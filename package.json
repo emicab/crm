@@ -1,20 +1,23 @@
 {
   "name": "crmapp",
   "version": "1.0.0",
+  "description": "CRM APP By Emiliano Cabanillas",
+  "author": "Emiliano Cabanillas",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "dev-next": "next dev --turbopack", 
-    "dev-electron-main": "electron .",  
-    "dev": "concurrently \"npm:dev-next\" \"wait-on http://localhost:3000 && npm:dev-electron-main\"", 
+    "dev-next": "next dev --turbopack",
+    "electron-main": "electron .",
+    "dev": "concurrently \"npm run dev-next\" \"wait-on http://localhost:3000 && npm run electron-main\"",
     "build": "next build",
-    "start": "next start", 
+    "start": "next start",
     "lint": "next lint",
     "package-electron": "npm run build && electron-builder"
   },
   "dependencies": {
     "@prisma/client": "^6.8.2",
     "class-variance-authority": "^0.7.1",
+    "electron-is-dev": "^3.0.1",
     "lucide-react": "^0.511.0",
     "next": "15.3.3",
     "react": "^19.0.0",
@@ -30,12 +33,47 @@
     "concurrently": "^9.1.2",
     "electron": "^36.3.2",
     "electron-builder": "^26.0.12",
-    "electron-is-dev": "^3.0.1",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
     "prisma": "^6.8.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.emidev.crm",
+    "productName": "CRMAPP",
+    "asar": true,
+    "files": [
+      "electron/main.js",
+      "public/**/*",
+      ".next/standalone/**/*",
+      ".next/static/**/*",
+      "prisma/schema.prisma",
+      "prisma/migrations/**/*"
+    ],
+    "asarUnpack": [
+      "**/node_modules/.prisma/client/query_engine-*",
+      "**/.next/standalone/node_modules/.prisma/client/query_engine-*"
+    ],
+    "extraResources": [
+      {
+        "from": "prisma/dev.db",
+        "to": "prisma/crm_template.db"
+      }
+    ],
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist_electron"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }
