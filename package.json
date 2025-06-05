@@ -17,7 +17,6 @@
   "dependencies": {
     "@prisma/client": "^6.8.2",
     "class-variance-authority": "^0.7.1",
-    "electron-is-dev": "^3.0.1",
     "lucide-react": "^0.511.0",
     "next": "15.3.3",
     "react": "^19.0.0",
@@ -53,13 +52,13 @@
       "prisma/migrations/**/*"
     ],
     "asarUnpack": [
-      "**/node_modules/.prisma/client/query_engine-*",
-      "**/.next/standalone/node_modules/.prisma/client/query_engine-*"
+      ".next/standalone/**",
+      "**/node_modules/.prisma/client/query_engine-*"
     ],
     "extraResources": [
       {
-        "from": "prisma/dev.db",
-        "to": "prisma/crm_template.db"
+        "from": "prisma/crm_template.db",
+        "to": "crm_template.db"
       }
     ],
     "directories": {

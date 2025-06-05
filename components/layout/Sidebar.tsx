@@ -25,11 +25,11 @@ const navItems = [
   { href: "/marcas", label: "Marcas", icon: <Tag size={20} /> },
   { href: "/clientes", label: "Clientes", icon: <Users size={20} /> },
   { href: "/vendedores", label: "Vendedores", icon: <UserPlus size={20} /> },
-  {
+  /* {
     href: "/configuracion",
     label: "Configuración",
     icon: <Settings size={20} />,
-  },
+  }, */
 ];
 
 const Sidebar = () => {
