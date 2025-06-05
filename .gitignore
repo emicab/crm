@@ -17,6 +17,17 @@
 /.next/
 /out/
 
+# Archivos de la base de datos SQLite
+*.db
+*.db-journal
+
+# Variables de Entorno
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 # production
 /build
 
