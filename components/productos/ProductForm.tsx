@@ -212,7 +212,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Input label="Precio de Compra (Opcional)" name="pricePurchase" type="number" step="0.01" value={formData.pricePurchase} onChange={handleChange} />
+        <Input label="Precio de Compra" name="pricePurchase" type="number" step="0.01" value={formData.pricePurchase} onChange={handleChange} />
         <Input label="Precio de Venta *" name="priceSale" type="number" step="0.01" value={formData.priceSale} onChange={handleChange} required />
       </div>
       
