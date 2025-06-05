@@ -146,10 +146,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         });
       }
 
-      setTimeout(() => {
+      /* setTimeout(() => {
         router.push('/productos'); 
         router.refresh();
-      }, 1500);
+      }, 1500); */
 
     } catch (err: any) {
       setError(err.message || `Ocurrió un error al ${initialProductData ? 'actualizar' : 'crear'} el producto.`);
