@@ -6,13 +6,10 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "dev-next": "next dev --turbopack",
-    "electron-main": "electron .",
-    "dev": "concurrently \"npm run dev-next\" \"wait-on http://localhost:3000 && npm run electron-main\"",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "package-electron": "npm run build && electron-builder"
+    "dev": "concurrently \"npm:dev:next\" \"npm:dev:electron\"",
+    "dev:next": "next dev",
+    "dev:electron": "wait-on http://localhost:3000 && electron .",
+    "build": "npx prisma generate && next build && electron-builder"
   },
   "dependencies": {
     "@prisma/client": "^6.8.2",
@@ -41,23 +38,38 @@
   },
   "build": {
     "appId": "com.emidev.crm",
-    "productName": "CRMAPP",
-    "asar": true,
+    "productName": "Ignite CRM",
+    "asar": false,
     "files": [
-      "electron/main.js",
-      "public/**/*",
-      ".next/standalone/**/*",
-      ".next/static/**/*",
-      "prisma/schema.prisma",
-      "prisma/migrations/**/*"
-    ],
-    "asarUnpack": [
-      ".next/standalone/**",
-      "**/node_modules/.prisma/client/query_engine-*"
-    ],
+    "package.json",
+    {
+        "from": "electron",
+        "to": "electron"
+    },
+    {
+        "from": "public",
+        "to": "public"
+    },
+    {
+        "from": ".next/standalone",
+        "to": ".next/standalone"
+    },
+    {
+        "from": ".next/static",
+        "to": ".next/standalone/.next/static"
+    },
+    {
+        "from": "node_modules/.prisma",
+        "to": "node_modules/.prisma"
+    },
+    {
+        "from": "node_modules/@prisma/client/libquery_engine-windows.dll.node",
+        "to": "node_modules/@prisma/client/libquery_engine-windows.dll.node"
+    }
+],
     "extraResources": [
       {
-        "from": "prisma/crm_template.db",
+        "from": "prisma/prod.db",
         "to": "crm_template.db"
       }
     ],

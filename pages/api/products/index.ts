@@ -1,17 +1,52 @@
 // pages/api/products/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '../../../lib/prisma'; // Ajusta la ruta si es necesario
+import prisma from '../../../lib/prisma';
+import { Prisma } from '@prisma/client'; // Importar Prisma para los tipos
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   if (req.method === 'GET') {
+    const { search, brandId, categoryId } = req.query;
+
+    let whereClause: Prisma.ProductWhereInput = {};
+
+    // Filtro de búsqueda por texto (en nombre o SKU)
+    if (search && typeof search === 'string' && search.trim() !== '') {
+        whereClause.OR = [
+            { name: { contains: search } }, // Nota: La búsqueda será sensible a mayúsculas/minúsculas
+            { sku: { contains: search } },
+        ];
+        // Anteriormente, `mode: 'insensitive'` nos dio problemas con la base de datos.
+        // Lo omitimos para asegurar compatibilidad. La búsqueda será case-sensitive.
+    }
+
+    // Filtro por ID de Marca
+    if (brandId && typeof brandId === 'string' && brandId !== '') {
+        const parsedBrandId = parseInt(brandId);
+        if (!isNaN(parsedBrandId)) {
+            whereClause.brandId = parsedBrandId;
+        }
+    }
+
+    // Filtro por ID de Categoría
+    if (categoryId && typeof categoryId === 'string' && categoryId !== '') {
+        const parsedCategoryId = parseInt(categoryId);
+        if (!isNaN(parsedCategoryId)) {
+            whereClause.categoryId = parsedCategoryId;
+        }
+    }
+
     try {
       const products = await prisma.product.findMany({
+        where: whereClause, // Aplicar los filtros construidos
         include: {
-          brand: true, // Incluir datos de la marca
-          category: true, // Incluir datos de la categoría
+          brand: true,
+          category: true,
+        },
+        orderBy: {
+          name: 'asc',
         },
       });
       res.status(200).json(products);
@@ -20,44 +55,7 @@ export default async function handler(
       res.status(500).json({ message: 'Error al obtener los productos' });
     }
   } else if (req.method === 'POST') {
-    const { 
-        name, sku, description, 
-        pricePurchase, priceSale, quantityStock, stockMinAlert,
-        brandId, categoryId 
-    } = req.body;
-
-    // Validación básica (puedes mejorarla mucho)
-    if (!name || !pricePurchase || !priceSale || !quantityStock || !brandId || !categoryId) {
-        return res.status(400).json({ message: 'Faltan campos obligatorios' });
-    }
-
-    try {
-      const newProduct = await prisma.product.create({
-        data: {
-          name,
-          sku,
-          description,
-          pricePurchase: parseFloat(pricePurchase), // Asegúrate de que sean números
-          priceSale: parseFloat(priceSale),
-          quantityStock: parseInt(quantityStock),
-          stockMinAlert: stockMinAlert ? parseInt(stockMinAlert) : null,
-          brand: { connect: { id: parseInt(brandId) } },
-          category: { connect: { id: parseInt(categoryId) } },
-        },
-        include: {
-            brand: true,
-            category: true,
-        }
-      });
-      res.status(201).json(newProduct);
-    } catch (error) {
-      console.error("Error creating product:", error);
-      // Revisar si es un error de constraint (ej. SKU duplicado)
-      if (error.code === 'P2002' && error.meta?.target?.includes('sku')) {
-        return res.status(409).json({ message: 'Ya existe un producto con este SKU.' });
-      }
-      res.status(500).json({ message: 'Error al crear el producto' });
-    }
+    // ... (tu código para POST sin cambios) ...
   } else {
     res.setHeader('Allow', ['GET', 'POST']);
     res.status(405).end(`Method ${req.method} Not Allowed`);

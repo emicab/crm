@@ -1,51 +1,62 @@
-
+// components/clientes/ClientTable.tsx
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import type { Client } from '@/types';
 import Button from '@/components/ui/Button';
-import { Edit3, Trash2, Loader2, AlertCircle } from 'lucide-react'; 
-import { useRouter } from 'next/navigation'; 
+import Input from '@/components/ui/Input'; // Importamos Input para el buscador
+import { Edit3, Trash2, Loader2, AlertCircle, Search } from 'lucide-react'; // Importamos Search
+import { useRouter } from 'next/navigation';
 
 const ClientTable = () => {
+  const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null); 
-  const [actionError, setActionError] = useState<string | null>(null); 
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  
+  // --- Estado para el término de búsqueda ---
   const [searchTerm, setSearchTerm] = useState('');
 
-  const router = useRouter(); 
+  const fetchClients = useCallback(async () => {
+    // No hacemos setLoading(true) aquí para una búsqueda más fluida
+    // El loading se manejará por separado
+    const params = new URLSearchParams();
+    if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+    }
+    const queryString = params.toString();
 
-  const fetchClients = async (search = '') => {
-    setLoading(true);
-    setError(null);
-    setActionError(null);
     try {
-      const response = await fetch(`/api/clients${search ? `?search=${encodeURIComponent(search)}` : ''}`);
+      const response = await fetch(`/api/clients?${queryString}`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Error HTTP: ${response.status}`);
       }
-      const data = await response.json();
-      setClients(data);
+      setClients(await response.json());
     } catch (err: any) {
       setError(err.message || 'Error al cargar los clientes.');
       console.error(err);
     } finally {
-      setLoading(false);
+      setLoading(false); // Desactivar el loading inicial/principal
     }
+  }, [searchTerm]); // La función depende del término de búsqueda
+
+  // Efecto para la carga inicial
+  useEffect(() => {
+    setLoading(true);
+    fetchClients();
+  }, [fetchClients]);
+
+  // Handler para cuando el usuario escribe en el input de búsqueda
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setLoading(true); // Activar un indicador de carga mientras se busca
   };
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
-
-  
 
   const handleDelete = async (clientId: number) => {
-    if (confirm('¿Estás seguro de que quieres eliminar este cliente? Esta acción no se puede deshacer.')) {
-      setActionError(null);
-      try {
+    try {
         const response = await fetch(`/api/clients/${clientId}`, {
           method: 'DELETE',
         });
@@ -62,15 +73,14 @@ const ClientTable = () => {
         setActionError(err.message);
         alert(`Error: ${err.message}`);
       }
-    }
   };
 
   const handleEdit = (clientId: number) => {
     router.push(`/clientes/${clientId}/editar`);
   };
-
   
-  if (loading) {
+  // ... (resto del componente: loading, error) ...
+  if (loading && clients.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 size={32} className="animate-spin text-primary" />
@@ -81,21 +91,29 @@ const ClientTable = () => {
 
   if (error) {
     return (
-        <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md">
+        <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md my-4">
             <AlertCircle size={20} className="inline-block mr-2" />
             {error}
         </div>
     );
   }
-  
+
   return (
     <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
-      {actionError && (
-        <div className="mb-4 text-center text-destructive p-3 bg-destructive/10 rounded-md">
-          <AlertCircle size={18} className="inline-block mr-2" />
-          {actionError}
-        </div>
-      )}
+      {/* --- Sección de Búsqueda --- */}
+      <div className="mb-6">
+        <Input 
+            type="text"
+            placeholder="Buscar por nombre, apellido, email o teléfono..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="max-w-sm"
+            // icon={<Search size={16} />} // Si tu componente Input soporta iconos
+        />
+      </div>
+
+      {loading && <div className="text-center py-4"><Loader2 size={24} className="animate-spin text-primary" /></div>}
+
       <div className="overflow-x-auto">
         <table className="w-full min-w-[700px] text-left">
           <thead className="border-b border-border">
@@ -108,10 +126,10 @@ const ClientTable = () => {
             </tr>
           </thead>
           <tbody>
-            {clients.length === 0 && !loading ? (
+            {!loading && clients.length === 0 ? (
                 <tr>
                     <td colSpan={5} className="text-center text-foreground-muted py-8">
-                        No se encontraron clientes.
+                        {searchTerm ? `No se encontraron clientes para "${searchTerm}".` : "No hay clientes registrados."}
                     </td>
                 </tr>
             ) : (

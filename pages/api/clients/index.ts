@@ -9,7 +9,6 @@ export default async function handler(
 ) {
   if (req.method === 'GET') {
     const { search } = req.query;
-    console.log("API RECIBIÓ - Término de búsqueda:", search);
     // Define a prismaWhereClause object that we'll build conditionally
     let prismaWhereClause: Prisma.ClientWhereInput = {};
 
