@@ -15,6 +15,7 @@
     "@prisma/client": "^6.8.2",
     "class-variance-authority": "^0.7.1",
     "lucide-react": "^0.511.0",
+    "motion": "^12.16.0",
     "next": "15.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -41,32 +42,32 @@
     "productName": "Ignite CRM",
     "asar": false,
     "files": [
-    "package.json",
-    {
+      "package.json",
+      {
         "from": "electron",
         "to": "electron"
-    },
-    {
+      },
+      {
         "from": "public",
         "to": "public"
-    },
-    {
+      },
+      {
         "from": ".next/standalone",
         "to": ".next/standalone"
-    },
-    {
+      },
+      {
         "from": ".next/static",
         "to": ".next/standalone/.next/static"
-    },
-    {
+      },
+      {
         "from": "node_modules/.prisma",
         "to": "node_modules/.prisma"
-    },
-    {
+      },
+      {
         "from": "node_modules/@prisma/client/libquery_engine-windows.dll.node",
         "to": "node_modules/@prisma/client/libquery_engine-windows.dll.node"
-    }
-],
+      }
+    ],
     "extraResources": [
       {
         "from": "prisma/prod.db",

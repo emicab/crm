@@ -19,8 +19,8 @@ function mainApp() {
 
     function createSplashWindow() {
         splashWindow = new BrowserWindow({
-            width: 450,
-            height: 300,
+            width: 600,
+            height: 500,
             transparent: true,
             frame: false,
             alwaysOnTop: true,
@@ -39,11 +39,12 @@ function mainApp() {
             width: 1366,
             height: 768,
             show: false,
-            titleBarStyle: 'hidden',
+            autoHideMenuBar: true,
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
             },
+            icon: path.join(__dirname, 'public', 'crm_icono.png'),
         });
 
         const url = `http://127.0.0.1:${PORT}`;
@@ -59,7 +60,7 @@ function mainApp() {
     function ensureDatabaseIsReady() {
         const isDevMode = !app.isPackaged;
         if (isDevMode) {
-            const devDbPath = process.env.DATABASE_URL || `file:${path.join(process.cwd(), 'prisma', 'dev.db')}`;
+            const devDbPath = process.env.DATABASE_URL || `file:${path.join(process.cwd(), 'prisma', 'prod.db')}`;
             process.env.DATABASE_URL = devDbPath;
             return true;
         }
