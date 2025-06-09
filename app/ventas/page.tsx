@@ -17,7 +17,7 @@ export default function HistorialVentasPage() {
         <Link href="/ventas/nueva" passHref>
           <Button variant="primary">
             <PlusCircle size={18} className="mr-2" />
-            Registrar Nueva Venta
+            Nueva Venta
           </Button>
         </Link>
       </div>

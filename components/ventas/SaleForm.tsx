@@ -581,98 +581,70 @@ const SaleForm = () => {
       {/* Sección Ítems en la Venta */}
       {formData.items.length > 0 && (
         <fieldset className="border border-border p-4 rounded-md">
-          <legend className="text-lg font-medium text-primary px-2">
-            Ítems en la Venta
-          </legend>
-          <div className="mt-4 overflow-x-auto">
+          <legend className="text-lg font-medium text-primary px-2">Ítems en la Venta</legend>
+          
+          {/* Tabla para Escritorio (oculta en móvil) */}
+          <div className="mt-4 overflow-x-auto hidden md:block">
             <table className="w-full min-w-[600px] text-left">
               <thead className="border-b border-border">
                 <tr>
-                  <th className="p-2 text-sm font-semibold text-foreground">
-                    Producto
-                  </th>
-                  <th className="p-2 text-sm font-semibold text-foreground w-28 text-center">
-                    Cantidad
-                  </th>
-                  <th className="p-2 text-sm font-semibold text-foreground w-36 text-right">
-                    Precio Unit.
-                  </th>
-                  <th className="p-2 text-sm font-semibold text-foreground w-36 text-right">
-                    Subtotal
-                  </th>
-                  <th className="p-2 text-sm font-semibold text-foreground w-20 text-center">
-                    Acción
-                  </th>
+                  <th className="p-2 text-sm font-semibold text-foreground">Producto</th>
+                  <th className="p-2 text-sm font-semibold text-foreground w-28 text-center">Cantidad</th>
+                  <th className="p-2 text-sm font-semibold text-foreground w-36 text-right">Precio Unit.</th>
+                  <th className="p-2 text-sm font-semibold text-foreground w-36 text-right">Subtotal</th>
+                  <th className="p-2 text-sm font-semibold text-foreground w-20 text-center">Acción</th>
                 </tr>
               </thead>
               <tbody>
                 {formData.items.map((item) => (
-                  <tr
-                    key={item.tempId}
-                    className="border-b border-border last:border-b-0"
-                  >
-                    <td className="p-2 text-sm text-foreground font-medium align-middle">
-                      {item.productName}
-                      <p className="text-xs text-foreground-muted">
-                        Stock: {item.availableStock}
-                      </p>
-                    </td>
-                    <td className="p-2 align-middle">
-                      <Input
-                        type="number"
-                        value={String(item.quantity)}
-                        onChange={(e) =>
-                          handleItemDetailChange(
-                            item.tempId,
-                            "quantity",
-                            e.target.value
-                          )
-                        }
-                        min="1"
-                        max={String(item.availableStock)}
-                        className="w-20 text-center h-9 py-1"
-                        aria-label={`Cantidad para ${item.productName}`}
-                      />
-                    </td>
-                    <td className="p-2 align-middle">
-                      <Input
-                        type="number"
-                        value={String(item.priceAtSale)}
-                        onChange={(e) =>
-                          handleItemDetailChange(
-                            item.tempId,
-                            "priceAtSale",
-                            e.target.value
-                          )
-                        }
-                        step="0.01"
-                        min="0"
-                        className="w-28 text-right h-9 py-1"
-                        aria-label={`Precio para ${item.productName}`}
-                      />
-                    </td>
-                    <td className="p-2 text-sm text-foreground text-right align-middle">
-                      {formatCurrency(item.subtotal)}
-                    </td>
-                    <td className="p-2 text-center align-middle">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveItem(item.tempId)}
-                        title="Eliminar item"
-                      >
-                        <Trash2 size={16} className="text-destructive" />
-                      </Button>
-                    </td>
+                  <tr key={item.tempId} className="border-b border-border last:border-b-0">
+                    <td className="p-2 text-sm text-foreground font-medium align-middle">{item.productName}<p className="text-xs text-foreground-muted">Stock: {item.availableStock}</p></td>
+                    <td className="p-2 align-middle"><Input type="number" value={String(item.quantity)} onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)} min="0" max={String(item.availableStock)} className="w-20 text-center h-9 py-1 mx-auto" aria-label={`Cantidad para ${item.productName}`} /></td>
+                    <td className="p-2 align-middle"><Input type="number" value={String(item.priceAtSale)} onChange={(e) => handleItemDetailChange(item.tempId, 'priceAtSale', e.target.value)} step="0.01" min="0" className="w-28 text-right h-9 py-1 ml-auto" aria-label={`Precio para ${item.productName}`} /></td>
+                    <td className="p-2 text-sm text-foreground text-right align-middle">{formatCurrency(item.subtotal)}</td>
+                    <td className="p-2 text-center align-middle"><Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(item.tempId)} title="Eliminar item"><Trash2 size={16} className="text-destructive" /></Button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {/* Lista de Tarjetas para Móvil (oculta en escritorio) */}
+          <div className="mt-4 space-y-3 md:hidden">
+            {formData.items.map((item) => (
+                <div key={item.tempId} className="bg-background p-3 rounded-lg border border-border">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="font-semibold text-foreground">{item.productName}</p>
+                            <p className="text-xs text-foreground-muted">Subtotal: {formatCurrency(item.subtotal)}</p>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(item.tempId)} title="Eliminar item" className="h-8 w-8 -mr-2 -mt-1">
+                            <Trash2 size={16} className="text-destructive" />
+                        </Button>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-2 gap-3 items-end">
+                        <Input 
+                            label="Cantidad"
+                            type="number"
+                            value={String(item.quantity)}
+                            onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)}
+                            min="0" max={String(item.availableStock)}
+                            className="h-9 py-1"
+                        />
+                         <Input 
+                            label="Precio Unit."
+                            type="number"
+                            value={String(item.priceAtSale)}
+                            onChange={(e) => handleItemDetailChange(item.tempId, 'priceAtSale', e.target.value)}
+                            step="0.01" min="0"
+                            className="h-9 py-1"
+                        />
+                    </div>
+                </div>
+            ))}
+          </div>
         </fieldset>
       )}
-
       {/* Total y Botones de Envío */}
       <div className="flex flex-col items-end mt-6">
         <p className="text-2xl font-bold text-foreground mb-4">

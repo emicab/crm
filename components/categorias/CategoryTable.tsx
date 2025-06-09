@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import type { Category } from "@/types";
 import Button from "@/components/ui/Button";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
-import { Edit3, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { Edit3, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 
@@ -98,7 +98,7 @@ const CategoryTable = () => {
 
       <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[400px] text-left">
+          <table className="w-full min-w-[250px] text-left">
             <thead className="border-b border-border">
               <tr>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">

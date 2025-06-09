@@ -144,7 +144,7 @@ const ProductTable = () => {
         isLoading={isDeleting}
       >
         ¿Estás seguro de que quieres eliminar el producto{" "}
-        <strong className="text-foreground">"{itemToDelete?.name}"</strong>?
+        <strong className="text-foreground">&quot;{itemToDelete?.name}&quot;</strong>?
         Esta acción no se puede deshacer.
       </ConfirmationModal>
 
@@ -210,91 +210,82 @@ const ProductTable = () => {
           </div>
         )}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-max text-left">
+          {/* Tabla para Escritorio (oculta en móvil) */}
+          <table className="hidden md:table w-full min-w-max text-left">
             <thead className="border-b border-border">
               <tr>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
-                  Nombre
-                </th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
-                  SKU
-                </th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
-                  Marca
-                </th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
-                  Categoría
-                </th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">
-                  Precio Venta
-                </th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">
-                  Stock
-                </th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">
-                  Acciones
-                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Nombre</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">SKU</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Marca</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Categoría</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Venta</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Stock</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {!loading && products.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="text-center text-foreground-muted py-8"
-                  >
-                    No se encontraron productos para los filtros seleccionados.
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="text-center text-foreground-muted py-8">No se encontraron productos.</td></tr>
               ) : (
                 products.map((product) => (
-                  <tr
-                    key={product.id}
-                    className="border-b border-border last:border-b-0 hover:bg-background transition-colors"
-                  >
-                    <td className="p-3 sm:p-4 text-sm text-foreground font-medium">
-                      {product.name}
-                    </td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
-                      {product.sku || "-"}
-                    </td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
-                      {product.brand.name}
-                    </td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
-                      {product.category.name}
-                    </td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground text-right">
-                      {formatCurrency(product.priceSale)}
-                    </td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">
-                      {product.quantityStock}
-                    </td>
+                  <tr key={product.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
+                    <td className="p-3 sm:p-4 text-sm text-foreground font-medium">{product.name}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.sku || '-'}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.brand.name}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.category.name}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.priceSale)}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">{product.quantityStock}</td>
                     <td className="p-3 sm:p-4 text-sm text-center">
-                      <div className="flex justify-center items-center space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(product.id)}
-                          title="Editar"
-                        >
-                          <Edit3 size={16} className="text-primary" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenDeleteModal(product)}
-                          title="Eliminar"
-                        >
-                          <Trash2 size={16} className="text-destructive" />
-                        </Button>
-                      </div>
+                        {/* ... Botones de acción ... */}
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+           {/* Lista de Tarjetas para Móvil (oculta en escritorio) */}
+          <div className="md:hidden space-y-2">
+            {!loading && products.length === 0 ? (
+                <div className="text-center text-foreground-muted py-8">No se encontraron productos.</div>
+            ) : (
+                products.map((product) => (
+                    <div key={product.id} className="bg-background p-4 rounded-lg border border-border shadow-sm">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="font-bold text-foreground">{product.name}</p>
+                                <p className="text-xs text-foreground-muted">SKU: {product.sku || 'N/A'}</p>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(product.id)} title="Editar" className="h-8 w-8">
+                                    <Edit3 size={16} className="text-primary" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleOpenDeleteModal(product)} title="Eliminar" className="h-8 w-8">
+                                    <Trash2 size={16} className="text-destructive" />
+                                </Button>
+                            </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-border/60 grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p className="text-xs text-foreground-muted">Precio</p>
+                                <p className="font-semibold text-foreground">{formatCurrency(product.priceSale)}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-xs text-foreground-muted">Stock</p>
+                                <p className="font-semibold text-foreground">{product.quantityStock}</p>
+                            </div>
+                            <div className="col-span-1">
+                                <p className="text-xs text-foreground-muted">Marca</p>
+                                <p className="font-medium text-foreground">{product.brand.name}</p>
+                            </div>
+                             <div className="col-span-1 text-right">
+                                <p className="text-xs text-foreground-muted">Categoría</p>
+                                <p className="font-medium text-foreground">{product.category.name}</p>
+                            </div>
+                        </div>
+                    </div>
+                ))
+            )}
+          </div>
         </div>
       </div>
     </>
