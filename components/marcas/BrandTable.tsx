@@ -1,165 +1,182 @@
-
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import type { Brand } from '@/types';
-import Button from '@/components/ui/Button';
-import { Edit3, Trash2, Loader2, ImageOff, AlertCircle } from 'lucide-react'; 
+import React, { useEffect, useState, useCallback } from "react";
+import type { Brand } from "@/types";
+import Button from "@/components/ui/Button";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import { Edit3, Trash2, Loader2, ImageOff, AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "react-hot-toast";
+import Image from "next/image";
 
 const BrandTable = () => {
+  const router = useRouter();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null); 
 
-  const router = useRouter(); 
+  // Estados para el modal de confirmación
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<Brand | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchBrands = async () => { 
+  const fetchBrands = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setActionError(null); 
     try {
-      const response = await fetch('/api/brands');
+      const response = await fetch("/api/brands");
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})); 
-        throw new Error(errorData.message || `Error HTTP: ${response.status}`);
+        throw new Error(`Error HTTP: ${response.status}`);
       }
-      const data = await response.json();
-      setBrands(data);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar las marcas.');
+      setBrands(await response.json());
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Error al cargar las marcas.";
+      setError(errorMessage);
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchBrands();
-  }, []);
+  }, [fetchBrands]);
 
-  const handleDelete = async (brandId: number) => {
-    if (confirm('¿Estás seguro de que quieres eliminar esta marca? Esta acción no se puede deshacer.')) {
-      setActionError(null); 
-      try {
-        const response = await fetch(`/api/brands/${brandId}`, {
-          method: 'DELETE',
-        });
+  const handleOpenDeleteModal = (brand: Brand) => {
+    setItemToDelete(brand);
+    setIsModalOpen(true);
+  };
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})); 
-          throw new Error(errorData.message || `Error al eliminar: ${response.statusText} (${response.status})`);
-        }
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
 
-        
-        setBrands(prevBrands => prevBrands.filter(brand => brand.id !== brandId));
-        
-        
-
-      } catch (err: any) {
-        console.error('Error al eliminar la marca:', err);
-        setActionError(err.message || 'No se pudo eliminar la marca.');
-        
-        alert(`Error: ${err.message || 'No se pudo eliminar la marca.'}`);
+    try {
+      const response = await fetch(`/api/brands/${itemToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "No se pudo eliminar la marca.");
       }
+      setBrands((prevBrands) =>
+        prevBrands.filter((brand) => brand.id !== itemToDelete.id)
+      );
+      toast.success(`Marca "${itemToDelete.name}" eliminada exitosamente.`);
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Ocurrió un error inesperado.";
+      toast.error(errorMessage);
+    } finally {
+      setIsModalOpen(false);
+      setIsDeleting(false);
+      setItemToDelete(null);
     }
   };
 
   const handleEdit = (brandId: number) => {
-    router.push(`/marcas/${brandId}/editar`)
+    router.push(`/marcas/${brandId}/editar`);
   };
-
-  
-  
-  
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 size={32} className="animate-spin text-primary" />
-        <p className="ml-2 text-foreground-muted">Cargando marcas...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-        <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md">
-            <AlertCircle size={20} className="inline-block mr-2" />
-            {error}
-        </div>
+      <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md">
+        {error}
+      </div>
     );
-  }
-  
-  
-  
-
-  if (brands.length === 0) {
-    return <div className="text-center text-foreground-muted py-8">No se encontraron marcas. Comienza agregando una nueva.</div>;
   }
 
   return (
-    <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
-       {actionError && ( 
-        <div className="mb-4 text-center text-destructive p-3 bg-destructive/10 rounded-md">
-          <AlertCircle size={18} className="inline-block mr-2" />
-          {actionError}
-        </div>
-      )}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px] text-left">
-          <thead className="border-b border-border">
-            <tr>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-16 text-center">Logo</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Nombre</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {brands.map((brand) => (
-              <tr key={brand.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
-                <td className="p-3 sm:p-4 text-center">
-                  {brand.logoUrl ? (
-                    <img 
-                      src={brand.logoUrl} 
-                      alt={`Logo de ${brand.name}`} 
-                      className="h-10 w-10 object-contain rounded-sm inline-block" 
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        
-                        const placeholder = document.createElement('div');
-                        placeholder.className = "h-10 w-10 bg-slate-200 rounded-sm flex items-center justify-center text-slate-400 inline-block";
-                        placeholder.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>`; 
-                        if (target.parentNode) {
-                            target.parentNode.insertBefore(placeholder, target.nextSibling);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="h-10 w-10 bg-slate-200 rounded-sm flex items-center justify-center text-slate-400">
-                      <ImageOff size={20} />
-                    </div>
-                  )}
-                </td>
-                <td className="p-3 sm:p-4 text-sm text-foreground font-medium">{brand.name}</td>
-                <td className="p-3 sm:p-4 text-sm text-center">
-                  <div className="flex justify-center items-center space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(brand.id)} title="Editar">
-                      <Edit3 size={16} className="text-primary" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(brand.id)} title="Eliminar">
-                      <Trash2 size={16} className="text-destructive" />
-                    </Button>
-                  </div>
-                </td>
+    <>
+      <ConfirmationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Marca"
+        confirmText="Sí, Eliminar"
+        isLoading={isDeleting}
+      >
+        ¿Estás seguro de que quieres eliminar la marca{" "}
+        <strong className="text-foreground">"{itemToDelete?.name}"</strong>?
+        Esta acción no se puede deshacer.
+      </ConfirmationModal>
+
+      <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px] text-left">
+            <thead className="border-b border-border">
+              <tr>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-16 text-center">
+                  Logo
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Nombre
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">
+                  Acciones
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {brands.map((brand) => (
+                <tr
+                  key={brand.id}
+                  className="border-b border-border last:border-b-0 hover:bg-background transition-colors"
+                >
+                  <td className="p-3 sm:p-4 text-center">
+                    {brand.logoUrl ? (
+                      <img
+                        src={brand.logoUrl}
+                        alt={`Logo de ${brand.name}`}
+                        width={40}
+                        height={40}
+                        className="object-contain rounded-sm inline-block"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 bg-slate-200 rounded-sm flex items-center justify-center text-slate-400 inline-block">
+                        <ImageOff size={20} />
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-3 sm:p-4 text-sm text-foreground font-medium">
+                    {brand.name}
+                  </td>
+                  <td className="p-3 sm:p-4 text-sm text-center">
+                    <div className="flex justify-center items-center space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(brand.id)}
+                        title="Editar"
+                      >
+                        <Edit3 size={16} className="text-primary" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenDeleteModal(brand)}
+                        title="Eliminar"
+                      >
+                        <Trash2 size={16} className="text-destructive" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

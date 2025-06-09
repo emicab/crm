@@ -6,12 +6,18 @@ import type { Seller } from '@/types';
 import Button from '@/components/ui/Button';
 import { Edit3, Trash2, Loader2, UserCheck, UserX, AlertCircle } from 'lucide-react'; // Importar AlertCircle
 import { useRouter } from 'next/navigation'; // Descomentar si se usa para handleEdit aquí
+import toast from 'react-hot-toast';
+import ConfirmationModal from '../ui/ConfirmationModal';
 
 const SellerTable = () => {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null); // Error para la carga inicial
   const [actionError, setActionError] = useState<string | null>(null); // Error para acciones (delete)
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<Seller | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const router = useRouter(); // Descomentar si se usa para handleEdit aquí
 
@@ -39,30 +45,35 @@ const SellerTable = () => {
     fetchSellers();
   }, []);
 
-  const handleDelete = async (sellerId: number) => {
-    if (confirm('¿Estás seguro de que quieres eliminar este vendedor? Esta acción podría no ser reversible si no tiene ventas asociadas, o podría ser desactivado.')) {
-      setActionError(null);
-      try {
-        const response = await fetch(`/api/vendedores/${sellerId}`, {
-          method: 'DELETE',
-        });
+  const handleOpenDeleteModal = (seller: Seller) => {
+    setItemToDelete(seller);
+    setIsModalOpen(true);
+  };
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          // El backend devuelve 409 si tiene ventas asociadas
-          throw new Error(errorData.message || `Error al eliminar: ${response.statusText} (${response.status})`);
-        }
-
-        // Eliminar el vendedor del estado local para actualizar la UI
-        setSellers(prevSellers => prevSellers.filter(seller => seller.id !== sellerId));
-        // alert('Vendedor eliminado/desactivado exitosamente'); // O usar un sistema de notificaciones
-      } catch (err: any) {
-        console.error('Error al eliminar el vendedor:', err);
-        setActionError(err.message);
-        alert(`Error: ${err.message}`);
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/vendedores/${itemToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Error al eliminar el vendedor.");
       }
+      setSellers((prev) => prev.filter((p) => p.id !== itemToDelete.id));
+      toast.success(`Vendedor "${itemToDelete.name}" eliminado.`);
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Ocurrió un error inesperado.";
+      toast.error(errorMessage);
+    } finally {
+      setIsModalOpen(false);
+      setIsDeleting(false);
+      setItemToDelete(null);
     }
   };
+
 
   const handleEdit = (sellerId: number) => {
     router.push(`/vendedores/${sellerId}/editar`);
@@ -88,65 +99,112 @@ const SellerTable = () => {
   }
   
   return (
-    <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
-      {actionError && (
-        <div className="mb-4 text-center text-destructive p-3 bg-destructive/10 rounded-md">
-          <AlertCircle size={18} className="inline-block mr-2" />
-          {actionError}
-        </div>
-      )}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px] text-left">
-          <thead className="border-b border-border">
-            <tr>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Nombre</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Email</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Teléfono</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Estado</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sellers.length === 0 && !loading ? (
+    <>
+      <ConfirmationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar vendedor"
+        confirmText="Sí, Eliminar"
+        isLoading={isDeleting}
+      >
+        ¿Estás seguro de que quieres eliminar el vendedor{" "}
+        <strong className="text-foreground">"{itemToDelete?.name}"</strong>?
+        <br />
+        Esta acción no se puede deshacer.
+      </ConfirmationModal>
+      <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
+        {actionError && (
+          <div className="mb-4 text-center text-destructive p-3 bg-destructive/10 rounded-md">
+            <AlertCircle size={18} className="inline-block mr-2" />
+            {actionError}
+          </div>
+        )}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px] text-left">
+            <thead className="border-b border-border">
               <tr>
-                <td colSpan={5} className="text-center text-foreground-muted py-8">
-                  No se encontraron vendedores. Comienza agregando uno nuevo.
-                </td>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Nombre
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Email
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Teléfono
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">
+                  Estado
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">
+                  Acciones
+                </th>
               </tr>
-            ) : (
-              sellers.map((seller) => (
-                <tr key={seller.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
-                  <td className="p-3 sm:p-4 text-sm text-foreground font-medium">{seller.name}</td>
-                  <td className="p-3 sm:p-4 text-sm text-foreground-muted">{seller.email || '-'}</td>
-                  <td className="p-3 sm:p-4 text-sm text-foreground-muted">{seller.phone || '-'}</td>
-                  <td className="p-3 sm:p-4 text-sm text-center">
-                    {seller.isActive ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/20 text-success">
-                        <UserCheck size={14} className="mr-1" /> Activo
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-destructive/20 text-destructive">
-                        <UserX size={14} className="mr-1" /> Inactivo
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3 sm:p-4 text-sm text-center">
-                    <div className="flex justify-center items-center space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(seller.id)} title="Editar">
-                        <Edit3 size={16} className="text-primary" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(seller.id)} title="Eliminar">
-                        <Trash2 size={16} className="text-destructive" />
-                      </Button>
-                    </div>
+            </thead>
+            <tbody>
+              {sellers.length === 0 && !loading ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="text-center text-foreground-muted py-8"
+                  >
+                    No se encontraron vendedores. Comienza agregando uno nuevo.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                sellers.map((seller) => (
+                  <tr
+                    key={seller.id}
+                    className="border-b border-border last:border-b-0 hover:bg-background transition-colors"
+                  >
+                    <td className="p-3 sm:p-4 text-sm text-foreground font-medium">
+                      {seller.name}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
+                      {seller.email || "-"}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
+                      {seller.phone || "-"}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-center">
+                      {seller.isActive ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/20 text-success">
+                          <UserCheck size={14} className="mr-1" /> Activo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-destructive/20 text-destructive">
+                          <UserX size={14} className="mr-1" /> Inactivo
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-center">
+                      <div className="flex justify-center items-center space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(seller.id)}
+                          title="Editar"
+                        >
+                          <Edit3 size={16} className="text-primary" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenDeleteModal(seller)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} className="text-destructive" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

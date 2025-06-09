@@ -60,7 +60,7 @@ function mainApp() {
     function ensureDatabaseIsReady() {
         const isDevMode = !app.isPackaged;
         if (isDevMode) {
-            const devDbPath = process.env.DATABASE_URL || `file:${path.join(process.cwd(), 'prisma', 'prod.db')}`;
+            const devDbPath = process.env.DATABASE_URL || `file:${path.join(process.cwd(), 'prisma', 'dev.db')}`;
             process.env.DATABASE_URL = devDbPath;
             return true;
         }

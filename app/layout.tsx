@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
 import LayoutFromComponents from '@/components/layout/Layout';
+import { Toaster } from "react-hot-toast";
 
 const outfit = Outfit({
   variable: "--font-outfit", // Esto crea la variable CSS --font-outfit
@@ -39,10 +40,33 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body
-        className={`${outfit.variable} antialiased bg-background text-foreground`}>
-        <LayoutFromComponents>
-          {children}
-        </LayoutFromComponents>
+        className={`${outfit.variable} antialiased bg-background text-foreground`}
+      >
+        <Toaster
+          position="top-right" // Posición de las notificaciones
+          toastOptions={{
+            // Estilos para los toasts
+            style: {
+              background: "var(--color-muted)", // Usando tus variables de color
+              color: "var(--color-foreground)",
+              border: "1px solid var(--color-border)",
+            },
+            // Estilos específicos para éxito y error
+            success: {
+              iconTheme: {
+                primary: "var(--color-success)",
+                secondary: "var(--color-success-foreground)",
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: "var(--color-destructive)",
+                secondary: "var(--color-destructive-foreground)",
+              },
+            },
+          }}
+        />
+        <LayoutFromComponents>{children}</LayoutFromComponents>
       </body>
     </html>
   );

@@ -7,6 +7,8 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input'; // Importamos Input para el buscador
 import { Edit3, Trash2, Loader2, AlertCircle, Search } from 'lucide-react'; // Importamos Search
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import ConfirmationModal from '../ui/ConfirmationModal';
 
 const ClientTable = () => {
   const router = useRouter();
@@ -17,6 +19,10 @@ const ClientTable = () => {
   
   // --- Estado para el término de búsqueda ---
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchClients = useCallback(async () => {
     // No hacemos setLoading(true) aquí para una búsqueda más fluida
@@ -54,25 +60,33 @@ const ClientTable = () => {
     setLoading(true); // Activar un indicador de carga mientras se busca
   };
 
+  const handleOpenDeleteModal = (client: Client) => {
+      setItemToDelete(client);
+      setIsModalOpen(true);
+    };
 
-  const handleDelete = async (clientId: number) => {
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
     try {
-        const response = await fetch(`/api/clients/${clientId}`, {
-          method: 'DELETE',
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `Error al eliminar: ${response.statusText} (${response.status})`);
-        }
-
-        setClients(prevClients => prevClients.filter(client => client.id !== clientId));
-        
-      } catch (err: any) {
-        console.error('Error al eliminar el cliente:', err);
-        setActionError(err.message);
-        alert(`Error: ${err.message}`);
+      const response = await fetch(`/api/clients/${itemToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Error al eliminar el cliente.");
       }
+      setClients((prev) => prev.filter((p) => p.id !== itemToDelete.id));
+      toast.success(`Cliente "${itemToDelete.firstName} ${itemToDelete.lastName}" eliminado.`);
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Ocurrió un error inesperado.";
+      toast.error(errorMessage);
+    } finally {
+      setIsModalOpen(false);
+      setIsDeleting(false);
+      setItemToDelete(null);
+    }
   };
 
   const handleEdit = (clientId: number) => {
@@ -99,65 +113,116 @@ const ClientTable = () => {
   }
 
   return (
-    <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
-      {/* --- Sección de Búsqueda --- */}
-      <div className="mb-6">
-        <Input 
+    <>
+      <ConfirmationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Cliente"
+        confirmText="Sí, Eliminar"
+        isLoading={isDeleting}
+      >
+        ¿Estás seguro de que quieres eliminar el cliente{" "}
+        <strong className="text-foreground">"{itemToDelete?.firstName} {itemToDelete?.lastName}"</strong>?
+        <br />
+        Esta acción no se puede deshacer.
+      </ConfirmationModal>
+      <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
+        {/* --- Sección de Búsqueda --- */}
+        <div className="mb-6">
+          <Input
             type="text"
             placeholder="Buscar por nombre, apellido, email o teléfono..."
             value={searchTerm}
             onChange={handleSearchChange}
             className="max-w-sm"
             // icon={<Search size={16} />} // Si tu componente Input soporta iconos
-        />
-      </div>
-
-      {loading && <div className="text-center py-4"><Loader2 size={24} className="animate-spin text-primary" /></div>}
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[700px] text-left">
-          <thead className="border-b border-border">
-            <tr>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Nombre Completo</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Email</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Teléfono</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Dirección</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && clients.length === 0 ? (
+          />
+        </div>
+        {loading && (
+          <div className="text-center py-4">
+            <Loader2 size={24} className="animate-spin text-primary" />
+          </div>
+        )}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px] text-left">
+            <thead className="border-b border-border">
+              <tr>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Nombre Completo
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Email
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Teléfono
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Dirección
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {!loading && clients.length === 0 ? (
                 <tr>
-                    <td colSpan={5} className="text-center text-foreground-muted py-8">
-                        {searchTerm ? `No se encontraron clientes para "${searchTerm}".` : "No hay clientes registrados."}
-                    </td>
+                  <td
+                    colSpan={5}
+                    className="text-center text-foreground-muted py-8"
+                  >
+                    {searchTerm
+                      ? `No se encontraron clientes para "${searchTerm}".`
+                      : "No hay clientes registrados."}
+                  </td>
                 </tr>
-            ) : (
+              ) : (
                 clients.map((client) => (
-                <tr key={client.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
+                  <tr
+                    key={client.id}
+                    className="border-b border-border last:border-b-0 hover:bg-background transition-colors"
+                  >
                     <td className="p-3 sm:p-4 text-sm text-foreground font-medium">
-                    {`${client.firstName} ${client.lastName || ''}`.trim()}
+                      {`${client.firstName} ${client.lastName || ""}`.trim()}
                     </td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{client.email || '-'}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{client.phone || '-'}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{client.address || '-'}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
+                      {client.email || "-"}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
+                      {client.phone || "-"}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
+                      {client.address || "-"}
+                    </td>
                     <td className="p-3 sm:p-4 text-sm text-center">
-                    <div className="flex justify-center items-center space-x-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(client.id)} title="Editar">
-                        <Edit3 size={16} className="text-primary" />
+                      <div className="flex justify-center items-center space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(client.id)}
+                          title="Editar"
+                        >
+                          <Edit3 size={16} className="text-primary" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(client.id)} title="Eliminar">
-                        <Trash2 size={16} className="text-destructive" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenDeleteModal(client)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} className="text-destructive" />
                         </Button>
-                    </div>
+                      </div>
                     </td>
-                </tr>
+                  </tr>
                 ))
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

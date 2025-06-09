@@ -7,12 +7,18 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Edit3, Trash2, Loader2, AlertCircle, Filter, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import ConfirmationModal from '../ui/ConfirmationModal';
 
 const ProductTable = () => {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<Product | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // --- Estados para los filtros ---
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -80,6 +86,11 @@ const ProductTable = () => {
     fetchProducts();
   }, [fetchProducts]);
 
+  const handleOpenDeleteModal = (product: Product) => {
+    setItemToDelete(product);
+    setIsModalOpen(true);
+  };
+
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
@@ -93,19 +104,27 @@ const ProductTable = () => {
     router.push(`/productos/${productId}/editar`);
   };
 
-  const handleDelete = async (productId: number) => {
-    if (confirm('¿Estás seguro de que quieres eliminar este producto?')) {
-        try {
-            const response = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || 'Error al eliminar el producto.');
-            }
-            // Refrescar la lista de productos después de eliminar
-            fetchProducts(); 
-        } catch (err: any) {
-            alert(`Error: ${err.message}`);
-        }
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/products/${itemToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Error al eliminar el producto.");
+      }
+      setProducts((prev) => prev.filter((p) => p.id !== itemToDelete.id));
+      toast.success(`Producto "${itemToDelete.name}" eliminado.`);
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Ocurrió un error inesperado.";
+      toast.error(errorMessage);
+    } finally {
+      setIsModalOpen(false);
+      setIsDeleting(false);
+      setItemToDelete(null);
     }
   };
   
@@ -115,99 +134,170 @@ const ProductTable = () => {
   };
 
   return (
-    <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
-      {/* --- Sección de Filtros y Búsqueda --- */}
-      <div className="mb-6 p-4 border border-border rounded-md bg-background">
-        <h3 className="text-lg font-medium text-foreground mb-3 flex items-center">
-            <Filter size={18} className="mr-2 text-primary" /> Filtros y Búsqueda
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Input 
-            name="search"
-            placeholder="Buscar por nombre o SKU..."
-            value={filters.search}
-            onChange={handleFilterChange}
-          />
-          <Select
-            name="brandId"
-            value={filters.brandId}
-            onChange={handleFilterChange}
-            aria-label="Filtrar por Marca"
-          >
-            <option value="">Todas las Marcas</option>
-            {brands.map(brand => <option key={brand.id} value={String(brand.id)}>{brand.name}</option>)}
-          </Select>
-          <Select
-            name="categoryId"
-            value={filters.categoryId}
-            onChange={handleFilterChange}
-            aria-label="Filtrar por Categoría"
-          >
-            <option value="">Todas las Categorías</option>
-            {categories.map(category => <option key={category.id} value={String(category.id)}>{category.name}</option>)}
-          </Select>
-          <Button onClick={handleClearFilters} variant="outline" className="h-10 self-end">
-            <X size={16} className="mr-2" />
-            Limpiar Filtros
-          </Button>
-        </div>
-      </div>
+    <>
+      <ConfirmationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Producto"
+        confirmText="Sí, Eliminar"
+        isLoading={isDeleting}
+      >
+        ¿Estás seguro de que quieres eliminar el producto{" "}
+        <strong className="text-foreground">"{itemToDelete?.name}"</strong>?
+        Esta acción no se puede deshacer.
+      </ConfirmationModal>
 
-      {error && (
-        <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md my-4">
+      <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
+        {/* --- Sección de Filtros y Búsqueda --- */}
+        <div className="mb-6 p-4 border border-border rounded-md bg-background">
+          <h3 className="text-lg font-medium text-foreground mb-3 flex items-center">
+            <Filter size={18} className="mr-2 text-primary" /> Filtros y
+            Búsqueda
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Input
+              name="search"
+              placeholder="Buscar por nombre o SKU..."
+              value={filters.search}
+              onChange={handleFilterChange}
+            />
+            <Select
+              name="brandId"
+              value={filters.brandId}
+              onChange={handleFilterChange}
+              aria-label="Filtrar por Marca"
+            >
+              <option value="">Todas las Marcas</option>
+              {brands.map((brand) => (
+                <option key={brand.id} value={String(brand.id)}>
+                  {brand.name}
+                </option>
+              ))}
+            </Select>
+            <Select
+              name="categoryId"
+              value={filters.categoryId}
+              onChange={handleFilterChange}
+              aria-label="Filtrar por Categoría"
+            >
+              <option value="">Todas las Categorías</option>
+              {categories.map((category) => (
+                <option key={category.id} value={String(category.id)}>
+                  {category.name}
+                </option>
+              ))}
+            </Select>
+            <Button
+              onClick={handleClearFilters}
+              variant="outline"
+              className="h-10 self-end"
+            >
+              <X size={16} className="mr-2" />
+              Limpiar Filtros
+            </Button>
+          </div>
+        </div>
+        {error && (
+          <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md my-4">
             <AlertCircle size={20} className="inline-block mr-2" />
             {error}
-        </div>
-      )}
-
-      {loading && <div className="text-center py-4"><Loader2 size={24} className="animate-spin text-primary" /></div>}
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max text-left">
-          <thead className="border-b border-border">
-            <tr>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Nombre</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">SKU</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Marca</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Categoría</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Venta</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Stock</th>
-              <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && products.length === 0 ? (
+          </div>
+        )}
+        {loading && (
+          <div className="text-center py-4">
+            <Loader2 size={24} className="animate-spin text-primary" />
+          </div>
+        )}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max text-left">
+            <thead className="border-b border-border">
               <tr>
-                <td colSpan={7} className="text-center text-foreground-muted py-8">
-                  No se encontraron productos para los filtros seleccionados.
-                </td>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Nombre
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  SKU
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Marca
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                  Categoría
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">
+                  Precio Venta
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">
+                  Stock
+                </th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">
+                  Acciones
+                </th>
               </tr>
-            ) : (
-              products.map((product) => (
-                <tr key={product.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
-                  <td className="p-3 sm:p-4 text-sm text-foreground font-medium">{product.name}</td>
-                  <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.sku || '-'}</td>
-                  <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.brand.name}</td>
-                  <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.category.name}</td>
-                  <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.priceSale)}</td>
-                  <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">{product.quantityStock}</td>
-                  <td className="p-3 sm:p-4 text-sm text-center">
-                    <div className="flex justify-center items-center space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(product.id)} title="Editar">
-                        <Edit3 size={16} className="text-primary" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(product.id)} title="Eliminar">
-                        <Trash2 size={16} className="text-destructive" />
-                      </Button>
-                    </div>
+            </thead>
+            <tbody>
+              {!loading && products.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="text-center text-foreground-muted py-8"
+                  >
+                    No se encontraron productos para los filtros seleccionados.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                products.map((product) => (
+                  <tr
+                    key={product.id}
+                    className="border-b border-border last:border-b-0 hover:bg-background transition-colors"
+                  >
+                    <td className="p-3 sm:p-4 text-sm text-foreground font-medium">
+                      {product.name}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
+                      {product.sku || "-"}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
+                      {product.brand.name}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">
+                      {product.category.name}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground text-right">
+                      {formatCurrency(product.priceSale)}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">
+                      {product.quantityStock}
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm text-center">
+                      <div className="flex justify-center items-center space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(product.id)}
+                          title="Editar"
+                        >
+                          <Edit3 size={16} className="text-primary" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenDeleteModal(product)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} className="text-destructive" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
