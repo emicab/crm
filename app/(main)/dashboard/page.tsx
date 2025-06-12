@@ -7,7 +7,7 @@ import {
   getMonthlyFinancialSummaries 
 } from '@/lib/data';
 import { 
-  Package, Users, DollarSign, TrendingDown as ExpensesIcon, TrendingUp as GrossProfitIcon, ShieldCheck as NetProfitIcon,
+  Package, Users, DollarSign, TrendingDown as ExpensesIcon, TrendingUp as GrossProfitIcon,
   BarChart3,
   ShieldCheck
 } from 'lucide-react';

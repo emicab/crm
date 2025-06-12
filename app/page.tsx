@@ -14,6 +14,7 @@ import {
   UserPlus 
 } from 'lucide-react';
 
+export const dynamic = 'force-dynamic'; 
 
 // Módulos para las tarjetas grandes
 const mainModules = [
