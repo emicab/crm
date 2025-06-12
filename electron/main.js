@@ -1,13 +1,13 @@
-const { app, BrowserWindow, dialog, net } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
 if (process.env.RUNNING_AS_SERVER === 'true') {
-  const serverPath = process.argv[2];
-  require(serverPath);
+    const serverPath = process.argv[2];
+    require(serverPath);
 } else {
-  mainApp();
+    mainApp();
 }
 
 function mainApp() {
@@ -43,8 +43,9 @@ function mainApp() {
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
+                preload: path.join(__dirname, 'preload.js')
             },
-            icon: path.join(__dirname, 'public', 'crm_icono.png'),
+            icon: path.join(__dirname, '../assets/crm_icono.png'),
         });
 
         const url = `http://127.0.0.1:${PORT}`;
@@ -169,6 +170,49 @@ function mainApp() {
             isStartingUp = false;
         }
     }
+
+    // --- MANEJADOR DE IPC PARA GENERAR PDF ---
+    ipcMain.handle('save-sale-as-pdf', async (event) => {
+        // La ventana que envió el evento es la ventana principal
+        const webContents = event.sender;
+        const browserWindow = BrowserWindow.fromWebContents(webContents);
+
+        if (browserWindow) {
+            try {
+                // Opciones de impresión para el PDF
+                const pdfOptions = {
+                    marginsType: 0, // Sin márgenes
+                    pageSize: 'A4',
+                    printBackground: true, // Incluir colores de fondo y CSS
+                };
+
+                const { canceled, filePath } = await dialog.showSaveDialog(browserWindow, {
+                    title: 'Guardar Venta como PDF',
+                    defaultPath: `venta-${Date.now()}.pdf`,
+                    filters: [{ name: 'Documentos PDF', extensions: ['pdf'] }]
+                });
+
+                if (canceled || !filePath) {
+                    console.log('Guardado de PDF cancelado por el usuario.');
+                    return { success: false, path: null, error: 'Cancelled' };
+                }
+
+                // Genera el PDF a partir del contenido actual de la ventana
+                const pdfData = await browserWindow.webContents.printToPDF(pdfOptions);
+
+                // Guarda el PDF en la ruta elegida por el usuario
+                fs.writeFileSync(filePath, pdfData);
+                console.log(`PDF de la venta guardado en: ${filePath}`);
+
+                return { success: true, path: filePath };
+
+            } catch (error) {
+                console.error('Error al generar o guardar el PDF:', error);
+                return { success: false, path: null, error: error.message };
+            }
+        }
+        return { success: false, path: null, error: 'No se encontró la ventana' };
+    });
 
     app.on('ready', () => {
         createSplashWindow();

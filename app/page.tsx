@@ -1,151 +1,112 @@
-// app/page.tsx
-import StatCard from '@/components/dashboard/StatCard';
-import SalesOverTimeChart from '@/components/dashboard/SalesOverTimeChart';
-import TopSellingProductsChart from '@/components/dashboard/TopSellingProductsChart'; // Nuevo gráfico
+// app/page.tsx (Nuevo Centro de Navegación con Tarjetas)
+import Link from 'next/link';
 import { 
-  getProductCount, 
-  getClientCount, 
-  getBrandCount, 
-  getCategoryCount, 
-  getLowStockProductCount,
-  getRevenueDataForCurrentAndPreviousMonth, // Función actualizada/nueva
-  getSalesForLastXDays,
-  getTopSellingProducts // Nueva función para el gráfico
-} from '@/lib/data'; // Asegúrate que la ruta a lib/data.ts sea correcta
-import { 
+  ArrowUpRightSquare, 
+  History, 
+  LayoutDashboard,
   Package, 
-  Users, 
+  Shapes,
   Tag, 
-  Shapes, 
-  AlertTriangle, 
-  DollarSign, 
-  LineChart as LineChartIcon, // Icono para el gráfico de ventas
-  Star // Icono para el gráfico de top productos
+  ShoppingCart, 
+  TrendingDown, 
+  Truck, 
+  Users, 
+  UserPlus 
 } from 'lucide-react';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'; // Iconos para tendencias
-
-// Helper para formatear moneda (puedes moverlo a un archivo utils si lo usas en más sitios)
-const formatCurrency = (amount: number) => {
-  if (isNaN(amount)) return 'N/A'; // Manejar NaN si es posible
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-};
-
-export default async function DashboardPage() {
-  // Obtenemos todos los datos necesarios en paralelo
-  const [
-    productCount, 
-    clientCount, 
-    brandCount, 
-    categoryCount,
-    lowStockCount,
-    revenueData,   // Datos para la tarjeta de ingresos con comparativa
-    salesLast7Days,
-    topSellingProducts 
-  ] = await Promise.all([
-    getProductCount(),
-    getClientCount(),
-    getBrandCount(),
-    getCategoryCount(),
-    getLowStockProductCount(),
-    getRevenueDataForCurrentAndPreviousMonth(),
-    getSalesForLastXDays(7), // Ventas de los últimos 7 días
-    getTopSellingProducts(5, 30) // Top 5 productos de los últimos 30 días
-  ]);
-
-  // Lógica para la descripción de la StatCard de Ingresos
-  let revenueDescriptionText = `vs ${formatCurrency(revenueData.previousMonthRevenue)} mes anterior`;
-  let RevenueTrendIcon = Minus;
-  let trendColor = "text-foreground-muted";
-
-  if (revenueData.percentageChange !== null) {
-    if (revenueData.percentageChange > 0) {
-      RevenueTrendIcon = TrendingUp;
-      trendColor = "text-success"; // Verde para positivo
-      revenueDescriptionText = `+${revenueData.percentageChange.toFixed(1)}% (${formatCurrency(revenueData.differenceAmount)})`;
-    } else if (revenueData.percentageChange < 0) {
-      RevenueTrendIcon = TrendingDown;
-      trendColor = "text-destructive"; // Rojo para negativo
-      revenueDescriptionText = `${revenueData.percentageChange.toFixed(1)}% (${formatCurrency(revenueData.differenceAmount)})`;
-    } else { // percentageChange es 0
-        revenueDescriptionText = `Igual (${formatCurrency(revenueData.differenceAmount)})`;
-    }
-  } else if (revenueData.currentMonthRevenue > 0 && revenueData.previousMonthRevenue === 0) {
-      RevenueTrendIcon = TrendingUp;
-      trendColor = "text-success";
-      revenueDescriptionText = `+100.0% (Nuevo) vs mes anterior`;
-  }
 
 
+// Módulos para las tarjetas grandes
+const mainModules = [
+  { name: 'Nueva Venta', href: '/ventas/nueva', icon: ShoppingCart, description: 'Registra una nueva transacción de venta.' },
+  { name: 'Nueva Compra', href: '/compras/nueva', icon: ArrowUpRightSquare, description: 'Ingresa mercadería y actualiza tu stock.' },
+  { name: 'Dashboard Analítico', href: '/dashboard', icon: LayoutDashboard, description: 'Visualiza tus métricas y gráficos clave.' },
+];
+
+// Módulos para las tarjetas secundarias
+const historyAndRegisters = [
+    { name: 'Historial de Ventas', href: '/ventas', icon: History },
+    { name: 'Historial de Compras', href: '/compras', icon: History },
+    { name: 'Registro de Gastos', href: '/gastos', icon: TrendingDown },
+];
+
+const managementModules = [
+  { name: 'Productos', href: '/productos', icon: Package },
+  { name: 'Clientes', href: '/clientes', icon: Users },
+  { name: 'Proveedores', href: '/proveedores', icon: Truck },
+  { name: 'Vendedores', href: '/vendedores', icon: UserPlus },
+  { name: 'Categorías', href: '/categorias', icon: Shapes },
+  { name: 'Marcas', href: '/marcas', icon: Tag },
+];
+
+// --- Componentes de Tarjeta ---
+
+// Tarjeta para los módulos principales (la que ya teníamos)
+const NavCard = ({ module }: { module: typeof mainModules[0] }) => (
+  <Link href={module.href} className="group block rounded-xl border border-border bg-muted p-6 shadow transition-all duration-200 ease-in-out hover:border-primary hover:shadow-lg hover:-translate-y-1">
+    <div className="flex items-center space-x-4">
+      <div className="rounded-lg bg-primary/10 p-3 text-primary">
+        <module.icon className="h-6 w-6" />
+      </div>
+      <div>
+        <h3 className="text-base font-semibold text-foreground group-hover:text-primary">{module.name}</h3>
+        {module.description && <p className="mt-1 text-sm text-foreground-muted">{module.description}</p>}
+      </div>
+    </div>
+  </Link>
+);
+
+// *** NUEVO COMPONENTE para las tarjetas secundarias (más pequeñas y cuadradas) ***
+const SecondaryNavCard = ({ module }: { module: typeof historyAndRegisters[0] }) => (
+  <Link href={module.href} className="group flex flex-col items-center justify-center rounded-xl border border-border bg-background p-4 text-center shadow-sm transition-all duration-200 ease-in-out hover:border-primary hover:shadow-md hover:-translate-y-0.5">
+    <module.icon className="h-8 w-8 text-foreground-muted transition-colors group-hover:text-primary" />
+    <p className="mt-2 text-sm font-semibold text-foreground">{module.name}</p>
+  </Link>
+);
+
+
+export default function HomePage() {
   return (
-    <>
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-foreground">Dashboard Principal</h1>
-        <p className="mt-1 text-foreground-muted">
-          Un resumen de la actividad y estado de tu negocio.
-        </p>
-      </div>
+    // Fondo con un patrón de grilla sutil para darle un toque de diseño
+    <div className="flex justify-center items-center min-h-screen bg-[#EEE] dark:bg-slate-50/50 bg-[url('/grid.svg')]">
+      <div className="w-full max-w-5xl mx-auto p-4 md:p-8">
+        <header className="text-center mb-12">
+          {/* Puedes poner tu logo aquí si quieres */}
+          {/* <img src="/logo.png" alt="Ignite CRM Logo" className="mx-auto h-16 w-auto mb-4" /> */}
+          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">Bienvenido a Ignite CRM</h1>
+          <p className="mt-4 text-lg text-foreground-muted">Selecciona un módulo para empezar a gestionar tu negocio.</p>
+        </header>
 
-      {/* Fila de Tarjetas de Estadísticas */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-        <StatCard 
-          title="Ingresos Este Mes" 
-          value={formatCurrency(revenueData.currentMonthRevenue)}
-          icon={<DollarSign size={20} />} // Reducido tamaño de icono para consistencia
-          description={
-            <span className={`flex items-center text-xs ${trendColor}`}>
-              <RevenueTrendIcon size={14} className="mr-1" />
-              {revenueDescriptionText}
-            </span>
-          }
-        />
-        <StatCard 
-          title="Total Productos" 
-          value={productCount} 
-          icon={<Package size={20} />} 
-        />
-        <StatCard 
-          title="Total Clientes" 
-          value={clientCount} 
-          icon={<Users size={20} />}
-        />
-        <StatCard 
-          title="Total Marcas" 
-          value={brandCount} 
-          icon={<Tag size={20} />}
-        />
-        <StatCard 
-          title="Total Categorías" 
-          value={categoryCount} 
-          icon={<Shapes size={20} />}
-        />
-        <StatCard 
-          title="Productos Bajo Stock" 
-          value={lowStockCount} 
-          icon={<AlertTriangle size={20} />}
-          className={lowStockCount > 0 ? "bg-destructive/10 !text-destructive border border-destructive" : ""}
-        />
-      </div>
+        <main className="space-y-12">
+          {/* Módulos Principales */}
+          <section>
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              {mainModules.map((mod) => (
+                <NavCard key={mod.name} module={mod} />
+              ))}
+            </div>
+          </section>
 
-      {/* Sección de Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Gráfico de Ventas en los Últimos 7 Días */}
-        <div className="lg:col-span-2 bg-muted p-4 sm:p-6 rounded-xl shadow">
-          <div className="flex items-center mb-4">
-            <LineChartIcon size={20} className="text-primary mr-2" />
-            <h2 className="text-xl font-semibold text-foreground">Ventas Últimos 7 Días</h2>
-          </div>
-          <SalesOverTimeChart data={salesLast7Days} />
-        </div>
-        
-        {/* Gráfico de Productos Más Vendidos */}
-        <div className="bg-muted p-4 sm:p-6 rounded-xl shadow">
-          <div className="flex items-center mb-4">
-            <Star size={20} className="text-primary mr-2" />
-            <h2 className="text-xl font-semibold text-foreground">Top 5 Productos (Últ. 30 días)</h2>
-          </div>
-          <TopSellingProductsChart data={topSellingProducts} />
-        </div>
+          {/* *** SECCIONES SECUNDARIAS ACTUALIZADAS CON GRILLA DE TARJETAS *** */}
+          <section className="grid grid-cols-1 gap-10 lg:grid-cols-2">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground mb-4 px-2">Historiales y Registros</h2>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                {historyAndRegisters.map((mod) => (
+                    <SecondaryNavCard key={mod.name} module={mod} />
+                ))}
+              </div>
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-foreground mb-4 px-2">Gestión General</h2>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                {managementModules.map((mod) => (
+                    <SecondaryNavCard key={mod.name} module={mod} />
+                ))}
+              </div>
+            </div>
+          </section>
+        </main>
       </div>
-    </>
+    </div>
   );
 }

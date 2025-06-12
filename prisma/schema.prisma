@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,142 +9,160 @@ datasource db {
 
 model Brand {
   id        Int       @id @default(autoincrement())
-  name      String    @unique // El nombre de la marca debe ser único
-  logoUrl   String? // Opcional: URL para el logo de la marca
-  products  Product[] // Relación: Una marca puede tener muchos productos
+  name      String    @unique
+  logoUrl   String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  products  Product[]
 }
 
 model Category {
   id        Int       @id @default(autoincrement())
-  name      String    @unique // El nombre de la categoría debe ser único
-  products  Product[] // Relación: Una categoría puede tener muchos productos
+  name      String    @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  products  Product[]
 }
 
 model Product {
-  id          Int     @id @default(autoincrement())
-  name        String
-  sku         String? @unique // SKU opcional pero único si existe
-  description String? // Descripción opcional
-
-  pricePurchase Decimal // Precio de compra
-  priceSale     Decimal // Precio de venta
-  quantityStock Int // Cantidad en stock
-  stockMinAlert Int? // Opcional: Nivel mínimo para alerta de stock
-
-  brandId Int // Clave foránea para Brand
-  brand   Brand @relation(fields: [brandId], references: [id]) // Relación con Brand
-
-  categoryId Int // Clave foránea para Category
-  category   Category @relation(fields: [categoryId], references: [id]) // Relación con Category
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Asegurarse de que las combinaciones que deben ser únicas lo sean,
-  // por ejemplo, si un producto tiene un nombre y marca únicos.
-  // @@unique([name, brandId]) // Descomentar si necesitas esta restricción
-  SaleItem SaleItem[]
+  id            Int            @id @default(autoincrement())
+  name          String
+  sku           String?        @unique
+  description   String?
+  pricePurchase Decimal
+  priceSale     Decimal
+  quantityStock Int
+  stockMinAlert Int?
+  brandId       Int
+  categoryId    Int
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  category      Category       @relation(fields: [categoryId], references: [id])
+  brand         Brand          @relation(fields: [brandId], references: [id])
+  SaleItem      SaleItem[]
+  purchaseItems PurchaseItem[]
 }
 
 model Client {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   firstName String
-  lastName  String? // Apellido puede ser opcional
-  email     String? @unique // Email opcional pero único si se provee
+  lastName  String?
+  email     String?  @unique
   phone     String?
-  address   String? // Dirección simple, podría expandirse a campos estructurados después
-  notes     String? // Notas adicionales sobre el cliente
-
-  // Relaciones futuras (ej. historial de ventas)
-  // sales Sale[] // Descomentar cuando tengamos el modelo Sale
-
+  address   String?
+  notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   Sale      Sale[]
 
-  @@index([firstName, lastName]) // Para buscar/ordenar por nombre completo
+  @@index([firstName, lastName])
 }
 
 model Seller {
-  id       Int     @id @default(autoincrement())
-  name     String  @unique // Nombre del vendedor, único para evitar duplicados
-  email    String? @unique // Email opcional, pero único si se provee
-  phone    String?
-  isActive Boolean @default(true) // Para poder desactivar vendedores sin borrarlos
-
-  sales Sale[] // Relación: Un vendedor puede tener muchas ventas
-
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  email     String?  @unique
+  phone     String?
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-
-enum PaymentType {
-  CASH // Efectivo
-  TRANSFER // Transferencia
-  CARD // Tarjeta (Podrías tener DEBIT_CARD, CREDIT_CARD si necesitas más detalle)
-  OTHER // Otro
+  sales     Sale[]
 }
 
 model Sale {
-  id          Int         @id @default(autoincrement())
-  saleDate    DateTime    @default(now())
-  totalAmount Decimal // Calculado a partir de los SaleItems
-  paymentType PaymentType
-  notes       String?
+  id                  Int            @id @default(autoincrement())
+  saleDate            DateTime       @default(now())
+  totalAmount         Decimal
+  paymentType         PaymentType
+  notes               String?
+  clientId            Int?
+  sellerId            Int
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
   discountCodeApplied String?
-
-  clientId Int? // Cliente puede ser opcional (venta anónima)
-  client   Client? @relation(fields: [clientId], references: [id])
-
-  sellerId Int // Vendedor es obligatorio
-  seller   Seller @relation(fields: [sellerId], references: [id])
-
-  items SaleItem[] // Los productos vendidos en esta venta
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  seller              Seller         @relation(fields: [sellerId], references: [id])
+  client              Client?        @relation(fields: [clientId], references: [id])
+  items               SaleItem[]
 }
 
 model SaleItem {
   id          Int     @id @default(autoincrement())
   quantity    Int
-  priceAtSale Decimal // Precio del producto al momento de la venta (por unidad)
+  priceAtSale Decimal
+  purchasePriceAtSale Decimal
+  saleId      Int
+  productId   Int
+  product     Product @relation(fields: [productId], references: [id])
+  sale        Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
-  saleId Int
-  sale   Sale @relation(fields: [saleId], references: [id], onDelete: Cascade) // Si se borra la venta, se borran sus items
-
-  productId Int
-  product   Product @relation(fields: [productId], references: [id]) // No ponemos onDelete: Cascade aquí para decidir qué hacer con el producto
-
-  // Constraint para asegurar que un producto no se repita en la misma venta (opcional, manejar en lógica de negocio)
   @@unique([saleId, productId])
 }
 
 model Expense {
-  id           Int      @id @default(autoincrement())
-  expenseDate  DateTime @default(now())
-  description  String   // Descripción del gasto, ej: "Viáticos reunión BsAs", "Compra papelería"
-  amount       Decimal  // Monto del gasto
-  
-  // Usaremos un string para la categoría por ahora para flexibilidad.
-  // Más adelante podría ser una relación a un modelo ExpenseCategory.
-  category     String   // Ej: "Compra de Mercadería", "Viajes", "Viáticos", "Servicios", "Marketing", "Retiro de Caja"
-  
-  paymentType  PaymentType // Cómo se pagó el gasto
-  notes        String?  // Notas adicionales
+  id          Int      @id @default(autoincrement())
+  expenseDate DateTime @default(now())
+  description String
+  amount      Decimal
+  category    String
+  paymentType PaymentType
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
 
-  // Opcional: Si el gasto está ligado a un proveedor específico (para futuras compras de mercadería)
-  // supplierId   Int?
-  // supplier     Supplier? @relation(fields: [supplierId], references: [id])
+model Supplier {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique
+  contactPerson String?  // Nombre de la persona de contacto
+  email         String?
+  phone         String?
+  address       String?
+  notes         String?
 
-  // Opcional: Si el gasto está ligado a un empleado/vendedor
-  // userId       Int? 
-  // user         User? // Asumiendo un futuro modelo User para empleados/usuarios del sistema
+  purchases     Purchase[] // Un proveedor puede estar asociado a muchas compras
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Purchase {
+  id            Int      @id @default(autoincrement())
+  purchaseDate  DateTime @default(now())
+  totalAmount   Decimal  // Costo total de la compra
+  status        PurchaseStatus @default(PENDING) // Estado de la compra
+  invoiceNumber String?  // Número de factura del proveedor (opcional)
+  notes         String?
+
+  supplierId    Int
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+
+  items         PurchaseItem[] // Los productos comprados en esta transacción
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PurchaseItem {
+  id            Int     @id @default(autoincrement())
+  quantity      Int     // Cantidad de unidades compradas
+  purchasePrice Decimal // Costo por unidad en esta compra específica
+
+  purchaseId    Int
+  purchase      Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  productId     Int
+  product       Product  @relation(fields: [productId], references: [id])
+}
+
+enum PaymentType {
+  CASH
+  TRANSFER
+  CARD
+  OTHER
+}
+
+enum PurchaseStatus {
+  PENDING   
+  RECEIVED  
+  CANCELLED 
 }

@@ -132,6 +132,7 @@ export default async function handler(
               productId: item.productId,
               quantity: item.quantity,
               priceAtSale: new Decimal(item.priceAtSale),
+              purchasePriceAtSale: product.pricePurchase || new Decimal(0),
             },
           });
 

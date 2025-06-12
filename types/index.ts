@@ -1,4 +1,4 @@
-// types/index.ts (o donde prefieras)
+
 export interface Brand {
     id: number;
     name: string;
@@ -10,6 +10,8 @@ export interface Brand {
     name: string;
     logoUrl?: string | null;
   }
+
+  
   
   export interface Product {
     id: number;
@@ -92,3 +94,43 @@ export interface Brand {
     createdAt: string;
     updatedAt: string;
   }
+
+  export interface Supplier {
+  id: number;
+  name: string;
+  contactPerson?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export enum PurchaseStatusEnum {
+  PENDING = 'PENDING',
+  RECEIVED = 'RECEIVED',
+  CANCELLED = 'CANCELLED',
+}
+
+export interface PurchaseItem {
+  id?: number;
+  productId: number;
+  product?: Product;
+  quantity: number;
+  purchasePrice: number; // Costo por unidad
+}
+
+export interface Purchase {
+  id: number;
+  purchaseDate: string;
+  totalAmount: number;
+  status: PurchaseStatusEnum;
+  invoiceNumber?: string | null;
+  notes?: string | null;
+  supplierId: number;
+  supplier?: Supplier;
+  items: PurchaseItem[];
+  createdAt: string;
+  updatedAt: string;
+}

@@ -1,14 +1,15 @@
 // components/gastos/ExpenseForm.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select'; // Reutilizamos Select para PaymentType
 import { Loader2, AlertCircle } from 'lucide-react';
-import { PaymentTypeEnum } from '@/types'; // Reutilizamos el enum
+import { Expense, PaymentTypeEnum } from '@/types'; // Reutilizamos el enum
 import { getPaymentTypeDisplay } from '@/lib/displayTexts'; // Reutilizamos el helper
+import toast from 'react-hot-toast';
 
 // Lista sugerida de categorías de gastos
 const GASTO_CATEGORIAS_SUGERIDAS = [
@@ -44,48 +45,76 @@ const initialFormData: ExpenseFormData = {
   notes: '',
 };
 
-const ExpenseForm = () => {
+interface ExpenseFormProps {
+  initialExpenseData?: Expense | null;
+}
+
+const ExpenseForm : React.FC<ExpenseFormProps> = ({ initialExpenseData }) => {
   const router = useRouter();
-  const [formData, setFormData] = useState<ExpenseFormData>(initialFormData);
+  const [formData, setFormData] = useState({
+    expenseDate: new Date().toISOString().split('T')[0],
+    description: '',
+    amount: '',
+    category: '',
+    paymentType: '' as PaymentTypeEnum | '',
+    notes: '',
+  });
+
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+
+  useEffect(() => {
+    if (initialExpenseData) {
+      setFormData({
+        expenseDate: new Date(initialExpenseData.expenseDate).toISOString().split('T')[0],
+        description: initialExpenseData.description || '',
+        amount: String(initialExpenseData.amount) || '',
+        category: initialExpenseData.category || '',
+        paymentType: initialExpenseData.paymentType || '',
+        notes: initialExpenseData.notes || '',
+      });
+    }
+  }, [initialExpenseData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setError(null);
-    setSuccessMessage(null);
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    setError(null);
-    setSuccessMessage(null);
+
 
     if (!formData.description || !formData.amount || !formData.category || !formData.paymentType) {
-      setError('Por favor, completa Descripción, Monto, Categoría y Tipo de Pago.');
+      toast.error('Por favor, completa Descripción, Monto, Categoría y Tipo de Pago.');
       setIsLoading(false);
       return;
     }
     const amountNumber = parseFloat(formData.amount);
     if (isNaN(amountNumber) || amountNumber <= 0) {
-      setError('El monto debe ser un número positivo.');
+      toast.error('El monto debe ser un número positivo.');
       setIsLoading(false);
       return;
     }
+    const method = initialExpenseData ? 'PUT' : 'POST';
+    const apiUrl = initialExpenseData 
+      ? `/api/gastos/${initialExpenseData.id}` 
+      : '/api/gastos';
+
+    const dataToSend = {
+        expenseDate: formData.expenseDate,
+        description: formData.description,
+        amount: parseFloat(formData.amount),
+        category: formData.category,
+        paymentType: formData.paymentType as PaymentTypeEnum,
+        notes: formData.notes.trim() || null,
+    };
 
     try {
-      const response = await fetch('/api/gastos', {
-        method: 'POST',
+      const response = await fetch(apiUrl, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          amount: amountNumber, // Enviar como número
-          paymentType: formData.paymentType as PaymentTypeEnum,
-          expenseDate: formData.expenseDate || undefined, // Enviar undefined si está vacío para que el backend use la fecha actual
-        }),
+        body: JSON.stringify(dataToSend),
       });
 
       if (!response.ok) {
@@ -93,34 +122,22 @@ const ExpenseForm = () => {
         throw new Error(errorData.message || `Error HTTP: ${response.status}`);
       }
 
-      setSuccessMessage('¡Gasto registrado exitosamente!');
-      setFormData(initialFormData); 
+      toast.success(initialExpenseData ? '¡Gasto actualizado!' : '¡Gasto registrado!');
+      
+      router.push('/gastos');
+      router.refresh();
 
-      setTimeout(() => {
-        router.push('/gastos');
-        router.refresh();
-      }, 1500);
-
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error al registrar el gasto.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Ocurrió un error inesperado.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const submitButtonText = initialExpenseData ? 'Actualizar Gasto' : 'Guardar Gasto';
+
   return (
     <form onSubmit={handleSubmit} className="bg-muted p-6 sm:p-8 rounded-lg shadow space-y-6 max-w-2xl mx-auto">
-      {error && (
-        <div className="flex items-center bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-          <AlertCircle size={18} className="mr-2" /> {error}
-        </div>
-      )}
-      {successMessage && (
-        <div className="flex items-center bg-success/10 text-success text-sm p-3 rounded-md">
-          <AlertCircle size={18} className="mr-2" /> {successMessage}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input 
           label="Fecha del Gasto *" 
@@ -196,12 +213,10 @@ const ExpenseForm = () => {
       </div>
 
       <div className="flex justify-end pt-4">
-        <Button type="button" variant="outline" onClick={() => router.push('/gastos')} className="mr-3" disabled={isLoading}>
-          Cancelar
-        </Button>
+        <Button type="button" variant="outline" onClick={() => router.push('/gastos')} className="mr-3" disabled={isLoading}>Cancelar</Button>
         <Button type="submit" variant="primary" disabled={isLoading}>
-          {isLoading ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
-          {isLoading ? 'Guardando...' : 'Guardar Gasto'}
+            {isLoading && <Loader2 size={18} className="animate-spin mr-2" />}
+            {isLoading ? (initialExpenseData ? 'Actualizando...' : 'Guardando...') : submitButtonText}
         </Button>
       </div>
     </form>

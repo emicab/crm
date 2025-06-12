@@ -1,10 +1,13 @@
 // electron/preload.js
 const { contextBridge, ipcRenderer } = require('electron');
 
-console.log('Script de Preload cargado exitosamente!');
+console.log("Preload script cargado.");
 
-// Ejemplo de cómo exponer una API simple al proceso de renderizado (tu app Next.js)
-// contextBridge.exposeInMainWorld('electronAPI', {
-//   saludar: (nombre) => ipcRenderer.invoke('saludar', nombre),
-//   // Puedes añadir más funciones aquí
-// });
+// Exponemos funciones seguras al proceso de renderizado (tu app Next.js)
+// bajo el objeto global 'electronAPI'.
+contextBridge.exposeInMainWorld('electronAPI', {
+  // Función que la app web llamará para generar un PDF
+  saveSaleAsPDF: () => ipcRenderer.invoke('save-sale-as-pdf'),
+
+  // Podríamos añadir más funciones aquí en el futuro
+});

@@ -236,7 +236,14 @@ const ProductTable = () => {
                     <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.priceSale)}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">{product.quantityStock}</td>
                     <td className="p-3 sm:p-4 text-sm text-center">
-                        {/* ... Botones de acción ... */}
+                       <div className="flex items-center space-x-1">
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(product.id)} title="Editar" className="h-8 w-8">
+                                    <Edit3 size={16} className="text-primary" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleOpenDeleteModal(product)} title="Eliminar" className="h-8 w-8">
+                                    <Trash2 size={16} className="text-destructive" />
+                                </Button>
+                            </div>
                     </td>
                   </tr>
                 ))

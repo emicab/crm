@@ -71,7 +71,7 @@
     ],
     "extraResources": [
       {
-        "from": "prisma/prod.db",
+        "from": "prisma/crm_template.db",
         "to": "crm_template.db"
       }
     ],
