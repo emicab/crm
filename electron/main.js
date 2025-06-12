@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 if (process.env.RUNNING_AS_SERVER === 'true') {
     const serverPath = process.argv[2];
@@ -214,6 +215,56 @@ function mainApp() {
         return { success: false, path: null, error: 'No se encontró la ventana' };
     });
 
+    function setupAutoUpdates() {
+        // Solo buscamos actualizaciones en producción
+        if (!app.isPackaged) {
+            return;
+        }
+
+        // Activamos la descarga automática una vez que se detecta una actualización
+        autoUpdater.autoDownload = true;
+        
+        console.log('[Updater] Buscando actualizaciones...');
+        autoUpdater.checkForUpdates();
+
+        // --- MANEJO DE EVENTOS DEL ACTUALIZADOR ---
+
+        autoUpdater.on('update-available', (info) => {
+            console.log('[Updater] Actualización disponible.', info);
+        });
+
+        autoUpdater.on('update-not-available', (info) => {
+            console.log('[Updater] No hay actualizaciones disponibles.', info);
+        });
+
+        autoUpdater.on('download-progress', (progressObj) => {
+            let log_message = "Velocidad de descarga: " + progressObj.bytesPerSecond;
+            log_message = log_message + ' - Descargado ' + progressObj.percent + '%';
+            log_message = log_message + ' (' + progressObj.transferred + "/" + progressObj.total + ')';
+            console.log(`[Updater] ${log_message}`);
+        });
+
+        autoUpdater.on('update-downloaded', (info) => {
+            console.log('[Updater] Actualización descargada. Mostrando diálogo...');
+            dialog.showMessageBox({
+                type: 'info',
+                title: 'Actualización Lista',
+                message: 'Una nueva versión de CRMAPP ha sido descargada. ¿Deseas reiniciar la aplicación para instalarla ahora?',
+                buttons: ['Reiniciar ahora', 'Más tarde'],
+                defaultId: 0,
+                cancelId: 1
+            }).then(result => {
+                if (result.response === 0) {
+                    autoUpdater.quitAndInstall();
+                }
+            });
+        });
+
+        autoUpdater.on('error', (err) => {
+            console.error('[Updater] Error en el actualizador automático: ' + err);
+        });
+    }
+
     app.on('ready', () => {
         createSplashWindow();
         const minimumWait = new Promise(resolve => setTimeout(resolve, 3000));
@@ -226,6 +277,7 @@ function mainApp() {
                 if (splashWindow) {
                     splashWindow.destroy();
                 }
+                setupAutoUpdates();
             }
         }).catch(error => {
             if (splashWindow) {

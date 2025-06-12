@@ -5,15 +5,21 @@
   "author": "Emiliano Cabanillas",
   "private": true,
   "main": "electron/main.js",
+   "repository": { 
+    "type": "git",
+    "url": "https://github.com/emicab/crm.git"
+  },
   "scripts": {
     "dev": "concurrently \"npm:dev:next\" \"npm:dev:electron\"",
     "dev:next": "next dev",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
-    "build": "npx prisma generate && next build && electron-builder"
+    "build": "npx prisma generate && next build && electron-builder",
+    "publish": "npx prisma generate && next build && electron-builder --publish always"
   },
   "dependencies": {
     "@prisma/client": "^6.8.2",
     "class-variance-authority": "^0.7.1",
+    "electron-updater": "^6.6.2",
     "lucide-react": "^0.511.0",
     "motion": "^12.16.0",
     "next": "15.3.3",
@@ -41,6 +47,11 @@
   "build": {
     "appId": "com.emidev.crm",
     "productName": "Ignite CRM",
+    "publish": {
+        "provider": "github",
+        "owner": "emicab",
+        "repo": "crm"
+    },
     "asar": false,
     "files": [
       "package.json",
