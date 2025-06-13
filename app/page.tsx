@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
 const mainModules = [
   { name: 'Nueva Venta', href: '/ventas/nueva', icon: ShoppingCart, description: 'Registra una nueva transacción de venta.' },
   { name: 'Nueva Compra', href: '/compras/nueva', icon: ArrowUpRightSquare, description: 'Ingresa mercadería y actualiza tu stock.' },
-  { name: 'Dashboard Analítico', href: '/dashboard', icon: LayoutDashboard, description: 'Visualiza tus métricas y gráficos clave.' },
+  { name: 'Analíticas', href: '/analiticas', icon: LayoutDashboard, description: 'Visualiza tus métricas y gráficos clave.' },
 ];
 
 // Módulos para las tarjetas secundarias
@@ -73,7 +73,7 @@ export default function HomePage() {
         <header className="text-center mb-12">
           {/* Puedes poner tu logo aquí si quieres */}
           {/* <img src="/logo.png" alt="Ignite CRM Logo" className="mx-auto h-16 w-auto mb-4" /> */}
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">Bienvenido a Ignite CRM</h1>
+          <h1 className="text-4xl font-bold tracking-tight text-foreground uppercase sm:text-5xl">Bienvenido a Ignite CRM</h1>
           <p className="mt-4 text-lg text-foreground-muted">Selecciona un módulo para empezar a gestionar tu negocio.</p>
         </header>
 

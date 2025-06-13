@@ -27,7 +27,7 @@
 
   /* --- Paleta de Neutros --- */
   /* Para el fondo principal de la aplicación, un blanco o casi blanco */
-  --color-background: #FFFFFF; /* Blanco puro */
+  --color-background: #fff; /* Blanco puro */
   /* Un gris muy sutil para fondos de secciones o elementos deshabilitados */
   --color-muted: #F9FAFB; /* Similar a Tailwind gray-50 */
   /* Para bordes, líneas divisorias */

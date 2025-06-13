@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Home, Package, Tag, Users, UserPlus, FileText, PlusSquare, TrendingDown, X, Truck, ArrowUpRightSquare, History } from 'lucide-react';
+import { Package, Tag, Users, UserPlus, FileText, PlusSquare, TrendingDown, X, Truck, ArrowUpRightSquare, History, LayoutDashboard } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -12,7 +12,7 @@ interface SidebarProps {
 
 const navItems = [
   // Si tu página principal es la raíz, usa href: '/' para el Dashboard
-  { href: '/', label: 'Dashboard', icon: <Home size={20} /> },
+  { href: '/analiticas', label: 'Analíticas', icon: <LayoutDashboard size={20} /> },
   { href: '/ventas', label: 'Historial Ventas', icon: <FileText size={20} /> },
   { href: '/ventas/nueva', label: 'Nueva Venta', icon: <PlusSquare size={20} /> },
   { href: '/compras', label: 'Historial Compras', icon: <History size={20} /> },  

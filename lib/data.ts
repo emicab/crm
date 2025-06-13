@@ -495,7 +495,7 @@ export async function getMonthlyFinancialSummaries(numberOfMonths: number = 6): 
       const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
       
       const monthLabel = `${year}-${(month + 1).toString().padStart(2, '0')}`;
-      console.log(`Procesando mes: ${monthLabel} (Desde ${startDate.toLocaleDateString()} hasta ${endDate.toLocaleDateString()})`);
+      
 
       // 1. Obtener Ingresos, COGS y Gastos para el mes actual del bucle
       const [revenueResult, saleItemsForCogs, expensesResult] = await Promise.all([
@@ -540,5 +540,72 @@ export async function getMonthlyFinancialSummaries(numberOfMonths: number = 6): 
   } catch (error) {
     console.error("Error al calcular los resúmenes financieros mensuales:", error);
     return []; // Devolver array vacío en caso de error
+  }
+}
+
+export interface DailySalesCount {
+  day: string; // "Lunes", "Martes", etc.
+  sales: number;
+}
+
+export async function getDailySalesCountForCurrentWeek(): Promise<DailySalesCount[]> {
+  try {
+    const now = new Date();
+    // Ajuste para que la semana comience en Lunes (getDay() devuelve 0 para Domingo, 1 para Lunes...)
+    const dayOfWeek = now.getDay(); // 0 (Sun) to 6 (Sat)
+    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Calcula el Lunes de esta semana
+    
+    const startOfWeek = new Date(now.setDate(diff));
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+    
+    // Obtener las ventas de la semana, agrupadas por día
+    const salesByDay = await prisma.sale.groupBy({
+      by: ['saleDate'],
+      _count: {
+        id: true, // Contamos las ventas por su id
+      },
+      where: {
+        saleDate: {
+          gte: startOfWeek,
+          lte: endOfWeek,
+        },
+      },
+      orderBy: {
+        saleDate: 'asc',
+      },
+    });
+
+    // Crear un mapa para acceder fácilmente a los resultados
+    const salesMap = new Map<number, number>(); // <Día de la semana (0-6), Cantidad>
+    salesByDay.forEach(dayData => {
+      const dayIndex = new Date(dayData.saleDate).getDay(); // 0 para Domingo, etc.
+      salesMap.set(dayIndex, dayData._count.id);
+    });
+
+    // Construir el array final para el gráfico, asegurando que todos los días de la semana estén presentes
+    const weekDays = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const result: DailySalesCount[] = [];
+
+    // Reordenamos para que empiece en Lunes y termine en Domingo
+    const orderedDayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+    const dayNameToIndexMap = { "Domingo": 0, "Lunes": 1, "Martes": 2, "Miércoles": 3, "Jueves": 4, "Viernes": 5, "Sábado": 6 };
+
+    for (const dayName of orderedDayNames) {
+        const dayIndex = dayNameToIndexMap[dayName as keyof typeof dayNameToIndexMap];
+        result.push({
+            day: dayName,
+            sales: salesMap.get(dayIndex) || 0,
+        });
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error("Error al obtener el conteo de ventas diarias:", error);
+    return [];
   }
 }
