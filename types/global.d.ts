@@ -8,6 +8,12 @@ declare global {
   
   interface Window {
     electronAPI: IElectronAPI;
+    licenseAPI: {
+      activate: (licenseKey: string) => Promise<{ success: boolean; message: string; }>;
+      check: () => Promise<{ isActivated: boolean; licenseKey: string; }>;
+    };
   }
+
+
 }
 

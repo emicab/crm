@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Función que la app web llamará para generar un PDF
   saveSaleAsPDF: () => ipcRenderer.invoke('save-sale-as-pdf'),
 
-  // Podríamos añadir más funciones aquí en el futuro
+  activate: (licenseKey) => ipcRenderer.invoke('license:activate', licenseKey),
+  check: () => ipcRenderer.invoke('license:check'),
 });

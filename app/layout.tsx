@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { Outfit } from 'next/font/google'; // O la fuente que uses
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
+import LicenseGate from '@/components/LicenseGate';
+
 
 const outfit = Outfit({ 
   variable: "--font-outfit",
@@ -21,11 +23,17 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const isDev = process.env.NODE_ENV === 'development';
+
   return (
     <html lang="es">
       <body className={`${outfit.variable} antialiased bg-background text-foreground`}>
         <Toaster position="top-right" />
-        {children}
+        {isDev ? (
+          children // En desarrollo, muestra la app directamente
+        ) : (
+          <LicenseGate>{children}</LicenseGate> // En producción, el "guardia" vigila
+        )}
       </body>
     </html>
   );

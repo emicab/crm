@@ -1,11 +1,11 @@
 {
   "name": "crmapp",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "CRM APP By Emiliano Cabanillas",
   "author": "Emiliano Cabanillas",
   "private": true,
   "main": "electron/main.js",
-   "repository": { 
+  "repository": {
     "type": "git",
     "url": "https://github.com/emicab/crm.git"
   },
@@ -19,10 +19,12 @@
   "dependencies": {
     "@prisma/client": "^6.8.2",
     "class-variance-authority": "^0.7.1",
+    "electron-store": "^7.0.3",
     "electron-updater": "^6.6.2",
     "lucide-react": "^0.511.0",
     "motion": "^12.16.0",
     "next": "15.3.3",
+    "node-machine-id": "^1.1.12",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.5.2",
@@ -48,9 +50,9 @@
     "appId": "com.emidev.crm",
     "productName": "Ignite CRM",
     "publish": {
-        "provider": "github",
-        "owner": "emicab",
-        "repo": "crm"
+      "provider": "github",
+      "owner": "emicab",
+      "repo": "crm"
     },
     "asar": false,
     "files": [

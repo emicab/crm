@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const { machineIdSync } = require('node-machine-id');
+const Store = require('electron-store');
+
 
 if (process.env.RUNNING_AS_SERVER === 'true') {
     const serverPath = process.argv[2];
@@ -17,6 +20,8 @@ function mainApp() {
     let isServerReady = false;
     let isStartingUp = false;
     const PORT = 3001;
+
+    const store = new Store();
 
     function createSplashWindow() {
         splashWindow = new BrowserWindow({
@@ -44,9 +49,9 @@ function mainApp() {
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
-                preload: path.join(__dirname, 'preload.js')
+                preload: path.join(app.getAppPath(), 'electron/preload.js')
             },
-            icon: path.join(__dirname, '../assets/crm_icono.png'),
+            icon: path.join(app.getAppPath(), '../assets/crm_icono.png'),
         });
 
         const url = `http://127.0.0.1:${PORT}`;
@@ -213,6 +218,51 @@ function mainApp() {
             }
         }
         return { success: false, path: null, error: 'No se encontró la ventana' };
+    });
+
+    ipcMain.handle('license:activate', async (event, licenseKey) => {
+    try {
+        const { machineIdSync } = require('node-machine-id');
+        const hardwareId = machineIdSync(true); 
+        console.log(`[License] Intentando activar clave: ${licenseKey} para Hardware ID: ${hardwareId}`);
+
+        const response = await fetch('http://127.0.0.1:4000/api/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ licenseKey, hardwareId }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            store.set('licenseKey', licenseKey);
+            store.set('isActivated', true);
+            console.log('[License] Activación exitosa.');
+            return { success: true, message: data.message };
+        } else {
+            console.error('[License] Falló la activación (respuesta del servidor):', data.message);
+            return { success: false, message: data.message };
+        }
+    } catch (error) {
+        // --- ¡BLOQUE CATCH MEJORADO! ---
+        console.error('------------------------------------------------');
+        console.error('[License] Error DETALLADO de red al activar:');
+        console.error('Error Name:', error.name);
+        console.error('Error Message:', error.message);
+        // La "causa" del error suele tener la información más útil sobre problemas de red.
+        console.error('Error Cause:', error.cause); 
+        console.error('Full Error Object:', JSON.stringify(error, null, 2));
+        console.error('------------------------------------------------');
+        return { success: false, message: 'No se pudo conectar al servidor de licencias. Revisa los logs de la terminal.' };
+    }
+});
+
+    // Este manejador revisa si la app ya está activada
+    ipcMain.handle('license:check', async () => {
+        const isActivated = store.get('isActivated', false);
+        const licenseKey = store.get('licenseKey', '');
+        console.log(`[License] Verificando estado: ${isActivated ? 'Activada' : 'No activada'}`);
+        return { isActivated, licenseKey };
     });
 
     function setupAutoUpdates() {
