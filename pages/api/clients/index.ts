@@ -2,6 +2,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma'; // Adjust the path if necessary
 import { Prisma } from '@prisma/client'; // For error typing
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -23,25 +25,52 @@ export default async function handler(
       };
     }
 
+    const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
+    const skip = page ? (page - 1) * limit : undefined;
+
     try {
-      const clients = await prisma.client.findMany({
-        where: prismaWhereClause, // Use the constructed where clause
-        orderBy: [
-          { firstName: 'asc' },
-          { lastName: 'asc' },
-        ],
-      });
-      res.status(200).json(clients);
+      const [clients, total] = await Promise.all([
+        prisma.client.findMany({
+          where: prismaWhereClause, // Use the constructed where clause
+          orderBy: [
+            { firstName: 'asc' },
+            { lastName: 'asc' },
+          ],
+          ...(skip !== undefined && { skip, take: limit }),
+        }),
+        prisma.client.count({ where: prismaWhereClause }),
+      ]);
+
+      if (page !== undefined) {
+        res.status(200).json({
+          data: clients,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        });
+      } else {
+        res.status(200).json(clients);
+      }
     } catch (error) {
-      console.error("Error fetching clients:", error);
-      res.status(500).json({ message: 'Error al obtener los clientes' });
+      handleApiError(res, error, "fetching clients");
     }
   } else if (req.method === 'POST') {
-    const { firstName, lastName, email, phone, address, notes } = req.body;
+    let { firstName, lastName, email, phone, address, notes } = req.body;
 
     if (!firstName) {
       return res.status(400).json({ message: 'El nombre es obligatorio.' });
     }
+
+    firstName = sanitizeString(firstName);
+    if (lastName) lastName = sanitizeString(lastName);
+    if (email) email = sanitizeString(email);
+    if (phone) phone = sanitizeString(phone);
+    if (address) address = sanitizeString(address);
+    if (notes) notes = sanitizeString(notes);
 
     try {
       const newClient = await prisma.client.create({
@@ -56,13 +85,7 @@ export default async function handler(
       });
       res.status(201).json(newClient);
     } catch (error) {
-      console.error("Error creating client:", error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
-          return res.status(409).json({ message: 'Ya existe un cliente con este correo electrónico.' });
-        }
-      }
-      res.status(500).json({ message: 'Error al crear el cliente' });
+      handleApiError(res, error, "creating client");
     }
   } else {
     res.setHeader('Allow', ['GET', 'POST']);

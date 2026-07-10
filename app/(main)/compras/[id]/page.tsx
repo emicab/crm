@@ -20,7 +20,7 @@ interface PurchaseDetail extends Omit<Purchase, 'items' | 'totalAmount'> {
 const PurchaseDetailPage = () => {
   const router = useRouter();
   const params = useParams();
-  const purchaseId = params.id as string;
+  const purchaseId = params?.id as string;
 
   const [purchase, setPurchase] = useState<PurchaseDetail | null>(null);
   const [loading, setLoading] = useState(true);

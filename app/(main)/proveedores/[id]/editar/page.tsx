@@ -8,7 +8,7 @@ import { Loader2 } from 'lucide-react';
 
 const EditarProveedorPage = () => {
   const params = useParams();
-  const supplierId = params.id as string;
+  const supplierId = params?.id as string;
 
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(true);

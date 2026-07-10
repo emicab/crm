@@ -11,7 +11,7 @@ import Button from '@/components/ui/Button';
 const EditarCategoriaPage = () => {
   const router = useRouter();
   const params = useParams();
-  const categoryId = params.id as string;
+  const categoryId = params?.id as string;
 
   const [category, setCategory] = useState<Category | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,7 +1,8 @@
 // pages/api/brands/[id].ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma'; // Ajusta la ruta si es necesario
-import { Prisma } from '@prisma/client'; // Para tipar errores de Prisma
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -25,16 +26,17 @@ export default async function handler(
       }
       res.status(200).json(brand);
     } catch (error) {
-      console.error(`Error fetching brand ${id}:`, error);
-      res.status(500).json({ message: `Error al obtener la marca ${id}` });
+      handleApiError(res, error, `fetching brand ${id}`);
     }
   } else if (req.method === 'PUT') {
-    const { name, logoUrl } = req.body;
+    let { name, logoUrl } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ message: 'El nombre es obligatorio para la actualización y debe ser una cadena de texto no vacía.' });
     }
     // logoUrl es opcional, puede ser string o null
+    name = sanitizeString(name);
+    if (logoUrl) logoUrl = sanitizeString(logoUrl);
 
     try {
       const updatedBrand = await prisma.brand.update({
@@ -46,17 +48,7 @@ export default async function handler(
       });
       res.status(200).json(updatedBrand);
     } catch (error) {
-      console.error(`Error updating brand ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') { // "Record to update not found"
-          return res.status(404).json({ message: 'Marca no encontrada para actualizar.' });
-        }
-        if (error.code === 'P2002' && error.meta?.target?.includes('name')) {
-          // Violación de constraint único para el nombre
-          return res.status(409).json({ message: 'Ya existe otra marca con este nombre.' });
-        }
-      }
-      res.status(500).json({ message: `Error al actualizar la marca ${id}. Detalles: ${error.message}` });
+      handleApiError(res, error, `updating brand ${id}`);
     }
   } else if (req.method === 'DELETE') {
     try {
@@ -76,12 +68,7 @@ export default async function handler(
       });
       res.status(204).end(); // 204 No Content: Éxito, sin cuerpo de respuesta
     } catch (error) {
-      console.error(`Error deleting brand ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        // "Record to delete not found"
-        return res.status(404).json({ message: 'Marca no encontrada para eliminar.' });
-      }
-      res.status(500).json({ message: `Error al eliminar la marca ${id}. Detalles: ${error.message}` });
+      handleApiError(res, error, `deleting brand ${id}`);
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);

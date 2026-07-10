@@ -2,6 +2,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -26,42 +28,38 @@ export default async function handler(
       }
       res.status(200).json(supplier);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido.';
-      res.status(500).json({ message: `Error al obtener el proveedor: ${errorMessage}` });
+      handleApiError(res, error, `fetching supplier ${id}`);
     }
   } else if (req.method === 'PUT') {
     // Actualizar un proveedor
-    const { name, contactPerson, email, phone, address, notes } = req.body;
+    let { name, contactPerson, email, phone, address, notes } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ message: 'El nombre del proveedor es obligatorio.' });
     }
     
+    name = sanitizeString(name);
+    if (contactPerson) contactPerson = sanitizeString(contactPerson);
+    if (email) email = sanitizeString(email);
+    if (phone) phone = sanitizeString(phone);
+    if (address) address = sanitizeString(address);
+    if (notes) notes = sanitizeString(notes);
+
     try {
       const updatedSupplier = await prisma.supplier.update({
         where: { id },
         data: {
           name: name.trim(),
-          contactPerson,
-          email,
-          phone,
-          address,
-          notes,
+          contactPerson: contactPerson || null,
+          email: email || null,
+          phone: phone || null,
+          address: address || null,
+          notes: notes || null,
         },
       });
       res.status(200).json(updatedSupplier);
     } catch (error: unknown) {
-      console.error(`Error al actualizar proveedor ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
-          return res.status(404).json({ message: 'Proveedor no encontrado para actualizar.' });
-        }
-        if (error.code === 'P2002' && error.meta?.target?.includes('name')) {
-          return res.status(409).json({ message: 'Ya existe otro proveedor con este nombre.' });
-        }
-      }
-      const errorMessage = error instanceof Error ? error.message : 'Error inesperado.';
-      res.status(500).json({ message: `Error al actualizar el proveedor: ${errorMessage}` });
+      handleApiError(res, error, `updating supplier ${id}`);
     }
   } else if (req.method === 'DELETE') {
     // Eliminar un proveedor
@@ -83,12 +81,7 @@ export default async function handler(
       res.status(204).end(); // No Content, éxito en la eliminación
 
     } catch (error: unknown) {
-      console.error(`Error al eliminar proveedor ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        return res.status(404).json({ message: 'Proveedor no encontrado para eliminar.' });
-      }
-      const errorMessage = error instanceof Error ? error.message : 'Error inesperado.';
-      res.status(500).json({ message: `Error al eliminar el proveedor: ${errorMessage}` });
+      handleApiError(res, error, `deleting supplier ${id}`);
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);

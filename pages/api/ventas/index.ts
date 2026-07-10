@@ -2,7 +2,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { Prisma, PaymentType } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
+const Decimal = Prisma.Decimal;
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 interface SaleItemInput {
   productId: number;
@@ -46,20 +48,28 @@ export default async function handler(
       }
     }
 
+    const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
+    const skip = page ? (page - 1) * limit : undefined;
+
     try {
-      const sales = await prisma.sale.findMany({
-        where: whereClause, // Aplicar los filtros si existen
-        include: {
-          client: true,
-          seller: true,
-          items: {
-            include: {
-              product: true,
+      const [sales, total] = await Promise.all([
+        prisma.sale.findMany({
+          where: whereClause, // Aplicar los filtros si existen
+          include: {
+            client: true,
+            seller: true,
+            items: {
+              include: {
+                product: true,
+              },
             },
           },
-        },
-        orderBy: { saleDate: 'desc' },
-      });
+          orderBy: { saleDate: 'desc' },
+          ...(skip !== undefined && { skip, take: limit }),
+        }),
+        prisma.sale.count({ where: whereClause }),
+      ]);
 
       // Convertir Decimales a string para la respuesta JSON
       const salesForJson = sales.map(sale => ({
@@ -76,13 +86,24 @@ export default async function handler(
         }))
       }));
 
-      res.status(200).json(salesForJson);
+      if (page !== undefined) {
+        res.status(200).json({
+          data: salesForJson,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        });
+      } else {
+        res.status(200).json(salesForJson);
+      }
     } catch (error) {
-      console.error("Error fetching sales:", error);
-      res.status(500).json({ message: 'Error al obtener el historial de ventas' });
+      handleApiError(res, error, "fetching sales");
     }
   } else if (req.method === 'POST') {
-    const { clientId, sellerId, paymentType, notes, items, discountCodeApplied } = req.body as CreateSaleInput; // <--- AÑADIR discountCodeApplied
+    let { clientId, sellerId, paymentType, notes, items, discountCodeApplied } = req.body as CreateSaleInput; // <--- AÑADIR discountCodeApplied
 
     if (!sellerId || !paymentType || !items || items.length === 0) {
       return res.status(400).json({ message: 'Faltan datos obligatorios: vendedor, tipo de pago o ítems.' });
@@ -90,6 +111,9 @@ export default async function handler(
     if (!Object.values(PaymentType).includes(paymentType)) {
         return res.status(400).json({ message: 'Tipo de pago inválido.' });
     }
+
+    if (notes) notes = sanitizeString(notes);
+    if (discountCodeApplied) discountCodeApplied = sanitizeString(discountCodeApplied);
 
     let calculatedTotalAmount = new Decimal(0);
     for (const item of items) {
@@ -99,15 +123,57 @@ export default async function handler(
       calculatedTotalAmount = calculatedTotalAmount.plus(new Decimal(item.priceAtSale).times(item.quantity));
     }
     
-    // Nota: En este punto, 'calculatedTotalAmount' NO incluye ningún descuento.
-    // La lógica para aplicar el descuento al total se añadiría aquí si la tuviéramos.
+    let discountPercent = 0;
+    let discountCodeRecord: any = null;
+    if (discountCodeApplied) {
+      const codeUpper = discountCodeApplied.toUpperCase().trim();
+      try {
+        discountCodeRecord = await prisma.discountCode.findUnique({
+          where: { code: codeUpper }
+        });
+      } catch (err) {
+        // Ignorar error si no está sincronizado
+      }
+      
+      if (!discountCodeRecord) {
+        return res.status(400).json({ message: `El código de descuento "${discountCodeApplied}" no existe.` });
+      }
+      if (!discountCodeRecord.isActive) {
+        return res.status(400).json({ message: `El código de descuento "${discountCodeApplied}" está inactivo.` });
+      }
+      
+      const now = new Date();
+      if (discountCodeRecord.validFrom && now < new Date(discountCodeRecord.validFrom)) {
+        return res.status(400).json({ message: `El código de descuento "${discountCodeApplied}" aún no es válido.` });
+      }
+      if (discountCodeRecord.validUntil && now > new Date(discountCodeRecord.validUntil)) {
+        return res.status(400).json({ message: `El código de descuento "${discountCodeApplied}" ha expirado.` });
+      }
+      if (discountCodeRecord.maxUses !== null && discountCodeRecord.currentUses >= discountCodeRecord.maxUses) {
+        return res.status(400).json({ message: `El código de descuento "${discountCodeApplied}" ha alcanzado su límite de usos.` });
+      }
+      
+      discountPercent = parseFloat(discountCodeRecord.discountPercent.toString());
+    }
+
+    if (discountPercent > 0) {
+      const discountAmount = calculatedTotalAmount.times(discountPercent).div(100);
+      calculatedTotalAmount = calculatedTotalAmount.minus(discountAmount);
+    }
 
     try {
       const result = await prisma.$transaction(async (tx) => {
+        if (discountCodeRecord) {
+          await tx.discountCode.update({
+            where: { id: discountCodeRecord.id },
+            data: { currentUses: { increment: 1 } }
+          });
+        }
+
         const newSale = await tx.sale.create({
           data: {
             saleDate: new Date(),
-            totalAmount: calculatedTotalAmount, // Total sin descuento por ahora
+            totalAmount: calculatedTotalAmount,
             paymentType,
             notes: notes || null,
             discountCodeApplied: discountCodeApplied || null, // <--- GUARDAR EL CÓDIGO
@@ -116,8 +182,38 @@ export default async function handler(
           },
         });
 
+        // Registrar movimiento en caja si hay una abierta
+        const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
+        if (openRegister) {
+          const cashAmount = paymentType === 'CASH' ? calculatedTotalAmount : new Decimal(0);
+          const otherAmount = paymentType !== 'CASH' ? calculatedTotalAmount : new Decimal(0);
+          if (cashAmount.greaterThan(0)) {
+            await tx.cashMovement.create({
+              data: {
+                cashRegisterId: openRegister.id,
+                type: 'SALE',
+                paymentType: paymentType,
+                sourceId: newSale.id,
+                amount: cashAmount,
+                description: `Venta #${newSale.id} - Efectivo`,
+              },
+            });
+          }
+          if (otherAmount.greaterThan(0)) {
+            await tx.cashMovement.create({
+              data: {
+                cashRegisterId: openRegister.id,
+                type: 'SALE',
+                paymentType: paymentType,
+                sourceId: newSale.id,
+                amount: otherAmount,
+                description: `Venta #${newSale.id} - ${paymentType}`,
+              },
+            });
+          }
+        }
+
         for (const item of items) {
-          // ... (lógica de creación de SaleItem y actualización de stock sin cambios) ...
           const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) {
             throw new Error(`Producto con ID ${item.productId} no encontrado.`);
@@ -126,20 +222,50 @@ export default async function handler(
             throw new Error(`Stock insuficiente para el producto "${product.name}". Disponible: ${product.quantityStock}, Solicitado: ${item.quantity}.`);
           }
 
+          let purchasePriceAtSale = product.pricePurchase;
+          if (!purchasePriceAtSale || purchasePriceAtSale.equals(0)) {
+            const lastPurchase = await tx.purchaseItem.findFirst({
+              where: { productId: item.productId },
+              orderBy: { id: 'desc' },
+              select: { purchasePrice: true },
+            });
+            if (lastPurchase) {
+              purchasePriceAtSale = lastPurchase.purchasePrice;
+            }
+          }
+
           await tx.saleItem.create({
             data: {
               saleId: newSale.id,
               productId: item.productId,
               quantity: item.quantity,
               priceAtSale: new Decimal(item.priceAtSale),
-              purchasePriceAtSale: product.pricePurchase || new Decimal(0),
+              purchasePriceAtSale: purchasePriceAtSale || new Decimal(0),
             },
           });
 
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { quantityStock: { decrement: item.quantity } },
+          const updateResult = await tx.product.updateMany({
+            where: {
+              id: item.productId,
+              quantityStock: { gte: item.quantity }
+            },
+            data: {
+              quantityStock: { decrement: item.quantity }
+            }
           });
+          if (updateResult.count === 0) {
+            throw new Error(`Stock insuficiente o modificado concurrentemente para el producto "${product.name}".`);
+          }
+
+          // Alerta de stock mínimo con log local y mock email
+          const updatedProduct = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { id: true, name: true, quantityStock: true, stockMinAlert: true }
+          });
+          if (updatedProduct && updatedProduct.stockMinAlert !== null && updatedProduct.quantityStock < updatedProduct.stockMinAlert) {
+            console.warn(`[STOCK ALERT] El producto "${updatedProduct.name}" (ID: ${updatedProduct.id}) ha quedado por debajo del mínimo de alerta de stock (${updatedProduct.stockMinAlert}). Stock actual: ${updatedProduct.quantityStock}`);
+            console.log(`[MOCK EMAIL] Enviado correo ficticio a: administracion@empresa.com | Asunto: Alerta de Stock Mínimo - ${updatedProduct.name} | Contenido: El producto "${updatedProduct.name}" tiene ${updatedProduct.quantityStock} unidades disponibles (Umbral mínimo: ${updatedProduct.stockMinAlert}).`);
+          }
         }
         return tx.sale.findUnique({
             where: { id: newSale.id },
@@ -150,11 +276,10 @@ export default async function handler(
       res.status(201).json(result);
 
     } catch (error: any) {
-      console.error("Error creating sale:", error);
-      if (error.message.startsWith('Stock insuficiente') || error.message.startsWith('Producto con ID')) {
+      if (error instanceof Error && (error.message.startsWith('Stock insuficiente') || error.message.startsWith('Producto con ID'))) {
         return res.status(409).json({ message: error.message });
       }
-      res.status(500).json({ message: error.message || 'Error al crear la venta' });
+      handleApiError(res, error, "creating sale");
     }
   } else {
     res.setHeader('Allow', ['GET', 'POST']);

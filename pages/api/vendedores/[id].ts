@@ -2,6 +2,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -25,11 +27,10 @@ export default async function handler(
       }
       res.status(200).json(seller);
     } catch (error: any) {
-      console.error(`Error fetching seller ${id}:`, error);
-      res.status(500).json({ message: `Error al obtener el vendedor: ${error.message}` });
+      handleApiError(res, error, `fetching seller ${id}`);
     }
   } else if (req.method === 'PUT') {
-    const { name, email, phone, isActive } = req.body;
+    let { name, email, phone, isActive } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ message: 'El nombre es obligatorio.' });
@@ -40,6 +41,10 @@ export default async function handler(
     if (typeof isActive !== 'boolean' && isActive !== undefined) {
         return res.status(400).json({ message: 'El estado "isActive" debe ser un valor booleano.'});
     }
+
+    name = sanitizeString(name);
+    if (email) email = sanitizeString(email);
+    if (phone) phone = sanitizeString(phone);
 
     try {
       const updatedSeller = await prisma.seller.update({
@@ -53,22 +58,7 @@ export default async function handler(
       });
       res.status(200).json(updatedSeller);
     } catch (error: any) {
-      console.error(`Error updating seller ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
-          return res.status(404).json({ message: 'Vendedor no encontrado para actualizar.' });
-        }
-        if (error.code === 'P2002') {
-          const target = error.meta?.target as string[] | undefined;
-          if (target?.includes('name')) {
-            return res.status(409).json({ message: 'Ya existe otro vendedor con este nombre.' });
-          }
-          if (target?.includes('email')) {
-            return res.status(409).json({ message: 'Ya existe otro vendedor con este correo electrónico.' });
-          }
-        }
-      }
-      res.status(500).json({ message: `Error al actualizar el vendedor: ${error.message}` });
+      handleApiError(res, error, `updating seller ${id}`);
     }
   } else if (req.method === 'DELETE') {
     try {
@@ -88,11 +78,7 @@ export default async function handler(
       });
       res.status(204).end(); // No Content
     } catch (error: any) {
-      console.error(`Error deleting seller ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        return res.status(404).json({ message: 'Vendedor no encontrado para eliminar.' });
-      }
-      res.status(500).json({ message: `Error al eliminar el vendedor: ${error.message}` });
+      handleApiError(res, error, `deleting seller ${id}`);
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);

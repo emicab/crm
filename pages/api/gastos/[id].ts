@@ -2,7 +2,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { Prisma, PaymentType } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
+const Decimal = Prisma.Decimal;
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -26,11 +28,10 @@ export default async function handler(
       const expenseForJson = { ...expense, amount: expense.amount.toString() };
       res.status(200).json(expenseForJson);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido.';
-      res.status(500).json({ message: `Error al obtener el gasto: ${errorMessage}` });
+      handleApiError(res, error, `fetching expense ${id}`);
     }
   } else if (req.method === 'PUT') {
-    const { description, amount, category, paymentType, expenseDate, notes } = req.body;
+    let { description, amount, category, paymentType, expenseDate, notes } = req.body;
 
     if (!description || amount === undefined || !category || !paymentType) {
       return res.status(400).json({ message: 'Descripción, monto, categoría y tipo de pago son obligatorios.' });
@@ -39,6 +40,10 @@ export default async function handler(
     if (isNaN(amountNumber) || amountNumber <= 0) {
       return res.status(400).json({ message: 'El monto debe ser un número positivo.' });
     }
+
+    description = sanitizeString(description);
+    category = sanitizeString(category);
+    if (notes) notes = sanitizeString(notes);
 
     let finalExpenseDate: Date | undefined = undefined;
     if (expenseDate) {
@@ -61,24 +66,14 @@ export default async function handler(
       const expenseForJson = { ...updatedExpense, amount: updatedExpense.amount.toString() };
       res.status(200).json(expenseForJson);
     } catch (error: unknown) {
-      console.error(`Error al actualizar gasto ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        return res.status(404).json({ message: 'Gasto no encontrado para actualizar.' });
-      }
-      const errorMessage = error instanceof Error ? error.message : 'Error inesperado.';
-      res.status(500).json({ message: `Error al actualizar el gasto: ${errorMessage}` });
+      handleApiError(res, error, `updating expense ${id}`);
     }
   } else if (req.method === 'DELETE') {
     try {
       await prisma.expense.delete({ where: { id } });
       res.status(204).end(); // No Content, éxito
     } catch (error: unknown) {
-      console.error(`Error al eliminar gasto ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        return res.status(404).json({ message: 'Gasto no encontrado para eliminar.' });
-      }
-      const errorMessage = error instanceof Error ? error.message : 'Error inesperado.';
-      res.status(500).json({ message: `Error al eliminar el gasto: ${errorMessage}` });
+      handleApiError(res, error, `deleting expense ${id}`);
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);

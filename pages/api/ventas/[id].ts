@@ -2,6 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { Prisma } from '@prisma/client'; // Para tipar errores de Prisma
+import { handleApiError } from '../../../lib/apiErrorHandler';
 
 export default async function handler(
   req: NextApiRequest,
@@ -54,13 +55,48 @@ export default async function handler(
 
       res.status(200).json(saleForJson);
     } catch (error: any) {
-      console.error(`Error fetching sale ${id}:`, error);
-      res.status(500).json({ message: `Error al obtener los detalles de la venta: ${error.message}` });
+      handleApiError(res, error, `fetching sale ${id}`);
     }
   } else if (req.method === 'PUT') {
-    // La lógica para actualizar una venta es compleja (requiere reajustar stock, totales, etc.)
-    // y la dejamos pendiente.
-    res.status(501).json({ message: 'Funcionalidad de actualizar venta no implementada.' });
+    const { clientId } = req.body;
+    try {
+      const updatedSale = await prisma.sale.update({
+        where: { id: id },
+        data: {
+          clientId: clientId ? parseInt(clientId) : null,
+        },
+        include: {
+          client: true,
+          seller: true,
+          items: {
+            include: {
+              product: true,
+            },
+            orderBy: {
+              id: 'asc'
+            }
+          }
+        }
+      });
+
+      const saleForJson = {
+        ...updatedSale,
+        totalAmount: updatedSale.totalAmount.toString(),
+        items: updatedSale.items.map(item => ({
+          ...item,
+          priceAtSale: item.priceAtSale.toString(),
+          product: item.product ? {
+            ...item.product,
+            pricePurchase: item.product.pricePurchase?.toString() || null,
+            priceSale: item.product.priceSale.toString(),
+          } : null
+        }))
+      };
+
+      res.status(200).json(saleForJson);
+    } catch (error: any) {
+      handleApiError(res, error, `updating sale ${id}`);
+    }
 
   } else if (req.method === 'DELETE') {
     try {
@@ -112,11 +148,10 @@ export default async function handler(
       res.status(200).json(result);
 
     } catch (error: any) {
-      console.error(`Error deleting sale ${id}:`, error);
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         return res.status(404).json({ message: 'Venta no encontrada para eliminar.' });
       }
-      res.status(500).json({ message: `Error al eliminar la venta: ${error.message || 'Error desconocido en la transacción.'}` });
+      handleApiError(res, error, `deleting sale ${id}`);
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);

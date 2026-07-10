@@ -1,10 +1,15 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const { machineIdSync } = require('node-machine-id');
 const Store = require('electron-store');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://htroigemnwqiugieodmv.supabase.co';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MDM4ODcsImV4cCI6MjA5OTI3OTg4N30.sSp5vEDvI7OHuYL0SeeFiATilC_f_BdZao2BjeN0IVQ';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 
 if (process.env.RUNNING_AS_SERVER === 'true') {
@@ -19,7 +24,9 @@ function mainApp() {
     let splashWindow = null;
     let isServerReady = false;
     let isStartingUp = false;
+    let serverProcess = null;
     const PORT = 3001;
+    const DEV_PORT = 3000;
 
     const store = new Store();
 
@@ -40,7 +47,7 @@ function mainApp() {
         });
     }
 
-    function createWindow() {
+    function createWindow(urlOverride) {
         mainWindow = new BrowserWindow({
             width: 1366,
             height: 768,
@@ -54,7 +61,7 @@ function mainApp() {
             icon: path.join(app.getAppPath(), '../assets/crm_icono.png'),
         });
 
-        const url = `http://127.0.0.1:${PORT}`;
+        const url = urlOverride || `http://127.0.0.1:${PORT}`;
         mainWindow.loadURL(url).catch(err => {
             dialog.showErrorBox("Error de Conexión", `No se pudo conectar a ${url}.`);
         });
@@ -99,7 +106,7 @@ function mainApp() {
     function startNextServer() {
         return new Promise((resolve, reject) => {
             if (!app.isPackaged) {
-                return resolve();
+                return resolve(true);
             }
 
             const serverPath = path.join(app.getAppPath(), '.next/standalone/server.js');
@@ -163,10 +170,17 @@ function mainApp() {
 
         try {
             ensureDatabaseIsReady();
-            await startNextServer();
-            await checkServerReady();
-            isServerReady = true;
-            createWindow();
+            const isDev = await startNextServer();
+
+            if (isDev) {
+                // En desarrollo, Next.js ya corre en puerto 3000
+                isServerReady = true;
+                createWindow(`http://127.0.0.1:${DEV_PORT}`);
+            } else {
+                await checkServerReady();
+                isServerReady = true;
+                createWindow();
+            }
         } catch (error) {
             console.error("[Startup] ERROR FATAL DURANTE EL ARRANQUE:", error);
             dialog.showErrorBox("Error Crítico de Arranque", error.message);
@@ -221,85 +235,183 @@ function mainApp() {
     });
 
     ipcMain.handle('license:activate', async (event, licenseKey) => {
-    try {
-        const { machineIdSync } = require('node-machine-id');
-        const hardwareId = machineIdSync(true); 
-        console.log(`[License] Intentando activar clave: ${licenseKey} para Hardware ID: ${hardwareId}`);
+        try {
+            const hardwareId = machineIdSync(true);
+            const key = licenseKey.toUpperCase().trim();
+            console.log(`[License] Intentando activar clave: ${key} para Hardware ID: ${hardwareId}`);
 
-        const response = await fetch('http://127.0.0.1:4000/api/activate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ licenseKey, hardwareId }),
-        });
+            const { data: license, error } = await supabase
+                .from('licenses')
+                .select('*')
+                .eq('key', key)
+                .single();
 
-        const data = await response.json();
+            if (error || !license) {
+                console.error('[License] Clave no encontrada en Supabase.');
+                return { success: false, message: 'La clave de licencia no es válida.' };
+            }
 
-        if (response.ok) {
-            store.set('licenseKey', licenseKey);
+            if (!license.is_active) {
+                return { success: false, message: 'La clave de licencia está desactivada.' };
+            }
+
+            if (license.expires_at && new Date(license.expires_at) < new Date()) {
+                return { success: false, message: 'La clave de licencia ha expirado.' };
+            }
+
+            if (license.hardware_id && license.hardware_id !== hardwareId) {
+                return { success: false, message: 'La clave ya está activada en otro equipo.' };
+            }
+
+            if (license.activations_count >= license.max_activations) {
+                return { success: false, message: 'La clave alcanzó el límite de activaciones.' };
+            }
+
+            const { error: updateError } = await supabase
+                .from('licenses')
+                .update({
+                    hardware_id: hardwareId,
+                    activations_count: license.activations_count + 1,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', license.id);
+
+            if (updateError) {
+                console.error('[License] Error al actualizar en Supabase:', updateError);
+                return { success: false, message: 'Error al activar la licencia. Intente nuevamente.' };
+            }
+
+            if (safeStorage && safeStorage.isEncryptionAvailable()) {
+                const encryptedKey = safeStorage.encryptString(licenseKey);
+                store.set('licenseKey', encryptedKey.toString('base64'));
+            } else {
+                store.set('licenseKey', licenseKey);
+            }
             store.set('isActivated', true);
             console.log('[License] Activación exitosa.');
-            return { success: true, message: data.message };
-        } else {
-            console.error('[License] Falló la activación (respuesta del servidor):', data.message);
-            return { success: false, message: data.message };
+            return { success: true, message: '¡Activación exitosa!' };
+
+        } catch (error) {
+            console.error('[License] Error inesperado:', error);
+            return { success: false, message: 'Error de conexión con el servidor de licencias. Verifique su conexión a internet.' };
         }
-    } catch (error) {
-        // --- ¡BLOQUE CATCH MEJORADO! ---
-        console.error('------------------------------------------------');
-        console.error('[License] Error DETALLADO de red al activar:');
-        console.error('Error Name:', error.name);
-        console.error('Error Message:', error.message);
-        // La "causa" del error suele tener la información más útil sobre problemas de red.
-        console.error('Error Cause:', error.cause); 
-        console.error('Full Error Object:', JSON.stringify(error, null, 2));
-        console.error('------------------------------------------------');
-        return { success: false, message: 'No se pudo conectar al servidor de licencias. Revisa los logs de la terminal.' };
-    }
-});
+    });
 
     // Este manejador revisa si la app ya está activada
     ipcMain.handle('license:check', async () => {
         const isActivated = store.get('isActivated', false);
-        const licenseKey = store.get('licenseKey', '');
         console.log(`[License] Verificando estado: ${isActivated ? 'Activada' : 'No activada'}`);
-        return { isActivated, licenseKey };
+        return { isActivated };
     });
 
-    function setupAutoUpdates() {
-        // Solo buscamos actualizaciones en producción
-        if (!app.isPackaged) {
-            return;
+    ipcMain.handle('db:backup', async () => {
+        try {
+            const getDatabasePath = () => {
+                const dbUrl = process.env.DATABASE_URL || '';
+                if (dbUrl.startsWith('file:')) {
+                    let dbPath = dbUrl.replace(/^file:/, '');
+                    if (dbPath.startsWith('/') && dbPath[2] === ':') {
+                        dbPath = dbPath.slice(1);
+                    }
+                    return path.resolve(dbPath);
+                }
+                return path.join(app.getPath('userData'), 'crm_prod.db');
+            };
+
+            const dbPath = getDatabasePath();
+            if (!fs.existsSync(dbPath)) {
+                return { success: false, error: 'Base de datos no encontrada.' };
+            }
+            const { filePath, canceled } = await dialog.showSaveDialog({
+                title: 'Exportar Copia de Seguridad',
+                defaultPath: path.join(app.getPath('downloads'), `backup_crm_${new Date().toISOString().split('T')[0]}.db`),
+                filters: [{ name: 'SQLite Database', extensions: ['db'] }]
+            });
+            if (canceled || !filePath) {
+                return { success: false, canceled: true };
+            }
+            fs.copyFileSync(dbPath, filePath);
+            return { success: true, path: filePath };
+        } catch (error) {
+            console.error('[Backup Error]:', error);
+            return { success: false, error: error.message };
         }
+    });
 
-        // Activamos la descarga automática una vez que se detecta una actualización
-        autoUpdater.autoDownload = true;
-        
-        console.log('[Updater] Buscando actualizaciones...');
-        autoUpdater.checkForUpdates();
+    ipcMain.handle('db:restore', async () => {
+        try {
+            const getDatabasePath = () => {
+                const dbUrl = process.env.DATABASE_URL || '';
+                if (dbUrl.startsWith('file:')) {
+                    let dbPath = dbUrl.replace(/^file:/, '');
+                    if (dbPath.startsWith('/') && dbPath[2] === ':') {
+                        dbPath = dbPath.slice(1);
+                    }
+                    return path.resolve(dbPath);
+                }
+                return path.join(app.getPath('userData'), 'crm_prod.db');
+            };
 
-        // --- MANEJO DE EVENTOS DEL ACTUALIZADOR ---
+            const dbPath = getDatabasePath();
+            const { filePaths, canceled } = await dialog.showOpenDialog({
+                title: 'Importar Copia de Seguridad',
+                properties: ['openFile'],
+                filters: [{ name: 'SQLite Database', extensions: ['db'] }]
+            });
+            if (canceled || filePaths.length === 0) {
+                return { success: false, canceled: true };
+            }
+            const sourcePath = filePaths[0];
+            const tempBackup = dbPath + '.backup_temp';
+            if (fs.existsSync(dbPath)) {
+                fs.copyFileSync(dbPath, tempBackup);
+            }
+            try {
+                fs.copyFileSync(sourcePath, dbPath);
+                if (fs.existsSync(tempBackup)) {
+                    fs.unlinkSync(tempBackup);
+                }
+                return { success: true, message: 'Base de datos restaurada. Se recomienda reiniciar la aplicación.' };
+            } catch (writeError) {
+                if (fs.existsSync(tempBackup)) {
+                    fs.copyFileSync(tempBackup, dbPath);
+                    fs.unlinkSync(tempBackup);
+                }
+                throw writeError;
+            }
+        } catch (error) {
+            console.error('[Restore Error]:', error);
+            return { success: false, error: error.message };
+        }
+    });
 
+    function setupAutoUpdaterEvents() {
         autoUpdater.on('update-available', (info) => {
+            const msg = { status: 'available', version: info.version };
             console.log('[Updater] Actualización disponible.', info);
+            if (mainWindow) mainWindow.webContents.send('update:status', msg);
         });
 
         autoUpdater.on('update-not-available', (info) => {
+            const msg = { status: 'up-to-date', version: info?.version };
             console.log('[Updater] No hay actualizaciones disponibles.', info);
+            if (mainWindow) mainWindow.webContents.send('update:status', msg);
         });
 
         autoUpdater.on('download-progress', (progressObj) => {
-            let log_message = "Velocidad de descarga: " + progressObj.bytesPerSecond;
-            log_message = log_message + ' - Descargado ' + progressObj.percent + '%';
-            log_message = log_message + ' (' + progressObj.transferred + "/" + progressObj.total + ')';
-            console.log(`[Updater] ${log_message}`);
+            const msg = { status: 'downloading', percent: Math.round(progressObj.percent) };
+            console.log(`[Updater] Descargando ${progressObj.percent}%`);
+            if (mainWindow) mainWindow.webContents.send('update:status', msg);
         });
 
         autoUpdater.on('update-downloaded', (info) => {
-            console.log('[Updater] Actualización descargada. Mostrando diálogo...');
+            const msg = { status: 'downloaded', version: info.version };
+            console.log('[Updater] Actualización descargada.');
+            if (mainWindow) mainWindow.webContents.send('update:status', msg);
             dialog.showMessageBox({
                 type: 'info',
                 title: 'Actualización Lista',
-                message: 'Una nueva versión de CRMAPP ha sido descargada. ¿Deseas reiniciar la aplicación para instalarla ahora?',
+                message: 'Una nueva versión ha sido descargada. ¿Deseas reiniciar la aplicación para instalarla ahora?',
                 buttons: ['Reiniciar ahora', 'Más tarde'],
                 defaultId: 0,
                 cancelId: 1
@@ -311,8 +423,27 @@ function mainApp() {
         });
 
         autoUpdater.on('error', (err) => {
-            console.error('[Updater] Error en el actualizador automático: ' + err);
+            const msg = { status: 'error', error: err.message };
+            console.error('[Updater] Error:', err.message);
+            if (mainWindow) mainWindow.webContents.send('update:status', msg);
         });
+    }
+
+    ipcMain.handle('update:check', async () => {
+        if (!app.isPackaged) {
+            return { status: 'dev-mode', message: 'Modo desarrollo: no se buscan actualizaciones.' };
+        }
+        autoUpdater.autoDownload = true;
+        autoUpdater.checkForUpdates();
+        return { status: 'checking' };
+    });
+
+    function setupAutoUpdates() {
+        if (!app.isPackaged) return;
+        setupAutoUpdaterEvents();
+        autoUpdater.autoDownload = true;
+        console.log('[Updater] Buscando actualizaciones...');
+        autoUpdater.checkForUpdates();
     }
 
     app.on('ready', () => {
@@ -351,6 +482,7 @@ function mainApp() {
         if (serverProcess) {
             serverProcess.kill();
         }
+        serverProcess = null;
     });
 
     app.on('activate', () => {

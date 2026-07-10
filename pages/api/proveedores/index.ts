@@ -2,6 +2,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -9,23 +11,49 @@ export default async function handler(
 ) {
   if (req.method === 'GET') {
     // Listar todos los proveedores
+    const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
+    const skip = page ? (page - 1) * limit : undefined;
+
     try {
-      const suppliers = await prisma.supplier.findMany({
-        orderBy: { name: 'asc' },
-      });
-      res.status(200).json(suppliers);
+      const [suppliers, total] = await Promise.all([
+        prisma.supplier.findMany({
+          orderBy: { name: 'asc' },
+          ...(skip !== undefined && { skip, take: limit }),
+        }),
+        prisma.supplier.count(),
+      ]);
+
+      if (page !== undefined) {
+        res.status(200).json({
+          data: suppliers,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        });
+      } else {
+        res.status(200).json(suppliers);
+      }
     } catch (error: unknown) {
-      console.error("Error al obtener proveedores:", error);
-      const errorMessage = error instanceof Error ? error.message : 'Ocurrió un error desconocido.';
-      res.status(500).json({ message: 'Error al obtener los proveedores.', error: errorMessage });
+      handleApiError(res, error, "fetching suppliers");
     }
   } else if (req.method === 'POST') {
     // Crear un nuevo proveedor
-    const { name, contactPerson, email, phone, address, notes } = req.body;
+    let { name, contactPerson, email, phone, address, notes } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ message: 'El nombre del proveedor es obligatorio.' });
     }
+
+    name = sanitizeString(name);
+    if (contactPerson) contactPerson = sanitizeString(contactPerson);
+    if (email) email = sanitizeString(email);
+    if (phone) phone = sanitizeString(phone);
+    if (address) address = sanitizeString(address);
+    if (notes) notes = sanitizeString(notes);
 
     try {
       const newSupplier = await prisma.supplier.create({
@@ -40,14 +68,7 @@ export default async function handler(
       });
       res.status(201).json(newSupplier);
     } catch (error: unknown) {
-      console.error("Error al crear proveedor:", error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002' && error.meta?.target?.includes('name')) {
-          return res.status(409).json({ message: 'Ya existe un proveedor con este nombre.' });
-        }
-      }
-      const errorMessage = error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
-      res.status(500).json({ message: 'Error al crear el proveedor.', error: errorMessage });
+      handleApiError(res, error, "creating supplier");
     }
   } else {
     res.setHeader('Allow', ['GET', 'POST']);

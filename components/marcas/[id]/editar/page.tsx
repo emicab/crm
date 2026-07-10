@@ -6,11 +6,12 @@ import { useParams, useRouter } from 'next/navigation';
 import BrandForm from '@/components/marcas/BrandForm'; 
 import type { Brand } from '@/types';
 import { Loader2, AlertCircle } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
 const EditarMarcaPage = () => {
   const router = useRouter();
   const params = useParams(); 
-  const brandId = params.id as string; 
+  const brandId = params?.id as string; 
 
   const [brand, setBrand] = useState<Brand | null>(null);
   const [loading, setLoading] = useState(true);

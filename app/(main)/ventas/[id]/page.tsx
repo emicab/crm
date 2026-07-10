@@ -18,11 +18,13 @@ import {
     Percent,
     UserPlus,
     MessageSquare,
+    X,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 import toast from "react-hot-toast";
+import { motion, AnimatePresence } from "motion/react";
 
 interface SaleItemDetail extends Omit<SaleItem, "product"> {
     product: Product | null;
@@ -39,11 +41,19 @@ interface SaleDetail
 const SaleDetailPage = () => {
     const router = useRouter();
     const params = useParams();
-    const saleId = params.id as string;
+    const saleId = params?.id as string;
 
     const [sale, setSale] = useState<SaleDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showPhoneModal, setShowPhoneModal] = useState(false);
+    const [manualPhone, setManualPhone] = useState("");
+
+    // Estados para vincular cliente
+    const [showClientModal, setShowClientModal] = useState(false);
+    const [clientSearchTerm, setClientSearchTerm] = useState("");
+    const [searchedClients, setSearchedClients] = useState<Client[]>([]);
+    const [isUpdatingClient, setIsUpdatingClient] = useState(false);
 
     useEffect(() => {
         if (saleId) {
@@ -142,14 +152,7 @@ const SaleDetailPage = () => {
         }
     };
 
-    const handleShareOnWhatsApp = async () => {
-        if (!sale?.client?.phone) {
-            toast.error(
-                "Este cliente no tiene un número de teléfono registrado."
-            );
-            return;
-        }
-
+    const triggerWhatsAppSend = async (phone: string) => {
         if (window.electronAPI) {
             toast.loading("Preparando para compartir...", {
                 id: "whatsapp-toast",
@@ -163,7 +166,7 @@ const SaleDetailPage = () => {
                     { duration: 6000 }
                 );
                 // Abre WhatsApp en el navegador por defecto
-                const whatsappUrl = `https://wa.me/${sale.client.phone.replace(
+                const whatsappUrl = `https://wa.me/${phone.replace(
                     /\D/g,
                     ""
                 )}`; // Limpia el número de teléfono
@@ -175,6 +178,65 @@ const SaleDetailPage = () => {
             toast.error(
                 "La función de compartir solo está disponible en la aplicación de escritorio."
             );
+        }
+    };
+
+    const handleShareOnWhatsApp = async () => {
+        if (sale?.client?.phone) {
+            triggerWhatsAppSend(sale.client.phone);
+        } else {
+            setManualPhone("");
+            setShowPhoneModal(true);
+        }
+    };
+
+    // Búsqueda de cliente con debounce
+    useEffect(() => {
+        if (clientSearchTerm.trim() === "") {
+            setSearchedClients([]);
+            return;
+        }
+        const delayDebounceFn = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/clients?search=${encodeURIComponent(clientSearchTerm)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setSearchedClients(data);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [clientSearchTerm]);
+
+    const handleLinkClient = async (clientId: number | null) => {
+        setIsUpdatingClient(true);
+        try {
+            const res = await fetch(`/api/ventas/${saleId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ clientId }),
+            });
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.message || "Error al actualizar el cliente.");
+            }
+            const updatedSale = await res.json();
+            setSale(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    client: updatedSale.client,
+                };
+            });
+            toast.success(clientId ? "¡Cliente vinculado exitosamente!" : "¡Cliente desvinculado exitosamente!");
+            setShowClientModal(false);
+        } catch (err: any) {
+            toast.error(err.message || "Error al vincular el cliente.");
+        } finally {
+            setIsUpdatingClient(false);
         }
     };
 
@@ -250,12 +312,25 @@ const SaleDetailPage = () => {
 
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-8'>
                     <div>
-                        <h3 className='text-sm font-medium text-foreground-muted mb-1 flex items-center'>
-                            <UserCircle
-                                size={16}
-                                className='mr-2 text-primary'
-                            />
-                            Cliente
+                        <h3 className='text-sm font-medium text-foreground-muted mb-1 flex items-center justify-between'>
+                            <span className="flex items-center">
+                                <UserCircle
+                                    size={16}
+                                    className='mr-2 text-primary'
+                                />
+                                Cliente
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setClientSearchTerm("");
+                                    setSearchedClients([]);
+                                    setShowClientModal(true);
+                                }}
+                                className="text-xs text-primary hover:underline"
+                            >
+                                {sale.client ? "Cambiar" : "Vincular"}
+                            </button>
                         </h3>
                         {sale.client ? (
                             <Link
@@ -319,7 +394,7 @@ const SaleDetailPage = () => {
                                 />
                                 Cód. Descuento Aplicado
                             </h3>
-                            <p className='text-foreground_major_custom_colors font-medium'>
+                            <p className='text-foreground font-medium'>
                                 {sale.discountCodeApplied}
                             </p>
                         </div>
@@ -404,7 +479,6 @@ const SaleDetailPage = () => {
                         <Button
                             variant='whatsapp'
                             onClick={handleShareOnWhatsApp}
-                            
                         >
                             <MessageSquare size={16} className='mr-2' />
                             Compartir por WhatsApp
@@ -412,6 +486,200 @@ const SaleDetailPage = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Modal para ingresar teléfono manual */}
+            <AnimatePresence>
+                {showPhoneModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                        onClick={() => setShowPhoneModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                            animate={{ scale: 1, y: 0, opacity: 1 }}
+                            exit={{ scale: 0.9, y: 20, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-semibold text-foreground flex items-center">
+                                        <MessageSquare className="mr-2 text-primary" size={20} />
+                                        Compartir por WhatsApp
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowPhoneModal(false)}
+                                        className="p-1 rounded-full hover:bg-border transition-colors text-foreground-muted hover:text-foreground"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <p className="text-sm text-foreground-muted mb-4">
+                                    Este cliente no posee número de teléfono registrado o no hay cliente vinculado a la venta. Por favor, ingrese el número de teléfono manualmente para enviar el PDF.
+                                </p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label htmlFor="manual-phone-input" className="block text-xs font-semibold uppercase tracking-wider text-foreground-muted mb-2">
+                                            Número de Teléfono
+                                        </label>
+                                        <input
+                                            id="manual-phone-input"
+                                            type="text"
+                                            className="w-full rounded-lg border border-border bg-background p-3 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none"
+                                            placeholder="Ej. 5491122334455"
+                                            value={manualPhone}
+                                            onChange={(e) => setManualPhone(e.target.value)}
+                                        />
+                                        <span className="text-[10px] text-foreground-muted mt-1 block">
+                                            Incluya código de país y código de área sin espacios, guiones ni el prefijo +
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-background px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 rounded-b-lg gap-2">
+                                <Button
+                                    variant="whatsapp"
+                                    onClick={() => {
+                                        if (!manualPhone.trim()) {
+                                            toast.error("Por favor, ingrese un número de teléfono.");
+                                            return;
+                                        }
+                                        setShowPhoneModal(false);
+                                        triggerWhatsAppSend(manualPhone);
+                                    }}
+                                    className="w-full sm:w-auto"
+                                >
+                                    Enviar
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowPhoneModal(false)}
+                                    className="w-full sm:w-auto"
+                                >
+                                    Cancelar
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Modal para vincular cliente */}
+            <AnimatePresence>
+                {showClientModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                        onClick={() => setShowClientModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                            animate={{ scale: 1, y: 0, opacity: 1 }}
+                            exit={{ scale: 0.9, y: 20, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-semibold text-foreground flex items-center">
+                                        <UserCircle className="mr-2 text-primary" size={20} />
+                                        Vincular Cliente
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowClientModal(false)}
+                                        className="p-1 rounded-full hover:bg-border transition-colors text-foreground-muted hover:text-foreground"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <p className="text-sm text-foreground-muted mb-4">
+                                    Busque y seleccione el cliente que desea vincular a esta venta.
+                                </p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label htmlFor="client-search-input" className="block text-xs font-semibold uppercase tracking-wider text-foreground-muted mb-2">
+                                            Buscar Cliente
+                                        </label>
+                                        <input
+                                            id="client-search-input"
+                                            type="text"
+                                            className="w-full rounded-lg border border-border bg-background p-3 text-sm text-foreground placeholder:text-foreground-muted focus:border-primary focus:outline-none"
+                                            placeholder="Buscar por nombre, email o DNI..."
+                                            value={clientSearchTerm}
+                                            onChange={(e) => setClientSearchTerm(e.target.value)}
+                                            autoFocus
+                                        />
+                                    </div>
+
+                                    {/* Resultados de búsqueda */}
+                                    {clientSearchTerm.trim() !== "" && (
+                                        <div className="max-h-60 overflow-y-auto border border-border rounded-lg bg-background divide-y divide-border">
+                                            {searchedClients.length === 0 ? (
+                                                <p className="p-3 text-sm text-foreground-muted text-center">
+                                                    No se encontraron clientes.
+                                                </p>
+                                            ) : (
+                                                searchedClients.map((client) => (
+                                                    <button
+                                                        key={client.id}
+                                                        type="button"
+                                                        onClick={() => handleLinkClient(client.id)}
+                                                        disabled={isUpdatingClient}
+                                                        className="w-full text-left p-3 text-sm hover:bg-muted transition-colors flex justify-between items-center text-foreground disabled:opacity-50"
+                                                    >
+                                                        <div>
+                                                            <span className="font-semibold">
+                                                                {client.firstName} {client.lastName || ""}
+                                                            </span>
+                                                            {client.email && (
+                                                                <span className="block text-xs text-foreground-muted">
+                                                                    {client.email}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-xs text-primary font-medium">
+                                                            Seleccionar
+                                                        </span>
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="bg-background px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 rounded-b-lg gap-2">
+                                {sale.client && (
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() => handleLinkClient(null)}
+                                        disabled={isUpdatingClient}
+                                        className="w-full sm:w-auto"
+                                    >
+                                        Desvincular Cliente
+                                    </Button>
+                                )}
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowClientModal(false)}
+                                    disabled={isUpdatingClient}
+                                    className="w-full sm:w-auto"
+                                >
+                                    Cerrar
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

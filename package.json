@@ -17,7 +17,8 @@
     "publish": "npx prisma generate && next build && electron-builder --publish always"
   },
   "dependencies": {
-    "@prisma/client": "^6.8.2",
+    "@prisma/client": "^6.4.0",
+    "@supabase/supabase-js": "^2.110.2",
     "class-variance-authority": "^0.7.1",
     "electron-store": "^7.0.3",
     "electron-updater": "^6.6.2",
@@ -41,7 +42,7 @@
     "electron-builder": "^26.0.12",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
-    "prisma": "^6.8.2",
+    "prisma": "^6.4.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wait-on": "^8.0.3"

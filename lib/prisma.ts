@@ -1,4 +1,10 @@
 import { PrismaClient } from '@prisma/client';
+import path from 'path';
+
+// Asegurar que DATABASE_URL esté definida en el entorno antes de instanciar PrismaClient
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = `file:${path.join(process.cwd(), 'prisma', 'dev.db')}`;
+}
 
 let prisma: PrismaClient;
 

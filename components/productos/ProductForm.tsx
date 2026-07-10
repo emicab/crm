@@ -7,7 +7,9 @@ import type { Brand, Category, Product } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, X } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ProductFormData {
   name: string;
@@ -39,6 +41,69 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const [isFetchingDropdowns, setIsFetchingDropdowns] = useState(true); 
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Estados para creación rápida de Marca y Categoría
+  const [showNewBrandModal, setShowNewBrandModal] = useState(false);
+  const [newBrandName, setNewBrandName] = useState('');
+  const [isCreatingBrand, setIsCreatingBrand] = useState(false);
+
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+
+  const handleCreateBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBrandName.trim()) return;
+    setIsCreatingBrand(true);
+    try {
+      const res = await fetch('/api/brands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newBrandName.trim() }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al crear la marca.');
+      }
+      const createdBrand = await res.json();
+      setBrands(prev => [...prev, createdBrand].sort((a, b) => a.name.localeCompare(b.name)));
+      setFormData(prev => ({ ...prev, brandId: String(createdBrand.id) }));
+      toast.success('¡Marca creada exitosamente!');
+      setShowNewBrandModal(false);
+      setNewBrandName('');
+    } catch (err: any) {
+      toast.error(err.message || 'Error al crear la marca.');
+    } finally {
+      setIsCreatingBrand(false);
+    }
+  };
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    setIsCreatingCategory(true);
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCategoryName.trim() }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al crear la categoría.');
+      }
+      const createdCategory = await res.json();
+      setCategories(prev => [...prev, createdCategory].sort((a, b) => a.name.localeCompare(b.name)));
+      setFormData(prev => ({ ...prev, categoryId: String(createdCategory.id) }));
+      toast.success('¡Categoría creada exitosamente!');
+      setShowNewCategoryModal(false);
+      setNewCategoryName('');
+    } catch (err: any) {
+      toast.error(err.message || 'Error al crear la categoría.');
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
 
   
   useEffect(() => {
@@ -146,10 +211,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         });
       }
 
-      /* setTimeout(() => {
+      setTimeout(() => {
         router.push('/productos'); 
         router.refresh();
-      }, 1500); */
+      }, 1500);
 
     } catch (err: any) {
       setError(err.message || `Ocurrió un error al ${initialProductData ? 'actualizar' : 'crear'} el producto.`);
@@ -171,6 +236,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const loadingButtonText = initialProductData ? 'Actualizando...' : 'Guardando...';
 
   return (
+    <>
     <form onSubmit={handleSubmit} className="bg-muted p-6 sm:p-8 rounded-lg shadow space-y-6 max-w-2xl mx-auto">
       {error && (
         <div className="flex items-center bg-destructive/10 text-destructive text-sm p-3 rounded-md">
@@ -201,14 +267,32 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Select label="Marca *" name="brandId" value={formData.brandId} onChange={handleChange} required disabled={isFetchingDropdowns}>
-          <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Selecciona una marca'}</option>
-          {brands.map(brand => <option key={brand.id} value={String(brand.id)}>{brand.name}</option>)}
-        </Select>
-        <Select label="Categoría *" name="categoryId" value={formData.categoryId} onChange={handleChange} required disabled={isFetchingDropdowns}>
-          <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Selecciona una categoría'}</option>
-          {categories.map(category => <option key={category.id} value={String(category.id)}>{category.name}</option>)}
-        </Select>
+        <div>
+          <Select label="Marca *" name="brandId" value={formData.brandId} onChange={handleChange} required disabled={isFetchingDropdowns}>
+            <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Selecciona una marca'}</option>
+            {brands.map(brand => <option key={brand.id} value={String(brand.id)}>{brand.name}</option>)}
+          </Select>
+          <button
+            type="button"
+            onClick={() => setShowNewBrandModal(true)}
+            className="mt-1 text-xs text-primary hover:underline flex items-center"
+          >
+            + Nueva Marca
+          </button>
+        </div>
+        <div>
+          <Select label="Categoría *" name="categoryId" value={formData.categoryId} onChange={handleChange} required disabled={isFetchingDropdowns}>
+            <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Selecciona una categoría'}</option>
+            {categories.map(category => <option key={category.id} value={String(category.id)}>{category.name}</option>)}
+          </Select>
+          <button
+            type="button"
+            onClick={() => setShowNewCategoryModal(true)}
+            className="mt-1 text-xs text-primary hover:underline flex items-center"
+          >
+            + Nueva Categoría
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -231,6 +315,147 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         </Button>
       </div>
     </form>
+
+      {/* Modal para crear marca rápida */}
+      <AnimatePresence>
+        {showNewBrandModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowNewBrandModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <form onSubmit={handleCreateBrand}>
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      Nueva Marca
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewBrandModal(false)}
+                      className="p-1 rounded-full hover:bg-border transition-colors text-foreground-muted hover:text-foreground"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <Input
+                      label="Nombre de la Marca *"
+                      type="text"
+                      value={newBrandName}
+                      onChange={(e) => setNewBrandName(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div className="bg-background px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 rounded-b-lg gap-2">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={isCreatingBrand}
+                    className="w-full sm:w-auto"
+                  >
+                    {isCreatingBrand ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
+                    Guardar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowNewBrandModal(false)}
+                    disabled={isCreatingBrand}
+                    className="w-full sm:w-auto"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal para crear categoría rápida */}
+      <AnimatePresence>
+        {showNewCategoryModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowNewCategoryModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <form onSubmit={handleCreateCategory}>
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      Nueva Categoría
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewCategoryModal(false)}
+                      className="p-1 rounded-full hover:bg-border transition-colors text-foreground-muted hover:text-foreground"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <Input
+                      label="Nombre de la Categoría *"
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div className="bg-background px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 rounded-b-lg gap-2">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={isCreatingCategory}
+                    className="w-full sm:w-auto"
+                  >
+                    {isCreatingCategory ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
+                    Guardar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowNewCategoryModal(false)}
+                    disabled={isCreatingCategory}
+                    className="w-full sm:w-auto"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 

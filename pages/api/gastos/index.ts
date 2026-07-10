@@ -1,8 +1,10 @@
 // pages/api/gastos/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { Prisma, PaymentType } from '@prisma/client'; // Importar PaymentType y Prisma
-import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma, PaymentType } from '@prisma/client';
+const Decimal = Prisma.Decimal;
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 interface CreateExpenseInput {
   expenseDate?: string; // Fecha opcional, si no se provee se usa la actual
@@ -27,10 +29,11 @@ export default async function handler(
       whereClause.category = { contains: queryCategory };
     }
 
+    let dateFilter: Prisma.DateTimeFilter = {};
     if (startDate && typeof startDate === 'string') {
       const parsedStartDate = new Date(startDate);
       if (!isNaN(parsedStartDate.valueOf())) {
-        whereClause.expenseDate = { ...whereClause.expenseDate, gte: parsedStartDate };
+        dateFilter.gte = parsedStartDate;
       }
     }
     if (endDate && typeof endDate === 'string') {
@@ -38,16 +41,26 @@ export default async function handler(
       if (!isNaN(parsedEndDate.valueOf())) {
          // Para que incluya todo el día de endDate
         parsedEndDate.setHours(23, 59, 59, 999);
-        whereClause.expenseDate = { ...whereClause.expenseDate, lte: parsedEndDate };
+        dateFilter.lte = parsedEndDate;
       }
     }
+    if (Object.keys(dateFilter).length > 0) {
+      whereClause.expenseDate = dateFilter;
+    }
 
+    const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
+    const skip = page ? (page - 1) * limit : undefined;
 
     try {
-      const expenses = await prisma.expense.findMany({
-        where: whereClause,
-        orderBy: { expenseDate: 'desc' },
-      });
+      const [expenses, total] = await Promise.all([
+        prisma.expense.findMany({
+          where: whereClause,
+          orderBy: { expenseDate: 'desc' },
+          ...(skip !== undefined && { skip, take: limit }),
+        }),
+        prisma.expense.count({ where: whereClause }),
+      ]);
 
       // Convertir Decimal a string para la respuesta JSON
       const expensesForJson = expenses.map(expense => ({
@@ -55,22 +68,33 @@ export default async function handler(
         amount: expense.amount.toString(),
       }));
 
-      res.status(200).json(expensesForJson);
+      if (page !== undefined) {
+        res.status(200).json({
+          data: expensesForJson,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        });
+      } else {
+        res.status(200).json(expensesForJson);
+      }
     } catch (error) {
-      console.error("Error fetching expenses:", error);
-      res.status(500).json({ message: 'Error al obtener los gastos' });
+      handleApiError(res, error, "fetching expenses");
     }
   } else if (req.method === 'POST') {
-    const { description, amount, category, paymentType, expenseDate: expenseDateString, notes } = req.body as CreateExpenseInput;
+    let { description, amount, category, paymentType, expenseDate: expenseDateString, notes } = req.body as CreateExpenseInput;
 
     let finalExpenseDate: Date;
-if (expenseDateString) {
-    const [year, month, day] = expenseDateString.split('-').map(Number);
-    // Creamos la fecha como mediodía UTC para evitar problemas de "un día antes"
-    finalExpenseDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); 
-} else {
-    finalExpenseDate = new Date(); // O maneja como error si la fecha es obligatoria
-}
+    if (expenseDateString) {
+        const [year, month, day] = expenseDateString.split('-').map(Number);
+        // Creamos la fecha como mediodía UTC para evitar problemas de "un día antes"
+        finalExpenseDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); 
+    } else {
+        finalExpenseDate = new Date(); // O maneja como error si la fecha es obligatoria
+    }
 
     if (!description || amount === undefined || !category || !paymentType) {
       return res.status(400).json({ message: 'Faltan datos obligatorios: descripción, monto, categoría o tipo de pago.' });
@@ -81,6 +105,10 @@ if (expenseDateString) {
     if (!Object.values(PaymentType).includes(paymentType)) {
         return res.status(400).json({ message: 'Tipo de pago inválido.' });
     }
+
+    description = sanitizeString(description);
+    category = sanitizeString(category);
+    if (notes) notes = sanitizeString(notes);
 
     let parsedExpenseDate: Date | undefined = undefined;
     if (finalExpenseDate) {
@@ -108,8 +136,7 @@ if (expenseDateString) {
       }
       res.status(201).json(expenseForJson);
     } catch (error: any) {
-      console.error("Error creating expense:", error);
-      res.status(500).json({ message: `Error al crear el gasto: ${error.message || 'Error desconocido'}` });
+      handleApiError(res, error, "creating expense");
     }
   } else {
     res.setHeader('Allow', ['GET', 'POST']);

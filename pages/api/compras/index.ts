@@ -1,8 +1,10 @@
 // pages/api/compras/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { Prisma, PurchaseStatus } from '@prisma/client'; // Importar PurchaseStatus
-import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma, PurchaseStatus } from '@prisma/client';
+const Decimal = Prisma.Decimal;
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 // --- Interfaces para los datos de entrada ---
 interface PurchaseItemInput {
@@ -25,18 +27,26 @@ export default async function handler(
 ) {
   if (req.method === 'GET') {
     // --- Obtener Historial de Compras ---
+    const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
+    const skip = page ? (page - 1) * limit : undefined;
+
     try {
-      const purchases = await prisma.purchase.findMany({
-        include: {
-          supplier: true,
-          items: {
-            include: {
-              product: true,
+      const [purchases, total] = await Promise.all([
+        prisma.purchase.findMany({
+          include: {
+            supplier: true,
+            items: {
+              include: {
+                product: true,
+              },
             },
           },
-        },
-        orderBy: { purchaseDate: 'desc' },
-      });
+          orderBy: { purchaseDate: 'desc' },
+          ...(skip !== undefined && { skip, take: limit }),
+        }),
+        prisma.purchase.count(),
+      ]);
       // Convertir Decimales a string para la respuesta JSON
       const purchasesForJson = purchases.map(p => ({
         ...p,
@@ -51,18 +61,33 @@ export default async function handler(
           }
         }))
       }));
-      res.status(200).json(purchasesForJson);
+      
+      if (page !== undefined) {
+        res.status(200).json({
+          data: purchasesForJson,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        });
+      } else {
+        res.status(200).json(purchasesForJson);
+      }
     } catch (error) {
-      console.error("Error al obtener el historial de compras:", error);
-      res.status(500).json({ message: 'Error al obtener el historial de compras' });
+      handleApiError(res, error, "fetching purchases");
     }
   } else if (req.method === 'POST') {
     // --- Registrar una Nueva Compra ---
-    const { supplierId, status, invoiceNumber, notes, items } = req.body as CreatePurchaseInput;
+    let { supplierId, status, invoiceNumber, notes, items } = req.body as CreatePurchaseInput;
 
     if (!supplierId || !items || items.length === 0) {
       return res.status(400).json({ message: 'Faltan datos obligatorios: proveedor o ítems.' });
     }
+
+    if (invoiceNumber) invoiceNumber = sanitizeString(invoiceNumber);
+    if (notes) notes = sanitizeString(notes);
 
     // Calcular totalAmount a partir de los ítems recibidos
     let calculatedTotalAmount = new Decimal(0);
@@ -76,19 +101,21 @@ export default async function handler(
     try {
       // Usamos una transacción para asegurar que todo se ejecute correctamente o nada lo haga.
       const result = await prisma.$transaction(async (tx) => {
+        const purchaseStatus = status || PurchaseStatus.RECEIVED;
+
         // 1. Crear el registro principal de la Compra
         const newPurchase = await tx.purchase.create({
           data: {
             purchaseDate: new Date(),
             totalAmount: calculatedTotalAmount,
-            status: status || PurchaseStatus.RECEIVED, // Si no se especifica, asumimos que se recibió la mercadería
+            status: purchaseStatus,
             invoiceNumber: invoiceNumber || null,
             notes: notes || null,
             supplier: { connect: { id: supplierId } },
           },
         });
 
-        // 2. Crear los PurchaseItems y, crucialmente, INCREMENTAR el stock de los productos
+        // 2. Crear los PurchaseItems y, crucialmente, INCREMENTAR el stock de los productos si se recibió
         for (const item of items) {
           await tx.purchaseItem.create({
             data: {
@@ -99,17 +126,24 @@ export default async function handler(
             },
           });
 
-          // Actualizar (incrementar) el stock del producto
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              quantityStock: {
-                increment: item.quantity,
+          if (purchaseStatus === PurchaseStatus.RECEIVED) {
+            const product = await tx.product.findUnique({
+              where: { id: item.productId },
+              select: { pricePurchase: true },
+            });
+
+            // Actualizar (incrementar) el stock del producto
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                quantityStock: {
+                  increment: item.quantity,
+                },
+                // F2: Solo actualizar el precio de compra del producto si no tiene uno
+                ...(!product?.pricePurchase ? { pricePurchase: new Decimal(item.purchasePrice) } : {})
               },
-              // Opcional: Actualizar el precio de compra del producto con el de esta última compra
-              pricePurchase: new Decimal(item.purchasePrice)
-            },
-          });
+            });
+          }
         }
 
         // Devolvemos la compra completa para la respuesta
@@ -122,9 +156,7 @@ export default async function handler(
       res.status(201).json(result);
 
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido en la transacción.';
-      console.error("Error al registrar la compra:", error);
-      res.status(500).json({ message: `Error al registrar la compra: ${errorMessage}` });
+      handleApiError(res, error, "creating purchase");
     }
   } else {
     res.setHeader('Allow', ['GET', 'POST']);

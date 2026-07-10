@@ -11,7 +11,7 @@ import Button from '@/components/ui/Button';
 const EditarClientePage = () => {
   const router = useRouter();
   const params = useParams();
-  const clientId = params.id as string;
+  const clientId = params?.id as string;
 
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,5 +1,14 @@
 import prisma from "./prisma";
-import { Decimal } from "@prisma/client/runtime/library";
+import { Prisma } from "@prisma/client";
+type Decimal = Prisma.Decimal;
+const Decimal = Prisma.Decimal;
+
+// Helper to get local date boundaries converted to UTC (assuming UTC-3 offset for Argentina / local user time)
+function getLocalDateBoundary(year: number, month: number, day: number, hours: number, minutes: number, seconds: number, ms: number): Date {
+  const utcTime = Date.UTC(year, month, day, hours, minutes, seconds, ms);
+  const offsetMinutes = -180; // UTC-3
+  return new Date(utcTime - (offsetMinutes * 60 * 1000));
+}
 
 export async function getProductCount() {
     try {
@@ -40,20 +49,12 @@ export async function getCategoryCount() {
 // Podríamos añadir más aquí, como "productos con stock bajo", etc.
 export async function getLowStockProductCount(minStockThreshold = 5) {
     try {
-        return await prisma.product.count({
-            where: {
-                AND: [
-                    {
-                        quantityStock: {
-                            lt: prisma.product.fields.stockMinAlert,
-                        },
-                    }, // Stock por debajo de su alerta individual
-                    { stockMinAlert: { not: null } }, // Y que tengan un stockMinAlert definido
-                ],
-                // O una forma más simple si todas las alertas son el mismo número:
-                // quantityStock: { lt: minStockThreshold }
-            },
-        });
+        const result = await prisma.$queryRaw<any[]>`
+            SELECT COUNT(*) as count FROM Product
+            WHERE stockMinAlert IS NOT NULL AND quantityStock < stockMinAlert
+        `;
+        const count = result[0]?.count;
+        return typeof count === 'bigint' ? Number(count) : (Number(count) || 0);
     } catch (error) {
         console.error("Error fetching low stock product count:", error);
         return 0;
@@ -100,16 +101,8 @@ export async function getProductsPerCategory(): Promise<
 export async function getTotalRevenueThisMonth(): Promise<number> {
     try {
         const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            0,
-            23,
-            59,
-            59,
-            999
-        ); // Fin del último día del mes
+        const startOfMonth = getLocalDateBoundary(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const endOfMonth = getLocalDateBoundary(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
         const sales = await prisma.sale.findMany({
             where: {
@@ -143,12 +136,14 @@ export async function getSalesForLastXDays(
     days: number
 ): Promise<DailySalesData[]> {
     try {
-        const today = new Date();
-        const startDate = new Date();
-        startDate.setDate(today.getDate() - (days - 1)); // Incluir el día de hoy, X días en total
-        startDate.setHours(0, 0, 0, 0); // Inicio del día
+        const now = new Date();
+        const localNow = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+        const localTodayYear = localNow.getUTCFullYear();
+        const localTodayMonth = localNow.getUTCMonth();
+        const localTodayDate = localNow.getUTCDate();
 
-        today.setHours(23, 59, 59, 999); // Fin del día de hoy
+        const startDate = getLocalDateBoundary(localTodayYear, localTodayMonth, localTodayDate - (days - 1), 0, 0, 0, 0);
+        const today = getLocalDateBoundary(localTodayYear, localTodayMonth, localTodayDate, 23, 59, 59, 999);
 
         const sales = await prisma.sale.findMany({
             where: {
@@ -170,14 +165,16 @@ export async function getSalesForLastXDays(
         const dailySalesMap = new Map<string, Decimal>();
 
         for (let i = 0; i < days; i++) {
-            const d = new Date(startDate);
-            d.setDate(startDate.getDate() + i);
+            const localStart = new Date(startDate.getTime() + (3 * 60 * 60 * 1000));
+            const d = new Date(localStart);
+            d.setDate(localStart.getDate() + i);
             const dateString = d.toISOString().split("T")[0]; // YYYY-MM-DD
             dailySalesMap.set(dateString, new Decimal(0)); // Inicializar todos los días del rango
         }
 
         sales.forEach((sale) => {
-            const dateString = sale.saleDate.toISOString().split("T")[0]; // YYYY-MM-DD
+            const localSaleDate = new Date(sale.saleDate.getTime() + (3 * 60 * 60 * 1000));
+            const dateString = localSaleDate.toISOString().split("T")[0]; // YYYY-MM-DD
             const currentTotal =
                 dailySalesMap.get(dateString) || new Decimal(0);
             dailySalesMap.set(dateString, currentTotal.plus(sale.totalAmount));
@@ -188,7 +185,7 @@ export async function getSalesForLastXDays(
             chartData.push({ date, totalSales: total.toNumber() });
         });
 
-        // Asegurar que el orden sea cronológico si el Map no lo garantiza (aunque debería con inserción ordenada)
+        // Asegurar que el orden sea cronológico si el Map no lo garantiza
         chartData.sort(
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
@@ -212,36 +209,12 @@ export async function getRevenueDataForCurrentAndPreviousMonth(): Promise<Monthl
         const now = new Date();
 
         // Mes Actual
-        const startOfCurrentMonth = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            1
-        );
-        const endOfCurrentMonth = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            0,
-            23,
-            59,
-            59,
-            999
-        );
+        const startOfCurrentMonth = getLocalDateBoundary(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const endOfCurrentMonth = getLocalDateBoundary(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
         // Mes Anterior
-        const startOfPreviousMonth = new Date(
-            now.getFullYear(),
-            now.getMonth() - 1,
-            1
-        );
-        const endOfPreviousMonth = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            0,
-            23,
-            59,
-            59,
-            999
-        );
+        const startOfPreviousMonth = getLocalDateBoundary(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        const endOfPreviousMonth = getLocalDateBoundary(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
         const currentMonthSales = await prisma.sale.findMany({
             where: {
@@ -275,7 +248,7 @@ export async function getRevenueDataForCurrentAndPreviousMonth(): Promise<Monthl
         if (previousMonthRevenue !== 0) {
             percentageChange = (differenceAmount / previousMonthRevenue) * 100;
         } else if (currentMonthRevenue > 0) {
-            percentageChange = 100; // Si antes era 0 y ahora hay ventas, es un "infinito" o 100% de aumento desde 0
+            percentageChange = null; // Cambio porcentual no calculable (infinito) desde 0
         }
 
         return {
@@ -486,37 +459,48 @@ export async function getMonthlyFinancialSummaries(numberOfMonths: number = 6): 
   const now = new Date();
 
   try {
+    const startDateBound = getLocalDateBoundary(now.getFullYear(), now.getMonth() - numberOfMonths + 1, 1, 0, 0, 0, 0);
+    const endDateBound = getLocalDateBoundary(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Ejecutamos consultas agregadas generales en paralelo (3 consultas en total)
+    const [sales, saleItems, expenses] = await Promise.all([
+      prisma.sale.findMany({
+        where: { saleDate: { gte: startDateBound, lte: endDateBound } },
+        select: { saleDate: true, totalAmount: true }
+      }),
+      prisma.saleItem.findMany({
+        where: { sale: { saleDate: { gte: startDateBound, lte: endDateBound } } },
+        select: { quantity: true, purchasePriceAtSale: true, sale: { select: { saleDate: true } } }
+      }),
+      prisma.expense.findMany({
+        where: { expenseDate: { gte: startDateBound, lte: endDateBound } },
+        select: { expenseDate: true, amount: true }
+      })
+    ]);
+
+    const localDate = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+
     for (let i = 0; i < numberOfMonths; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const date = new Date(localDate.getUTCFullYear(), localDate.getUTCMonth() - i, 1);
       const year = date.getFullYear();
       const month = date.getMonth();
 
-      const startDate = new Date(Date.UTC(year, month, 1, 0, 0, 0));
-      const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+      const startDate = getLocalDateBoundary(year, month, 1, 0, 0, 0, 0);
+      const endDate = getLocalDateBoundary(year, month + 1, 0, 23, 59, 59, 999);
       
       const monthLabel = `${year}-${(month + 1).toString().padStart(2, '0')}`;
-      
 
-      // 1. Obtener Ingresos, COGS y Gastos para el mes actual del bucle
-      const [revenueResult, saleItemsForCogs, expensesResult] = await Promise.all([
-        prisma.sale.aggregate({
-          _sum: { totalAmount: true },
-          where: { saleDate: { gte: startDate, lte: endDate } },
-        }),
-        prisma.saleItem.findMany({
-          where: { sale: { saleDate: { gte: startDate, lte: endDate } } },
-          select: { quantity: true, purchasePriceAtSale: true },
-        }),
-        prisma.expense.aggregate({ // <--- Esta consulta ahora usará el rango UTC correcto
-          _sum: { amount: true },
-          where: { expenseDate: { gte: startDate, lte: endDate } },
-        }),
-      ]);
+      // Sumar ingresos para el mes actual del bucle
+      const monthSales = sales.filter(s => s.saleDate >= startDate && s.saleDate <= endDate);
+      const totalRevenue = monthSales.reduce((sum, s) => sum.plus(s.totalAmount), new Decimal(0)).toNumber();
 
-      // 2. Calcular los totales
-      const totalRevenue = revenueResult._sum.totalAmount?.toNumber() || 0;
-      const totalExpenses = expensesResult._sum.amount?.toNumber() || 0;
-      const totalCOGS = saleItemsForCogs.reduce((sum, item) => {
+      // Sumar gastos para el mes actual del bucle
+      const monthExpenses = expenses.filter(e => e.expenseDate >= startDate && e.expenseDate <= endDate);
+      const totalExpenses = monthExpenses.reduce((sum, e) => sum.plus(e.amount), new Decimal(0)).toNumber();
+
+      // Sumar costo de mercadería vendida para el mes actual del bucle
+      const monthSaleItems = saleItems.filter(item => item.sale.saleDate >= startDate && item.sale.saleDate <= endDate);
+      const totalCOGS = monthSaleItems.reduce((sum, item) => {
         const itemCost = new Decimal(item.purchasePriceAtSale || 0).times(item.quantity);
         return sum.plus(itemCost);
       }, new Decimal(0)).toNumber();
@@ -551,39 +535,37 @@ export interface DailySalesCount {
 export async function getDailySalesCountForCurrentWeek(): Promise<DailySalesCount[]> {
   try {
     const now = new Date();
+    const localNow = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+    
     // Ajuste para que la semana comience en Lunes (getDay() devuelve 0 para Domingo, 1 para Lunes...)
-    const dayOfWeek = now.getDay(); // 0 (Sun) to 6 (Sat)
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Calcula el Lunes de esta semana
+    const dayOfWeek = localNow.getUTCDay(); // 0 (Sun) to 6 (Sat)
+    const diff = localNow.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Calcula el Lunes de esta semana
     
-    const startOfWeek = new Date(now.setDate(diff));
-    startOfWeek.setHours(0, 0, 0, 0);
+    const localMondayYear = localNow.getUTCFullYear();
+    const localMondayMonth = localNow.getUTCMonth();
 
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
+    const startOfWeek = getLocalDateBoundary(localMondayYear, localMondayMonth, diff, 0, 0, 0, 0);
+    const endOfWeek = getLocalDateBoundary(localMondayYear, localMondayMonth, diff + 6, 23, 59, 59, 999);
     
-    // Obtener las ventas de la semana, agrupadas por día
-    const salesByDay = await prisma.sale.groupBy({
-      by: ['saleDate'],
-      _count: {
-        id: true, // Contamos las ventas por su id
-      },
+    // Obtener las ventas de la semana
+    const sales = await prisma.sale.findMany({
       where: {
         saleDate: {
           gte: startOfWeek,
           lte: endOfWeek,
         },
       },
-      orderBy: {
-        saleDate: 'asc',
+      select: {
+        saleDate: true,
       },
     });
 
     // Crear un mapa para acceder fácilmente a los resultados
     const salesMap = new Map<number, number>(); // <Día de la semana (0-6), Cantidad>
-    salesByDay.forEach(dayData => {
-      const dayIndex = new Date(dayData.saleDate).getDay(); // 0 para Domingo, etc.
-      salesMap.set(dayIndex, dayData._count.id);
+    sales.forEach(sale => {
+      const localSaleDate = new Date(sale.saleDate.getTime() + (3 * 60 * 60 * 1000));
+      const dayIndex = localSaleDate.getUTCDay(); // 0 para Domingo, etc.
+      salesMap.set(dayIndex, (salesMap.get(dayIndex) || 0) + 1);
     });
 
     // Construir el array final para el gráfico, asegurando que todos los días de la semana estén presentes

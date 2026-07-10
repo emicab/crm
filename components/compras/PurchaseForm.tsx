@@ -67,21 +67,11 @@ const PurchaseForm = () => {
         const fetchData = async () => {
             setIsFetchingInitialData(true);
             try {
-                const [suppliersRes, productsRes] = await Promise.all([
-                    fetch("/api/proveedores"),
-                    fetch("/api/products"),
-                ]);
-                if (!suppliersRes.ok || !productsRes.ok)
+                const suppliersRes = await fetch("/api/proveedores");
+                if (!suppliersRes.ok)
                     throw new Error("Error al cargar datos iniciales.");
 
                 setSuppliers(await suppliersRes.json());
-                const productsData = await productsRes.json();
-                setAllProducts(
-                    productsData.map((p: any) => ({
-                        ...p,
-                        priceSale: parseFloat(p.priceSale),
-                    }))
-                );
             } catch (err: unknown) {
                 toast.error(
                     err instanceof Error ? err.message : "Error cargando datos."
@@ -94,30 +84,37 @@ const PurchaseForm = () => {
     }, []);
 
     // --- Handlers de Producto/Ítems ---
-    const handleProductSearchChange = (
-        e: React.ChangeEvent<HTMLInputElement>
-    ) => {
-        const searchTerm = e.target.value;
-        setProductSearchTerm(searchTerm);
-        if (!searchTerm) {
+    useEffect(() => {
+        if (!productSearchTerm.trim()) {
             setSearchedProducts([]);
             return;
         }
-        const itemsInCartIds = formData.items.map((item) =>
-            parseInt(item.productId)
-        );
-        const filtered = allProducts.filter(
-            (product) =>
-                !itemsInCartIds.includes(product.id) &&
-                (product.name
-                    .toLowerCase()
-                    .includes(searchTerm.toLowerCase()) ||
-                    (product.sku &&
-                        product.sku
-                            .toLowerCase()
-                            .includes(searchTerm.toLowerCase())))
-        );
-        setSearchedProducts(filtered.slice(0, 5));
+        const delayDebounceFn = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/products?search=${encodeURIComponent(productSearchTerm)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const itemsInCartIds = formData.items.map((item) => parseInt(item.productId));
+                    const filtered = data
+                        .filter((p: any) => !itemsInCartIds.includes(p.id))
+                        .map((p: any) => ({
+                            ...p,
+                            priceSale: parseFloat(p.priceSale),
+                        }));
+                    setSearchedProducts(filtered.slice(0, 5));
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [productSearchTerm, formData.items]);
+
+    const handleProductSearchChange = (
+        e: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        setProductSearchTerm(e.target.value);
     };
 
     const handleSelectProduct = (product: Product) => {
@@ -444,7 +441,7 @@ const PurchaseForm = () => {
                                             </td>
                                             <td className='p-2 text-right'>
                                                 {formatCurrency(
-                                                    item.purchasePrice
+                                                    Number(item.purchasePrice)
                                                 )}
                                             </td>
                                             <td className='p-2 text-right font-semibold'>

@@ -19,6 +19,7 @@ model Brand {
 model Category {
   id        Int       @id @default(autoincrement())
   name      String    @unique
+  logoUrl   String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   products  Product[]
@@ -63,95 +64,96 @@ model Seller {
   name      String   @unique
   email     String?  @unique
   phone     String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  sales     Sale[]
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  sales        Sale[]
+  cashRegisters CashRegister[]
 }
 
 model Sale {
-  id                  Int            @id @default(autoincrement())
-  saleDate            DateTime       @default(now())
+  id                  Int         @id @default(autoincrement())
+  saleDate            DateTime    @default(now())
   totalAmount         Decimal
   paymentType         PaymentType
   notes               String?
   clientId            Int?
   sellerId            Int
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
   discountCodeApplied String?
-  seller              Seller         @relation(fields: [sellerId], references: [id])
-  client              Client?        @relation(fields: [clientId], references: [id])
+  seller              Seller      @relation(fields: [sellerId], references: [id])
+  client              Client?     @relation(fields: [clientId], references: [id])
   items               SaleItem[]
 }
 
 model SaleItem {
-  id          Int     @id @default(autoincrement())
-  quantity    Int
-  priceAtSale Decimal
+  id                  Int     @id @default(autoincrement())
+  quantity            Int
+  priceAtSale         Decimal
   purchasePriceAtSale Decimal
-  saleId      Int
-  productId   Int
-  product     Product @relation(fields: [productId], references: [id])
-  sale        Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleId              Int
+  productId           Int
+  product             Product @relation(fields: [productId], references: [id])
+  sale                Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   @@unique([saleId, productId])
 }
 
 model Expense {
-  id          Int      @id @default(autoincrement())
-  expenseDate DateTime @default(now())
+  id          Int         @id @default(autoincrement())
+  expenseDate DateTime    @default(now())
   description String
   amount      Decimal
   category    String
   paymentType PaymentType
   notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model Supplier {
-  id            Int      @id @default(autoincrement())
-  name          String   @unique
-  contactPerson String?  // Nombre de la persona de contacto
+  id            Int     @id @default(autoincrement())
+  name          String  @unique
+  contactPerson String? // Nombre de la persona de contacto
   email         String?
   phone         String?
   address       String?
   notes         String?
 
-  purchases     Purchase[] // Un proveedor puede estar asociado a muchas compras
+  purchases Purchase[] // Un proveedor puede estar asociado a muchas compras
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Purchase {
-  id            Int      @id @default(autoincrement())
-  purchaseDate  DateTime @default(now())
-  totalAmount   Decimal  // Costo total de la compra
+  id            Int            @id @default(autoincrement())
+  purchaseDate  DateTime       @default(now())
+  totalAmount   Decimal // Costo total de la compra
   status        PurchaseStatus @default(PENDING) // Estado de la compra
-  invoiceNumber String?  // Número de factura del proveedor (opcional)
+  invoiceNumber String? // Número de factura del proveedor (opcional)
   notes         String?
 
-  supplierId    Int
-  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  supplierId Int
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
 
-  items         PurchaseItem[] // Los productos comprados en esta transacción
+  items PurchaseItem[] // Los productos comprados en esta transacción
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PurchaseItem {
   id            Int     @id @default(autoincrement())
-  quantity      Int     // Cantidad de unidades compradas
+  quantity      Int // Cantidad de unidades compradas
   purchasePrice Decimal // Costo por unidad en esta compra específica
 
-  purchaseId    Int
-  purchase      Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchaseId Int
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
-  productId     Int
-  product       Product  @relation(fields: [productId], references: [id])
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
 }
 
 enum PaymentType {
@@ -162,7 +164,55 @@ enum PaymentType {
 }
 
 enum PurchaseStatus {
-  PENDING   
-  RECEIVED  
-  CANCELLED 
+  PENDING
+  RECEIVED
+  CANCELLED
+}
+
+model DiscountCode {
+  id              Int       @id @default(autoincrement())
+  code            String    @unique
+  discountPercent Decimal // Porcentaje de descuento (ej: 10.0)
+  validFrom       DateTime?
+  validUntil      DateTime?
+  maxUses         Int? // Límite de usos (null = ilimitado)
+  currentUses     Int       @default(0)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model CashRegister {
+  id              Int       @id @default(autoincrement())
+  openDate        DateTime  @default(now())
+  closeDate       DateTime?
+  initialBalance  Decimal   @default(0)
+  expectedBalance Decimal?
+  actualBalance   Decimal?
+  difference      Decimal?
+  status          String    @default("OPEN")
+  notes           String?
+  sellerId        Int?
+  seller          Seller?   @relation(fields: [sellerId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  movements       CashMovement[]
+}
+
+model CashMovement {
+  id              Int       @id @default(autoincrement())
+  cashRegisterId  Int
+  type            String    // SALE, EXPENSE, WITHDRAWAL, DEPOSIT, ADJUSTMENT
+  paymentType     String?   // CASH, TRANSFER, CARD, QR, OTHER
+  sourceId        Int?      // ID de la venta/gasto relacionado
+  amount          Decimal   // Positivo = ingreso, Negativo = egreso
+  description     String?
+  createdAt       DateTime  @default(now())
+  cashRegister    CashRegister @relation(fields: [cashRegisterId], references: [id])
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
 }

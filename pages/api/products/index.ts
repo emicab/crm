@@ -1,8 +1,11 @@
 // pages/api/products/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { Prisma } from '@prisma/client'; // Importar Prisma para los tipos
-import { Decimal } from '@prisma/client/runtime/library';
+import { Prisma } from '@prisma/client';
+type Decimal = Prisma.Decimal;
+const Decimal = Prisma.Decimal;
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -39,24 +42,44 @@ export default async function handler(
         }
     }
 
+    const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
+    const skip = page ? (page - 1) * limit : undefined;
+
     try {
-      const products = await prisma.product.findMany({
-        where: whereClause, // Aplicar los filtros construidos
-        include: {
-          brand: true,
-          category: true,
-        },
-        orderBy: {
-          name: 'asc',
-        },
-      });
-      res.status(200).json(products);
+      const [products, total] = await Promise.all([
+        prisma.product.findMany({
+          where: whereClause, // Aplicar los filtros construidos
+          include: {
+            brand: true,
+            category: true,
+          },
+          orderBy: {
+            name: 'asc',
+          },
+          ...(skip !== undefined && { skip, take: limit }),
+        }),
+        prisma.product.count({ where: whereClause }),
+      ]);
+
+      if (page !== undefined) {
+        res.status(200).json({
+          data: products,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        });
+      } else {
+        res.status(200).json(products);
+      }
     } catch (error) {
-      console.error("Error fetching products:", error);
-      res.status(500).json({ message: 'Error al obtener los productos' });
+      handleApiError(res, error, "fetching products");
     }
   } else if (req.method === 'POST') {
-    const {
+    let {
         name, sku, description,
         pricePurchase, priceSale, quantityStock, stockMinAlert,
         brandId, categoryId
@@ -87,6 +110,10 @@ export default async function handler(
         pricePurchaseDecimal = new Decimal(pricePurchaseNum);
     }
 
+    name = sanitizeString(name);
+    if (sku) sku = sanitizeString(sku);
+    if (description) description = sanitizeString(description);
+
     try {
       const newProduct = await prisma.product.create({
         data: {
@@ -107,22 +134,7 @@ export default async function handler(
       });
       res.status(201).json(newProduct);
     } catch (error: unknown) {
-      console.error("Error creando producto:", error);
-      let errorMessage = 'Ocurrió un error inesperado al crear el producto.';
-      let statusCode = 500;
-
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        // Manejar errores conocidos de Prisma, como constraints únicos
-        if (error.code === 'P2002' && error.meta?.target?.includes('sku')) {
-          errorMessage = 'Ya existe un producto con este SKU.';
-          statusCode = 409; // Conflict
-        }
-      } else if (error instanceof Error) {
-        // Capturar otros errores genéricos
-        errorMessage = error.message;
-      }
-
-      res.status(statusCode).json({ message: errorMessage });
+      handleApiError(res, error, "creating product");
     }
   } else {
     res.setHeader('Allow', ['GET', 'POST']);

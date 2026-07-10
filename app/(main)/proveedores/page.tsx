@@ -14,8 +14,8 @@ export default function ProveedoresPage() {
             Administra los proveedores y distribuidores de tu negocio.
           </p>
         </div>
-        <Link href="/proveedores/nuevo" passHref>
-          <Button as="a" variant="primary">
+        <Link href="/proveedores/nuevo">
+          <Button variant="primary">
             <PlusCircle size={18} className="mr-2" />
             Agregar Proveedor
           </Button>

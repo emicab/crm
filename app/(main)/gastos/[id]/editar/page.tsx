@@ -11,7 +11,7 @@ import Button from '@/components/ui/Button';
 const EditarGastoPage = () => {
   const router = useRouter();
   const params = useParams();
-  const expenseId = params.id as string;
+  const expenseId = params?.id as string;
 
   const [expense, setExpense] = useState<Expense | null>(null);
   const [loading, setLoading] = useState(true);

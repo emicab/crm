@@ -11,7 +11,8 @@ import {
   TrendingDown, 
   Truck, 
   Users, 
-  UserPlus 
+  UserPlus,
+  Wallet
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic'; 
@@ -19,6 +20,7 @@ export const dynamic = 'force-dynamic';
 // Módulos para las tarjetas grandes
 const mainModules = [
   { name: 'Nueva Venta', href: '/ventas/nueva', icon: ShoppingCart, description: 'Registra una nueva transacción de venta.' },
+  { name: 'Caja', href: '/caja', icon: Wallet, description: 'Abrir/Cerrar caja y ver movimientos del día.' },
   { name: 'Nueva Compra', href: '/compras/nueva', icon: ArrowUpRightSquare, description: 'Ingresa mercadería y actualiza tu stock.' },
   { name: 'Analíticas', href: '/analiticas', icon: LayoutDashboard, description: 'Visualiza tus métricas y gráficos clave.' },
 ];
@@ -80,7 +82,7 @@ export default function HomePage() {
         <main className="space-y-12">
           {/* Módulos Principales */}
           <section>
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
               {mainModules.map((mod) => (
                 <NavCard key={mod.name} module={mod} />
               ))}

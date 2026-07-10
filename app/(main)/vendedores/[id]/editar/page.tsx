@@ -11,7 +11,7 @@ import Button from '@/components/ui/Button';
 const EditarVendedorPage = () => {
   const router = useRouter();
   const params = useParams();
-  const sellerId = params.id as string;
+  const sellerId = params?.id as string;
 
   const [seller, setSeller] = useState<Seller | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Client, Seller, Product, PaymentTypeEnum } from "@/types";
 import Button from "@/components/ui/Button";
@@ -61,6 +61,10 @@ const initialFormData: SaleFormData = {
 
 const SaleForm = () => {
   const router = useRouter();
+  const barcodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barcodeInput = useRef("");
+  const productInputRef = useRef<HTMLInputElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
 
   // --- Estados del Componente ---
   const [formData, setFormData] = useState<SaleFormData>(initialFormData);
@@ -82,28 +86,27 @@ const SaleForm = () => {
     const fetchData = async () => {
       setIsFetchingInitialData(true);
       try {
-        const [clientsRes, sellersRes, productsRes] = await Promise.all([
-          fetch("/api/clients"),
+        const [sellersRes, cajaRes] = await Promise.all([
           fetch("/api/vendedores"),
-          fetch("/api/products"),
+          fetch("/api/caja"),
         ]);
 
-        if (!clientsRes.ok || !sellersRes.ok || !productsRes.ok) {
+        if (!sellersRes.ok) {
           throw new Error(
             "Error al cargar datos iniciales para el formulario de venta."
           );
         }
 
-        setClients(await clientsRes.json());
-        setSellers(await sellersRes.json());
-        const productsData = await productsRes.json();
-        setAllProducts(
-          productsData.map((p: any) => ({
-            ...p,
-            priceSale: parseFloat(p.priceSale),
-            quantityStock: parseInt(p.quantityStock),
-          }))
-        );
+        const sellersData = await sellersRes.json();
+        setSellers(sellersData);
+
+        // Auto-seleccionar vendedor desde caja abierta
+        if (cajaRes.ok) {
+          const cajaData = await cajaRes.json();
+          if (cajaData.open?.seller?.id) {
+            setFormData((prev) => ({ ...prev, sellerId: String(cajaData.open.seller.id) }));
+          }
+        }
       } catch (err: unknown) {
         toast.error(
           err instanceof Error ? err.message : "Error cargando datos."
@@ -115,21 +118,87 @@ const SaleForm = () => {
     fetchData();
   }, []);
 
+  // Auto-foco en input de producto al cargar
+  useEffect(() => {
+    if (!isFetchingInitialData) {
+      productInputRef.current?.focus();
+    }
+  }, [isFetchingInitialData]);
+
+  // --- Atajos de Teclado Globales ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA';
+
+      // F8 o Ctrl+K: enfocar búsqueda de producto
+      if (e.key === 'F8' || (e.ctrlKey && e.key === 'k')) {
+        e.preventDefault();
+        productInputRef.current?.focus();
+        return;
+      }
+
+      // Escape: limpiar selección de producto
+      if (e.key === 'Escape' && currentItem.productId) {
+        e.preventDefault();
+        handleClearCurrentItem();
+        return;
+      }
+
+      // F2: enfocar tipo de pago
+      if (e.key === 'F2') {
+        e.preventDefault();
+        const paymentSelect = document.querySelector<HTMLSelectElement>('select[name="paymentType"]');
+        paymentSelect?.focus();
+        return;
+      }
+
+      // Ctrl+Enter: finalizar venta
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        submitButtonRef.current?.click();
+        return;
+      }
+
+      // F10: finalizar venta (alternativa)
+      if (e.key === 'F10') {
+        e.preventDefault();
+        submitButtonRef.current?.click();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
+
   // --- Handlers de Cliente ---
+  useEffect(() => {
+    if (clientSearchTerm.trim() === "") {
+      setSearchedClients([]);
+      return;
+    }
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/clients?search=${encodeURIComponent(clientSearchTerm)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchedClients(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [clientSearchTerm]);
+
   const handleClientSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const searchTerm = e.target.value;
     setClientSearchTerm(searchTerm);
     if (searchTerm.trim() === "") {
-      setSearchedClients([]);
       setFormData((prev) => ({ ...prev, clientId: "" }));
-      return;
     }
-    const filtered = clients.filter((client) =>
-      `${client.firstName} ${client.lastName || ""}`
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase())
-    );
-    setSearchedClients(filtered.slice(0, 5));
   };
 
   const handleSelectClient = (client: Client) => {
@@ -141,41 +210,104 @@ const SaleForm = () => {
   const handleClearClientSelection = () => {
     setClientSearchTerm("");
     setFormData((prev) => ({ ...prev, clientId: "" }));
+    setSearchedClients([]);
   };
 
   // --- Handlers de Producto/Ítems ---
-  const handleProductSearchChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const searchTerm = e.target.value;
-    setProductSearchTerm(searchTerm);
-    if (!searchTerm) {
+  useEffect(() => {
+    if (!productSearchTerm.trim()) {
       setSearchedProducts([]);
       return;
     }
-    const itemsInCartIds = formData.items.map((item) =>
-      parseInt(item.productId)
-    );
-    const filtered = allProducts.filter(
-      (product) =>
-        !itemsInCartIds.includes(product.id) &&
-        (product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (product.sku &&
-            product.sku.toLowerCase().includes(searchTerm.toLowerCase())))
-    );
-    setSearchedProducts(filtered.slice(0, 5));
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/products?search=${encodeURIComponent(productSearchTerm)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const itemsInCartIds = formData.items.map((item) => parseInt(item.productId));
+          const filtered = data
+            .filter((p: any) => !itemsInCartIds.includes(p.id))
+            .map((p: any) => ({
+              ...p,
+              priceSale: parseFloat(p.priceSale),
+              quantityStock: parseInt(p.quantityStock),
+            }));
+          setSearchedProducts(filtered.slice(0, 5));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [productSearchTerm, formData.items]);
+
+  const handleProductSearchChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value;
+    setProductSearchTerm(value);
+
+    // Detectar lector de código de barras (caracteres rápidos consecutivos)
+    if (barcodeTimer.current) clearTimeout(barcodeTimer.current);
+    if (value.length > barcodeInput.current.length) {
+      barcodeInput.current = value;
+      barcodeTimer.current = setTimeout(() => {
+        barcodeInput.current = "";
+      }, 100);
+    } else {
+      barcodeInput.current = "";
+    }
+  };
+
+  const handleProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && barcodeInput.current.length > 0) {
+      e.preventDefault();
+      const code = barcodeInput.current;
+      barcodeInput.current = "";
+      // Buscar producto por código de barras (SKU)
+      fetch(`/api/products?search=${encodeURIComponent(code)}`).then((res) => {
+        if (res.ok) return res.json();
+        return [];
+      }).then((data) => {
+        const product = data?.[0];
+        if (product) {
+          handleSelectProduct({
+            ...product,
+            priceSale: parseFloat(product.priceSale),
+            quantityStock: parseInt(product.quantityStock),
+          });
+        } else {
+          toast.error(`Producto con código "${code}" no encontrado.`);
+        }
+      }).catch(() => {
+        toast.error("Error al buscar producto por código de barras.");
+      });
+    }
   };
 
   const handleSelectProduct = (product: Product) => {
-    setCurrentItem({
+    // Agregar directamente al carrito con cantidad 1
+    if (formData.items.some(i => i.productId === String(product.id))) {
+      toast.error(`"${product.name}" ya está en la venta.`);
+      setProductSearchTerm("");
+      setSearchedProducts([]);
+      productInputRef.current?.focus();
+      return;
+    }
+    const newItem: SaleItemInCart = {
       productId: String(product.id),
       productName: product.name,
+      availableStock: product.quantityStock,
       quantity: 1,
       priceAtSale: product.priceSale,
-      availableStock: product.quantityStock,
-    });
-    setProductSearchTerm(product.name);
+      tempId: Date.now(),
+      subtotal: product.priceSale,
+    };
+    setFormData((prev) => ({ ...prev, items: [...prev.items, newItem] }));
+    setProductSearchTerm("");
     setSearchedProducts([]);
+    setTimeout(() => productInputRef.current?.focus(), 50);
   };
 
   const handleCurrentItemFieldChange = (
@@ -240,6 +372,8 @@ const SaleForm = () => {
     setFormData((prev) => ({ ...prev, items: [...prev.items, newItem] }));
     setCurrentItem(initialCurrentItemState);
     setProductSearchTerm("");
+    // Auto-foco para el siguiente producto
+    setTimeout(() => productInputRef.current?.focus(), 50);
   };
 
   const handleItemDetailChange = (
@@ -382,14 +516,137 @@ const SaleForm = () => {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-muted p-6 sm:p-8 rounded-lg shadow space-y-8"
+      className="bg-muted p-6 sm:p-8 rounded-lg shadow space-y-6"
     >
-      {/* Sección Datos Generales */}
+      {/* Sección Producto (principal) */}
       <fieldset className="border border-border p-4 rounded-md">
         <legend className="text-lg font-medium text-primary px-2">
-          Datos de la Venta
+          Producto
         </legend>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+        <div className="relative mb-2">
+          <Input
+            ref={productInputRef}
+            type="text"
+            placeholder="Buscar producto por nombre o SKU... (código de barras automático)"
+            value={productSearchTerm}
+            onChange={handleProductSearchChange}
+            onKeyDown={handleProductKeyDown}
+            autoComplete="off"
+          />
+          <p className="text-[10px] text-foreground-muted/60 mt-1">
+            <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px]">F8</kbd> buscar &middot;
+            <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px] ml-1">Esc</kbd> limpiar &middot;
+            código de barras automático
+          </p>
+          {searchedProducts.length > 0 && (
+            <ul className="absolute z-10 w-full bg-background border border-border rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+              {searchedProducts.map((product) => (
+                <li
+                  key={product.id}
+                  onClick={() => handleSelectProduct(product)}
+                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
+                >
+                  {product.name} (Stock: {product.quantityStock}) -{" "}
+                  {formatCurrency(product.priceSale)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {currentItem.productId && (
+          <div className="mt-4 p-4 border border-primary/50 rounded-md bg-primary/5 space-y-3 relative">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-medium text-foreground">
+                Añadir: {currentItem.productName}
+              </h3>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleClearCurrentItem}
+                title="Cancelar selección de este producto"
+                className="absolute top-2 right-2 p-1 h-auto w-auto"
+              >
+                <XCircle
+                  size={20}
+                  className="text-destructive hover:text-destructive/80"
+                />
+              </Button>
+            </div>
+            <p className="text-xs text-foreground-muted">
+              Stock Disponible: {currentItem.availableStock}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+              <Input
+                label="Cantidad *"
+                type="number"
+                name="quantity"
+                value={String(currentItem.quantity)}
+                onChange={handleCurrentItemFieldChange}
+                min="1"
+                required
+                className="h-10"
+              />
+              <Input
+                label="Precio Venta (u.) *"
+                type="number"
+                name="priceAtSale"
+                value={String(currentItem.priceAtSale)}
+                onChange={handleCurrentItemFieldChange}
+                step="0.01"
+                min="0"
+                required
+                className="h-10"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleAddItemToSaleList}
+                className="h-10"
+              >
+                <ShoppingCart size={16} className="mr-2" /> Añadir a Venta
+              </Button>
+            </div>
+            <p className="text-[10px] text-foreground-muted/60 mt-2">
+              <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px]">Enter</kbd> añadir &middot;
+              <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px] ml-1">Ctrl+Enter</kbd> finalizar venta
+            </p>
+          </div>
+        )}
+      </fieldset>
+
+      {/* Sección Pago */}
+      <fieldset className="border border-border p-4 rounded-md">
+        <legend className="text-lg font-medium text-primary px-2">
+          Pago
+        </legend>
+        <div className="mt-4">
+          <Select
+            label="Tipo de Pago *"
+            name="paymentType"
+            value={formData.paymentType}
+            onChange={handleFormChange}
+            required
+          >
+            <option value="">Selecciona un tipo de pago</option>
+            {Object.values(PaymentTypeEnum).map((type) => (
+              <option key={type} value={type}>
+                {getPaymentTypeDisplay(type)}
+              </option>
+            ))}
+          </Select>
+          <p className="text-[10px] text-foreground-muted/60 mt-1">
+            <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px]">F2</kbd> enfocar
+          </p>
+        </div>
+      </fieldset>
+
+      {/* Sección Detalles Adicionales (colapsable) */}
+      <details className="border border-border rounded-md p-4">
+        <summary className="text-sm font-medium text-primary cursor-pointer select-none">
+          Detalles adicionales (cliente, vendedor, descuento)
+        </summary>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="relative">
             <Input
               label="Cliente (Opcional)"
@@ -447,22 +704,6 @@ const SaleForm = () => {
               </option>
             ))}
           </Select>
-          <Select
-            label="Tipo de Pago *"
-            name="paymentType"
-            value={formData.paymentType}
-            onChange={handleFormChange}
-            required
-          >
-            <option value="">Selecciona un tipo de pago</option>
-            {Object.values(PaymentTypeEnum).map((type) => (
-              <option key={type} value={type}>
-                {getPaymentTypeDisplay(type)}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           <Input
             label="Código de Descuento (Opcional)"
             name="discountCode"
@@ -470,113 +711,24 @@ const SaleForm = () => {
             onChange={handleFormChange}
             placeholder="Ej: VERANO20"
           />
-          <div className="md:col-span-2">
-            <label
-              htmlFor="notes"
-              className="block text-sm font-medium text-foreground-muted mb-1.5"
-            >
-              Notas Adicionales (Opcional)
-            </label>
-            <textarea
-              id="notes"
-              name="notes"
-              rows={2}
-              value={formData.notes}
-              onChange={handleFormChange}
-              className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
         </div>
-      </fieldset>
-
-      {/* Sección Agregar Productos */}
-      <fieldset className="border border-border p-4 rounded-md">
-        <legend className="text-lg font-medium text-primary px-2">
-          Agregar Productos
-        </legend>
-        <div className="relative mb-2">
-          <Input
-            type="text"
-            placeholder="Buscar producto por nombre o SKU..."
-            value={productSearchTerm}
-            onChange={handleProductSearchChange}
-            autoComplete="off"
+        <div className="mt-4">
+          <label
+            htmlFor="notes"
+            className="block text-sm font-medium text-foreground-muted mb-1.5"
+          >
+            Notas Adicionales (Opcional)
+          </label>
+          <textarea
+            id="notes"
+            name="notes"
+            rows={2}
+            value={formData.notes}
+            onChange={handleFormChange}
+            className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-          {searchedProducts.length > 0 && (
-            <ul className="absolute z-10 w-full bg-background border border-border rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
-              {searchedProducts.map((product) => (
-                <li
-                  key={product.id}
-                  onClick={() => handleSelectProduct(product)}
-                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
-                >
-                  {product.name} (Stock: {product.quantityStock}) -{" "}
-                  {formatCurrency(product.priceSale)}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
-        {currentItem.productId && (
-          <div className="mt-4 p-4 border border-primary/50 rounded-md bg-primary/5 space-y-3 relative">
-            {" "}
-            {/* 'relative' para el botón de cerrar */}
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-medium text-foreground">
-                Añadir: {currentItem.productName}
-              </h3>
-              {/* --- BOTÓN PARA CERRAR/DESELECCIONAR REINTRODUCIDO --- */}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={handleClearCurrentItem}
-                title="Cancelar selección de este producto"
-                className="absolute top-2 right-2 p-1 h-auto w-auto"
-              >
-                <XCircle
-                  size={20}
-                  className="text-destructive hover:text-destructive/80"
-                />
-              </Button>
-            </div>
-            <p className="text-xs text-foreground-muted">
-              Stock Disponible: {currentItem.availableStock}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-              <Input
-                label="Cantidad *"
-                type="number"
-                name="quantity"
-                value={String(currentItem.quantity)}
-                onChange={handleCurrentItemFieldChange}
-                min="1"
-                required
-                className="h-10"
-              />
-              <Input
-                label="Precio Venta (u.) *"
-                type="number"
-                name="priceAtSale"
-                value={String(currentItem.priceAtSale)}
-                onChange={handleCurrentItemFieldChange}
-                step="0.01"
-                min="0"
-                required
-                className="h-10"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleAddItemToSaleList}
-                className="h-10"
-              >
-                <ShoppingCart size={16} className="mr-2" /> Añadir a Venta
-              </Button>
-            </div>
-          </div>
-        )}
-      </fieldset>
+      </details>
 
       {/* Sección Ítems en la Venta */}
       {formData.items.length > 0 && (
@@ -660,6 +812,7 @@ const SaleForm = () => {
             Cancelar
           </Button>
           <Button
+            ref={submitButtonRef}
             type="submit"
             variant="primary"
             disabled={isLoading || formData.items.length === 0}
@@ -669,6 +822,10 @@ const SaleForm = () => {
             ) : null}
             {isLoading ? "Procesando Venta..." : "Finalizar Venta"}
           </Button>
+          <p className="text-[10px] text-foreground-muted/60 mt-2 text-right w-full">
+            <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px]">Ctrl+Enter</kbd> &middot;
+            <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px] ml-1">F10</kbd> finalizar
+          </p>
         </div>
       </div>
     </form>

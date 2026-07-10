@@ -1,6 +1,8 @@
 // pages/api/brands/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma'; // Ajusta la ruta si es necesario
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -9,26 +11,51 @@ export default async function handler(
   if (req.method === 'GET') {
     const { name } = req.query; // Para búsqueda opcional por nombre
 
+    const whereClause = {
+      name: name ? { contains: name as string } : undefined,
+    };
+
+    const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
+    const skip = page ? (page - 1) * limit : undefined;
+
     try {
-      const brands = await prisma.brand.findMany({
-        where: {
-          name: name ? { contains: name as string, mode: 'insensitive' } : undefined,
-        },
-        orderBy: {
-          name: 'asc', // Ordenar por nombre ascendentemente
-        },
-      });
-      res.status(200).json(brands);
+      const [brands, total] = await Promise.all([
+        prisma.brand.findMany({
+          where: whereClause,
+          orderBy: {
+            name: 'asc', // Ordenar por nombre ascendentemente
+          },
+          ...(skip !== undefined && { skip, take: limit }),
+        }),
+        prisma.brand.count({ where: whereClause }),
+      ]);
+
+      if (page !== undefined) {
+        res.status(200).json({
+          data: brands,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          }
+        });
+      } else {
+        res.status(200).json(brands);
+      }
     } catch (error) {
-      console.error("Error fetching brands:", error);
-      res.status(500).json({ message: 'Error al obtener las marcas' });
+      handleApiError(res, error, "fetching brands");
     }
   } else if (req.method === 'POST') {
-    const { name, logoUrl } = req.body;
+    let { name, logoUrl } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: 'El nombre es obligatorio' });
     }
+
+    name = sanitizeString(name);
+    if (logoUrl) logoUrl = sanitizeString(logoUrl);
 
     try {
       const newBrand = await prisma.brand.create({
@@ -39,12 +66,7 @@ export default async function handler(
       });
       res.status(201).json(newBrand);
     } catch (error) {
-      console.error("Error creating brand:", error);
-      if (error.code === 'P2002' && error.meta?.target?.includes('name')) {
-        // P2002 es el código de error de Prisma para violación de constraint único
-        return res.status(409).json({ message: 'Ya existe una marca con este nombre.' });
-      }
-      res.status(500).json({ message: 'Error al crear la marca' });
+      handleApiError(res, error, "creating brand");
     }
   } else {
     res.setHeader('Allow', ['GET', 'POST']);

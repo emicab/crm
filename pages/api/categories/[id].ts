@@ -1,7 +1,8 @@
 // pages/api/categories/[id].ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma'; // Ajusta la ruta si es necesario
-import { Prisma } from '@prisma/client'; // Para tipar errores de Prisma
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -25,15 +26,16 @@ export default async function handler(
       }
       res.status(200).json(category);
     } catch (error: any) {
-      console.error(`Error fetching category ${id}:`, error);
-      res.status(500).json({ message: `Error al obtener la categoría: ${error.message}` });
+      handleApiError(res, error, `fetching category ${id}`);
     }
   } else if (req.method === 'PUT') {
-    const { name } = req.body;
+    let { name } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ message: 'El nombre es obligatorio y debe ser una cadena de texto no vacía.' });
     }
+
+    name = sanitizeString(name);
 
     try {
       const updatedCategory = await prisma.category.update({
@@ -44,17 +46,7 @@ export default async function handler(
       });
       res.status(200).json(updatedCategory);
     } catch (error: any) {
-      console.error(`Error updating category ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') { // "Record to update not found"
-          return res.status(404).json({ message: 'Categoría no encontrada para actualizar.' });
-        }
-        if (error.code === 'P2002' && error.meta?.target?.includes('name')) {
-          // Violación de constraint único para el nombre
-          return res.status(409).json({ message: 'Ya existe otra categoría con este nombre.' });
-        }
-      }
-      res.status(500).json({ message: `Error al actualizar la categoría: ${error.message}` });
+      handleApiError(res, error, `updating category ${id}`);
     }
   } else if (req.method === 'DELETE') {
     try {
@@ -74,12 +66,7 @@ export default async function handler(
       });
       res.status(204).end(); // 204 No Content: Éxito, sin cuerpo de respuesta
     } catch (error: any) {
-      console.error(`Error deleting category ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        // "Record to delete not found"
-        return res.status(404).json({ message: 'Categoría no encontrada para eliminar.' });
-      }
-      res.status(500).json({ message: `Error al eliminar la categoría: ${error.message}` });
+      handleApiError(res, error, `deleting category ${id}`);
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);

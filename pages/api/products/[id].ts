@@ -2,7 +2,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { Prisma } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
+const Decimal = Prisma.Decimal;
+import { handleApiError } from '../../../lib/apiErrorHandler';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -30,11 +32,10 @@ export default async function handler(
       }
       res.status(200).json(product);
     } catch (error: any) {
-      console.error(`Error fetching product ${id}:`, error);
-      res.status(500).json({ message: `Error al obtener el producto: ${error.message}` });
+      handleApiError(res, error, `fetching product ${id}`);
     }
   } else if (req.method === 'PUT') {
-    const {
+    let {
       name, sku, description,
       pricePurchase, priceSale, quantityStock, stockMinAlert,
       brandId, categoryId,
@@ -56,6 +57,10 @@ export default async function handler(
     if (categoryId === undefined || isNaN(parseInt(categoryId))) {
       return res.status(400).json({ message: 'La categoría es obligatoria.' });
     }
+
+    name = sanitizeString(name);
+    if (sku) sku = sanitizeString(sku);
+    if (description) description = sanitizeString(description);
 
     try {
       // Validar existencia de Brand y Category
@@ -83,7 +88,7 @@ export default async function handler(
       if (pricePurchase !== undefined && pricePurchase !== null && pricePurchase !== '') {
         dataToUpdate.pricePurchase = new Decimal(parseFloat(pricePurchase));
       } else if (pricePurchase === '' || pricePurchase === null) {
-        dataToUpdate.pricePurchase = null; // Permitir borrar el precio de compra
+        dataToUpdate.pricePurchase = null as any; // Permitir borrar el precio de compra
       }
       if (stockMinAlert !== undefined && stockMinAlert !== null && stockMinAlert !== '') {
         dataToUpdate.stockMinAlert = parseInt(stockMinAlert);
@@ -98,26 +103,26 @@ export default async function handler(
       });
       res.status(200).json(updatedProduct);
     } catch (error: any) {
-      console.error(`Error updating product ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
-          return res.status(404).json({ message: 'Producto no encontrado para actualizar.' });
-        }
-        if (error.code === 'P2002' && error.meta?.target?.includes('sku')) {
-          return res.status(409).json({ message: 'Ya existe otro producto con este SKU.' });
-        }
-      }
-      res.status(500).json({ message: `Error al actualizar el producto: ${error.message}` });
+      handleApiError(res, error, `updating product ${id}`);
     }
   } else if (req.method === 'DELETE') {
     try {
-      const saleItemsCount = await prisma.saleItem.count({
-        where: { productId: id },
-      });
+      const [saleItemsCount, purchaseItemsCount] = await Promise.all([
+        prisma.saleItem.count({
+          where: { productId: id },
+        }),
+        prisma.purchaseItem.count({
+          where: { productId: id },
+        }),
+      ]);
 
-      if (saleItemsCount > 0) {
+      if (saleItemsCount > 0 || purchaseItemsCount > 0) {
+        const relations = [];
+        if (saleItemsCount > 0) relations.push(`${saleItemsCount} ítem(s) de venta`);
+        if (purchaseItemsCount > 0) relations.push(`${purchaseItemsCount} ítem(s) de compra`);
+
         return res.status(409).json({
-          message: `No se puede eliminar el producto porque está asociado a ${saleItemsCount} ítem(s) de venta. Considere marcarlo como no disponible o discontinuado.`
+          message: `No se puede eliminar el producto porque está asociado a ${relations.join(' y ')}. Considere marcarlo como no disponible o discontinuado.`
         });
       }
       
@@ -126,11 +131,7 @@ export default async function handler(
       });
       res.status(204).end(); // No Content
     } catch (error: any) {
-      console.error(`Error deleting product ${id}:`, error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        return res.status(404).json({ message: 'Producto no encontrado para eliminar.' });
-      }
-      res.status(500).json({ message: `Error al eliminar el producto: ${error.message}` });
+      handleApiError(res, error, `deleting product ${id}`);
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);

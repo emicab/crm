@@ -9,6 +9,7 @@ import { Edit3, Trash2, Loader2, AlertCircle, Filter, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import ConfirmationModal from '../ui/ConfirmationModal';
+import { exportToCSV, parseCSV } from '@/lib/csv';
 
 const ProductTable = () => {
   const router = useRouter();
@@ -127,6 +128,163 @@ const ProductTable = () => {
       setItemToDelete(null);
     }
   };
+
+  const handleExportCSV = () => {
+    const headers = [
+      { key: 'name', label: 'Nombre' },
+      { key: 'sku', label: 'SKU' },
+      { key: 'description', label: 'Descripción' },
+      { key: 'pricePurchase', label: 'Precio Compra' },
+      { key: 'priceSale', label: 'Precio Venta' },
+      { key: 'quantityStock', label: 'Stock' },
+      { key: 'stockMinAlert', label: 'Alerta Stock Mínimo' },
+      { key: 'brandName', label: 'Marca' },
+      { key: 'categoryName', label: 'Categoría' }
+    ];
+    const dataToExport = products.map(p => ({
+      ...p,
+      brandName: p.brand?.name || '',
+      categoryName: p.category?.name || '',
+    }));
+    exportToCSV('productos', dataToExport, headers);
+    toast.success('Productos exportados a CSV con éxito.');
+  };
+
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      try {
+        const lines = parseCSV(text);
+        if (lines.length < 2) {
+          toast.error('El archivo CSV está vacío o no tiene formato válido.');
+          return;
+        }
+
+        const headers = lines[0].map(h => h.trim().toLowerCase());
+        const nameIdx = headers.indexOf('nombre');
+        const skuIdx = headers.indexOf('sku');
+        const descIdx = headers.indexOf('descripción');
+        const pricePurchaseIdx = headers.indexOf('precio compra');
+        const priceSaleIdx = headers.indexOf('precio venta');
+        const stockIdx = headers.indexOf('stock');
+        const stockMinIdx = headers.indexOf('alerta stock mínimo');
+        const brandIdx = headers.indexOf('marca');
+        const categoryIdx = headers.indexOf('categoría');
+
+        if (nameIdx === -1 || priceSaleIdx === -1 || stockIdx === -1 || brandIdx === -1 || categoryIdx === -1) {
+          toast.error('Columnas obligatorias faltantes en el CSV. Asegúrate de incluir: Nombre, Precio Venta, Stock, Marca, Categoría.');
+          return;
+        }
+
+        toast.loading('Importando productos...', { id: 'import-toast' });
+
+        const [bRes, cRes] = await Promise.all([
+          fetch('/api/brands'),
+          fetch('/api/categories')
+        ]);
+        
+        let currentBrands = await bRes.ok ? await bRes.json() : [];
+        let currentCategories = await cRes.ok ? await cRes.json() : [];
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (let i = 1; i < lines.length; i++) {
+          const row = lines[i];
+          if (row.length <= 1) continue;
+
+          const name = row[nameIdx]?.trim();
+          if (!name) continue;
+
+          const sku = skuIdx !== -1 ? row[skuIdx]?.trim() || null : null;
+          const description = descIdx !== -1 ? row[descIdx]?.trim() || null : null;
+          const pricePurchase = pricePurchaseIdx !== -1 ? row[pricePurchaseIdx]?.trim() || '' : '';
+          const priceSale = parseFloat(row[priceSaleIdx]);
+          const quantityStock = parseInt(row[stockIdx]) || 0;
+          const stockMinAlert = stockMinIdx !== -1 ? parseInt(row[stockMinIdx]) || null : null;
+          const brandName = row[brandIdx]?.trim();
+          const categoryName = row[categoryIdx]?.trim();
+
+          if (!brandName || !categoryName || isNaN(priceSale)) {
+            errorCount++;
+            continue;
+          }
+
+          let brand = currentBrands.find((b: any) => b.name.toLowerCase() === brandName.toLowerCase());
+          if (!brand) {
+            const createRes = await fetch('/api/brands', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: brandName })
+            });
+            if (createRes.ok) {
+              brand = await createRes.json();
+              currentBrands.push(brand);
+            } else {
+              errorCount++;
+              continue;
+            }
+          }
+
+          let category = currentCategories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase());
+          if (!category) {
+            const createRes = await fetch('/api/categories', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: categoryName })
+            });
+            if (createRes.ok) {
+              category = await createRes.json();
+              currentCategories.push(category);
+            } else {
+              errorCount++;
+              continue;
+            }
+          }
+
+          const productData = {
+            name,
+            sku,
+            description,
+            pricePurchase,
+            priceSale,
+            quantityStock,
+            stockMinAlert,
+            brandId: brand.id,
+            categoryId: category.id
+          };
+
+          const pRes = await fetch('/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(productData)
+          });
+
+          if (pRes.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        }
+
+        toast.dismiss('import-toast');
+        toast.success(`Importación finalizada. Creados: ${successCount}. Errores/Omitidos: ${errorCount}`);
+        fetchProducts();
+      } catch (err) {
+        toast.dismiss('import-toast');
+        toast.error('Error al procesar el archivo CSV.');
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
   
   const formatCurrency = (amount: number | null | undefined) => {
     if (amount === null || amount === undefined) return '-';
@@ -151,10 +309,30 @@ const ProductTable = () => {
       <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
         {/* --- Sección de Filtros y Búsqueda --- */}
         <div className="mb-6 p-4 border border-border rounded-md bg-background">
-          <h3 className="text-lg font-medium text-foreground mb-3 flex items-center">
-            <Filter size={18} className="mr-2 text-primary" /> Filtros y
-            Búsqueda
-          </h3>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
+            <h3 className="text-lg font-medium text-foreground flex items-center">
+              <Filter size={18} className="mr-2 text-primary" /> Filtros y Búsqueda
+            </h3>
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={handleExportCSV}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+              >
+                Exportar CSV
+              </Button>
+              <label className="flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border border-input bg-background hover:bg-muted text-foreground transition-colors cursor-pointer">
+                Importar CSV
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleImportCSV}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
               name="search"
