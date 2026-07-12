@@ -1,7 +1,7 @@
 // pages/api/compras/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { Prisma, PurchaseStatus } from '@prisma/client';
+import { Prisma, PurchaseStatus, PaymentType } from '@prisma/client';
 const Decimal = Prisma.Decimal;
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
@@ -16,6 +16,7 @@ interface PurchaseItemInput {
 interface CreatePurchaseInput {
   supplierId: number;
   status?: PurchaseStatus; // Opcional, por defecto será RECEIVED para actualizar stock
+  paymentType?: PaymentType;
   invoiceNumber?: string;
   notes?: string;
   items: PurchaseItemInput[];
@@ -80,7 +81,7 @@ export default async function handler(
     }
   } else if (req.method === 'POST') {
     // --- Registrar una Nueva Compra ---
-    let { supplierId, status, invoiceNumber, notes, items } = req.body as CreatePurchaseInput;
+    let { supplierId, status, paymentType, invoiceNumber, notes, items } = req.body as CreatePurchaseInput;
 
     if (!supplierId || !items || items.length === 0) {
       return res.status(400).json({ message: 'Faltan datos obligatorios: proveedor o ítems.' });
@@ -109,6 +110,7 @@ export default async function handler(
             purchaseDate: new Date(),
             totalAmount: calculatedTotalAmount,
             status: purchaseStatus,
+            paymentType: paymentType || null,
             invoiceNumber: invoiceNumber || null,
             notes: notes || null,
             supplier: { connect: { id: supplierId } },
@@ -141,6 +143,38 @@ export default async function handler(
                 },
                 // F2: Solo actualizar el precio de compra del producto si no tiene uno
                 ...(!product?.pricePurchase ? { pricePurchase: new Decimal(item.purchasePrice) } : {})
+              },
+            });
+          }
+        }
+
+        // 3. Si la compra tiene medio de pago, registrar gasto automático
+        if (paymentType) {
+          const supplier = await tx.supplier.findUnique({ where: { id: supplierId } });
+          const supplierName = supplier?.name || `Proveedor #${supplierId}`;
+
+          await tx.expense.create({
+            data: {
+              expenseDate: newPurchase.purchaseDate,
+              description: `Compra #${newPurchase.id} - ${supplierName}`,
+              amount: calculatedTotalAmount,
+              category: 'Mercadería',
+              paymentType: paymentType,
+              notes: notes || null,
+            },
+          });
+
+          // Registrar movimiento en caja si hay una abierta
+          const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
+          if (openRegister) {
+            await tx.cashMovement.create({
+              data: {
+                cashRegisterId: openRegister.id,
+                type: 'EXPENSE',
+                paymentType: paymentType,
+                sourceId: newPurchase.id,
+                amount: calculatedTotalAmount.negated(),
+                description: `Compra #${newPurchase.id} - ${supplierName}`,
               },
             });
           }

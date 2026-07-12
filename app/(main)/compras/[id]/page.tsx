@@ -4,8 +4,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import type { Purchase, PurchaseItem, Product } from '@/types';
-import { Loader2, AlertCircle, ArrowLeft, UserCircle, Truck, ShoppingBag, FileText } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft, UserCircle, Truck, ShoppingBag, FileText, CreditCard, Edit3, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import Link from 'next/link';
+import { getPaymentTypeDisplay } from '@/lib/displayTexts';
 
 // Interfaces para asegurar el tipado correcto de los datos anidados
 interface PurchaseItemDetail extends Omit<PurchaseItem, 'product'> {
@@ -25,6 +27,8 @@ const PurchaseDetailPage = () => {
   const [purchase, setPurchase] = useState<PurchaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     if (purchaseId) {
@@ -70,6 +74,24 @@ const PurchaseDetailPage = () => {
     return new Date(dateString).toLocaleString('es-AR', { dateStyle: 'medium', timeStyle: 'short' });
   };
 
+  const handleDelete = async () => {
+    if (!purchase) return;
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/compras/${purchase.id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al eliminar la compra.');
+      }
+      router.push('/compras');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al eliminar la compra.');
+      setShowConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center p-8"><Loader2 size={32} className="animate-spin text-primary" /></div>;
   if (error) return (
     <div className="text-center p-8">
@@ -83,10 +105,41 @@ const PurchaseDetailPage = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Button variant="outline" size="sm" onClick={() => router.back()} className="mb-6">
-        <ArrowLeft size={16} className="mr-2" />
-        Volver
-      </Button>
+      <div className="flex justify-between items-center mb-6">
+        <Button variant="outline" size="sm" onClick={() => router.back()}>
+          <ArrowLeft size={16} className="mr-2" />
+          Volver
+        </Button>
+        <div className="flex gap-2">
+          <Link href={`/compras/${purchaseId}/editar`}>
+            <Button variant="primary" size="sm">
+              <Edit3 size={16} className="mr-2" />
+              Editar
+            </Button>
+          </Link>
+          <Button variant="destructive" size="sm" onClick={() => setShowConfirm(true)} disabled={deleting}>
+            <Trash2 size={16} className="mr-2" />
+            {deleting ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </div>
+      </div>
+
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-muted p-6 rounded-xl shadow-xl max-w-sm mx-4">
+            <h3 className="text-lg font-semibold text-foreground mb-2">¿Eliminar compra?</h3>
+            <p className="text-sm text-foreground-muted mb-4">
+              Se revertirá el stock de los productos y se eliminarán el gasto y movimiento de caja asociados. Esta acción no se puede deshacer.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" size="sm" onClick={() => setShowConfirm(false)} disabled={deleting}>Cancelar</Button>
+              <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
+                {deleting ? 'Eliminando...' : 'Eliminar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-muted p-6 sm:p-8 rounded-xl shadow-lg">
         <div className="flex flex-col sm:flex-row justify-between items-start mb-6 pb-6 border-b border-border">
@@ -113,6 +166,12 @@ const PurchaseDetailPage = () => {
             <div>
               <h3 className="text-sm font-medium text-foreground-muted mb-1 flex items-center"><FileText size={16} className="mr-2 text-primary"/>Nº de Factura</h3>
               <p className="text-foreground font-medium">{purchase.invoiceNumber}</p>
+            </div>
+          )}
+          {purchase.paymentType && (
+            <div>
+              <h3 className="text-sm font-medium text-foreground-muted mb-1 flex items-center"><CreditCard size={16} className="mr-2 text-primary"/>Medio de Pago</h3>
+              <p className="text-foreground font-medium">{getPaymentTypeDisplay(purchase.paymentType)}</p>
             </div>
           )}
           {purchase.notes && (

@@ -2,12 +2,18 @@
 import StatCard from '@/components/dashboard/StatCard';
 import NetProfitChart from '@/components/dashboard/NetProfitChart';
 import WeeklySalesCountChart from '@/components/analiticas/WeeklySalesCountChart';
+import DailyRevenueChart from '@/components/analiticas/DailyRevenueChart';
+import TopSellingChart from '@/components/analiticas/TopSellingChart';
+import PaymentDistributionChart from '@/components/analiticas/PaymentDistributionChart';
 import { 
   getMonthlyFinancialSummaries,
   getDailySalesCountForCurrentWeek,
   getProductCount,
   getClientCount,
-  getLowStockProductCount
+  getLowStockProductCount,
+  getSalesForLastXDays,
+  getTopSellingProducts,
+  getPaymentTypeDistribution,
 } from '@/lib/data';
 import { 
   Package, 
@@ -18,7 +24,9 @@ import {
   ShieldCheck, 
   TrendingDown as ExpensesIcon,
   BarChart3,
-  CalendarDays
+  CalendarDays,
+  TrendingUp,
+  PieChart,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -36,12 +44,18 @@ export default async function AnaliticasPage() {
     productCount, 
     clientCount, 
     lowStockCount,
+    dailyRevenueData,
+    topSellingData,
+    paymentTypeData,
   ] = await Promise.all([
     getMonthlyFinancialSummaries(6),
     getDailySalesCountForCurrentWeek(),
     getProductCount(),
     getClientCount(),
     getLowStockProductCount(),
+    getSalesForLastXDays(30),
+    getTopSellingProducts(5, 30),
+    getPaymentTypeDistribution(),
   ]);
   
   const currentMonthData = monthlySummaries[monthlySummaries.length - 1] || {
@@ -128,6 +142,38 @@ export default async function AnaliticasPage() {
           <WeeklySalesCountChart data={weeklySalesData} />
         </div>
 
+      </div>
+
+      {/* --- NIVEL 4: Grilla de Gráficos (2 columnas) --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+
+        {/* Gráfico de Ingresos Diarios (30 días) */}
+        <div className="bg-muted p-4 sm:p-6 rounded-xl shadow">
+          <div className="flex items-center mb-4">
+            <TrendingUp size={20} className="text-primary mr-2" />
+            <h2 className="text-xl font-semibold text-foreground">Ingresos Diarios (Últimos 30 Días)</h2>
+          </div>
+          <DailyRevenueChart data={dailyRevenueData} />
+        </div>
+
+        {/* Productos Más Vendidos */}
+        <div className="bg-muted p-4 sm:p-6 rounded-xl shadow">
+          <div className="flex items-center mb-4">
+            <BarChart3 size={20} className="text-primary mr-2" />
+            <h2 className="text-xl font-semibold text-foreground">Productos Más Vendidos (30 Días)</h2>
+          </div>
+          <TopSellingChart data={topSellingData} />
+        </div>
+
+      </div>
+
+      {/* --- NIVEL 5: Distribución por Tipo de Pago (ancho completo) --- */}
+      <div className="bg-muted p-4 sm:p-6 rounded-xl shadow mt-6">
+        <div className="flex items-center mb-4">
+          <PieChart size={20} className="text-primary mr-2" />
+          <h2 className="text-xl font-semibold text-foreground">Distribución por Tipo de Pago (Mes Actual)</h2>
+        </div>
+        <PaymentDistributionChart data={paymentTypeData} />
       </div>
     </>
   );

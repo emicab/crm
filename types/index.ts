@@ -18,16 +18,18 @@ export interface Brand {
     name: string;
     sku?: string | null;
     description?: string | null;
-    pricePurchase: number; // Prisma usa Decimal, que se serializa a string. Convertir a number.
-    priceSale: number;     // Idem.
+    pricePurchase: number;
+    priceSale: number;
     quantityStock: number;
     stockMinAlert?: number | null;
     brandId: number;
     categoryId: number;
-    createdAt: string; // O Date, dependiendo de cómo lo manejes post-fetch
-    updatedAt: string; // O Date
-    brand: Brand;       // Objeto Brand anidado
-    category: Category; // Objeto Category anidado
+    supplierId?: number | null;
+    createdAt: string;
+    updatedAt: string;
+    brand: Brand;
+    category: Category;
+    supplier?: Supplier | null;
   }
 
   export interface Client {
@@ -56,7 +58,56 @@ export interface Brand {
     CASH = 'CASH',
     TRANSFER = 'TRANSFER',
     CARD = 'CARD',
+    QR = 'QR',
     OTHER = 'OTHER',
+  }
+  
+  export interface Combo {
+    id: number;
+    name: string;
+    description?: string | null;
+    price: number;
+    active: boolean;
+    createdAt: string;
+    updatedAt: string;
+    items: ComboItem[];
+  }
+  
+  export interface ComboItem {
+    id?: number;
+    comboId?: number;
+    productId: number;
+    product?: Product;
+    quantity: number;
+    customPrice?: number | null;
+  }
+  
+  export interface Promotion {
+    id: number;
+    name: string;
+    description?: string | null;
+    type: string; // BUY_X_GET_Y | SET_DISCOUNT | THRESHOLD
+    status: string; // ACTIVE | INACTIVE
+    discountType: string; // PERCENTAGE | FIXED_AMOUNT
+    discountValue: number;
+    minQuantity?: number | null;
+    maxDiscountQty?: number | null;
+    priority: number;
+    startDate?: string | null;
+    endDate?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    conditions: PromotionCondition[];
+  }
+  
+  export interface PromotionCondition {
+    id?: number;
+    promotionId?: number;
+    productId?: number | null;
+    categoryId?: number | null;
+    minQuantity: number;
+    product?: Product;
+    category?: Category;
   }
   
   export interface SaleItem {
@@ -70,6 +121,7 @@ export interface Brand {
   export interface Sale {
     id: number;
     discountCodeApplied: string;
+    promotionsApplied?: string | null; // JSON string
     saleDate: string; // O Date
     totalAmount: number; // Prisma Decimal se convierte a string/number
     paymentType: PaymentTypeEnum;
@@ -126,6 +178,7 @@ export interface Purchase {
   purchaseDate: string;
   totalAmount: number;
   status: PurchaseStatusEnum;
+  paymentType?: PaymentTypeEnum | null;
   invoiceNumber?: string | null;
   notes?: string | null;
   supplierId: number;

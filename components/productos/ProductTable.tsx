@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
-import type { Product, Brand, Category } from '@/types'; // Asegúrate de tener Brand y Category en tus tipos
+import type { Product, Brand, Category, Supplier } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Edit3, Trash2, Loader2, AlertCircle, Filter, X } from 'lucide-react';
+import { Edit3, Trash2, Loader2, AlertCircle, Filter, X, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import ConfirmationModal from '../ui/ConfirmationModal';
@@ -21,27 +21,36 @@ const ProductTable = () => {
   const [itemToDelete, setItemToDelete] = useState<Product | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBatchSupplierModalOpen, setIsBatchSupplierModalOpen] = useState(false);
+  const [batchSupplierId, setBatchSupplierId] = useState('');
+  const [isSavingBatch, setIsSavingBatch] = useState(false);
+
   // --- Estados para los filtros ---
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [filters, setFilters] = useState({
     search: '',
     brandId: '',
     categoryId: '',
+    supplierId: '',
   });
 
   // Cargar las opciones para los desplegables de filtro una sola vez al montar el componente
   useEffect(() => {
     const fetchFilterOptions = async () => {
         try {
-            const [brandsRes, categoriesRes] = await Promise.all([
+            const [brandsRes, categoriesRes, suppliersRes] = await Promise.all([
                 fetch('/api/brands'),
                 fetch('/api/categories'),
+                fetch('/api/proveedores'),
             ]);
-            if (!brandsRes.ok || !categoriesRes.ok) throw new Error("Error al cargar opciones de filtro.");
+            if (!brandsRes.ok || !categoriesRes.ok || !suppliersRes.ok) throw new Error("Error al cargar opciones de filtro.");
             
             setBrands(await brandsRes.json());
             setCategories(await categoriesRes.json());
+            setSuppliers(await suppliersRes.json());
         } catch (err: any) {
             console.error("Filtro-Error:", err);
             // Mostrar un error no crítico si solo fallan las opciones de filtro
@@ -60,6 +69,7 @@ const ProductTable = () => {
     if (filters.search) params.append('search', filters.search);
     if (filters.brandId) params.append('brandId', filters.brandId);
     if (filters.categoryId) params.append('categoryId', filters.categoryId);
+    if (filters.supplierId) params.append('supplierId', filters.supplierId);
     const queryString = params.toString();
     
     try {
@@ -98,7 +108,55 @@ const ProductTable = () => {
   };
 
   const handleClearFilters = () => {
-    setFilters({ search: '', brandId: '', categoryId: '' });
+    setFilters({ search: '', brandId: '', categoryId: '', supplierId: '' });
+  };
+
+  const handleToggleSelect = (productId: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === products.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(products.map(p => p.id)));
+    }
+  };
+
+  const handleBatchSupplier = async () => {
+    if (!batchSupplierId) {
+      toast.error('Seleccioná un proveedor.');
+      return;
+    }
+    setIsSavingBatch(true);
+    try {
+      const res = await fetch('/api/products/batch-supplier', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productIds: Array.from(selectedIds),
+          supplierId: parseInt(batchSupplierId),
+        }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al actualizar proveedor.');
+      }
+      toast.success(`Proveedor asignado a ${selectedIds.size} producto(s).`);
+      setSelectedIds(new Set());
+      setIsBatchSupplierModalOpen(false);
+      setBatchSupplierId('');
+      fetchProducts();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error inesperado.');
+    } finally {
+      setIsSavingBatch(false);
+    }
   };
 
   const handleEdit = (productId: number) => {
@@ -139,12 +197,14 @@ const ProductTable = () => {
       { key: 'quantityStock', label: 'Stock' },
       { key: 'stockMinAlert', label: 'Alerta Stock Mínimo' },
       { key: 'brandName', label: 'Marca' },
-      { key: 'categoryName', label: 'Categoría' }
+      { key: 'categoryName', label: 'Categoría' },
+      { key: 'supplierName', label: 'Proveedor' },
     ];
     const dataToExport = products.map(p => ({
       ...p,
       brandName: p.brand?.name || '',
       categoryName: p.category?.name || '',
+      supplierName: p.supplier?.name || '',
     }));
     exportToCSV('productos', dataToExport, headers);
     toast.success('Productos exportados a CSV con éxito.');
@@ -166,19 +226,30 @@ const ProductTable = () => {
           return;
         }
 
-        const headers = lines[0].map(h => h.trim().toLowerCase());
-        const nameIdx = headers.indexOf('nombre');
-        const skuIdx = headers.indexOf('sku');
-        const descIdx = headers.indexOf('descripción');
-        const pricePurchaseIdx = headers.indexOf('precio compra');
-        const priceSaleIdx = headers.indexOf('precio venta');
-        const stockIdx = headers.indexOf('stock');
-        const stockMinIdx = headers.indexOf('alerta stock mínimo');
-        const brandIdx = headers.indexOf('marca');
-        const categoryIdx = headers.indexOf('categoría');
+        const rawHeaders = lines[0].map(h => h.trim());
+        const headers = rawHeaders.map(h => h.toLowerCase().replace(/[^a-záéíóúñ]/g, ''));
 
-        if (nameIdx === -1 || priceSaleIdx === -1 || stockIdx === -1 || brandIdx === -1 || categoryIdx === -1) {
-          toast.error('Columnas obligatorias faltantes en el CSV. Asegúrate de incluir: Nombre, Precio Venta, Stock, Marca, Categoría.');
+        const findCol = (aliases: string[]): number => {
+          for (const a of aliases) {
+            const clean = a.toLowerCase().replace(/[^a-záéíóúñ]/g, '');
+            const idx = headers.indexOf(clean);
+            if (idx !== -1) return idx;
+          }
+          return -1;
+        };
+
+        const nameIdx = findCol(['nombre', 'descripcion', 'producto', 'descripción']);
+        const skuIdx = findCol(['sku', 'codigo', 'código', 'code']);
+        const descIdx = findCol(['descripción', 'descripcion', 'observaciones', 'notas']);
+        const pricePurchaseIdx = findCol(['preciocompra', 'preciocompra', 'costo', 'preciodecosto', 'cost']);
+        const priceSaleIdx = findCol(['precioventa', 'precioventa', 'precio', 'price', 'preciodeventa']);
+        const stockIdx = findCol(['stock', 'cantidad', 'existencia', 'quantity']);
+        const stockMinIdx = findCol(['stockminimo', 'stockmínimo', 'alertastockmínimo', 'alertastockminimo', 'stockmin']);
+        const brandIdx = findCol(['marca', 'brand', 'marc']);
+        const categoryIdx = findCol(['categoría', 'categoria', 'rubro', 'category', 'categ']);
+
+        if (nameIdx === -1 || priceSaleIdx === -1 || stockIdx === -1) {
+          toast.error('No se encontraron columnas obligatorias. El CSV debe tener: Nombre/Descripción, Precio y Stock. Columnas detectadas: ' + rawHeaders.join(', '));
           return;
         }
 
@@ -189,11 +260,15 @@ const ProductTable = () => {
           fetch('/api/categories')
         ]);
         
-        let currentBrands = await bRes.ok ? await bRes.json() : [];
-        let currentCategories = await cRes.ok ? await cRes.json() : [];
+        const currentBrands = await bRes.ok ? await bRes.json() : [];
+        const currentCategories = await cRes.ok ? await cRes.json() : [];
 
         let successCount = 0;
         let errorCount = 0;
+        let duplicateCount = 0;
+        
+        // Mapa para recordar categorías asociadas a su ID (útil si faltan en filas posteriores)
+        const categoryIdToName: Record<string, string> = {};
 
         for (let i = 1; i < lines.length; i++) {
           const row = lines[i];
@@ -205,15 +280,32 @@ const ProductTable = () => {
           const sku = skuIdx !== -1 ? row[skuIdx]?.trim() || null : null;
           const description = descIdx !== -1 ? row[descIdx]?.trim() || null : null;
           const pricePurchase = pricePurchaseIdx !== -1 ? row[pricePurchaseIdx]?.trim() || '' : '';
-          const priceSale = parseFloat(row[priceSaleIdx]);
+          const priceSale = parseFloat(row[priceSaleIdx]?.replace(',', '.'));
           const quantityStock = parseInt(row[stockIdx]) || 0;
           const stockMinAlert = stockMinIdx !== -1 ? parseInt(row[stockMinIdx]) || null : null;
-          const brandName = row[brandIdx]?.trim();
-          const categoryName = row[categoryIdx]?.trim();
+          
+          const rawIdRubro = row[6]?.trim();
+          const rawRubro = categoryIdx !== -1 ? row[categoryIdx]?.trim() : '';
+          
+          if (rawIdRubro && rawRubro) {
+            categoryIdToName[rawIdRubro] = rawRubro;
+          }
+          
+          const resolvedCategory = rawRubro || (rawIdRubro ? categoryIdToName[rawIdRubro] : '') || 'General';
 
-          if (!brandName || !categoryName || isNaN(priceSale)) {
-            errorCount++;
-            continue;
+          const brandName = brandIdx !== -1 ? (row[brandIdx]?.trim() || 'Genérica') : 'Genérica';
+          const categoryName = resolvedCategory;
+
+          if (isNaN(priceSale)) { errorCount++; continue; }
+
+          // Verificar SKU duplicado
+          if (sku) {
+            const dupRes = await fetch(`/api/products?search=${encodeURIComponent(sku)}`);
+            if (dupRes.ok) {
+              const dupData = await dupRes.json();
+              const found = Array.isArray(dupData) ? dupData.find((p: any) => p.sku === sku) : dupData.data?.find((p: any) => p.sku === sku);
+              if (found) { duplicateCount++; continue; }
+            }
           }
 
           let brand = currentBrands.find((b: any) => b.name.toLowerCase() === brandName.toLowerCase());
@@ -252,7 +344,7 @@ const ProductTable = () => {
             name,
             sku,
             description,
-            pricePurchase,
+            pricePurchase: pricePurchase || 0,
             priceSale,
             quantityStock,
             stockMinAlert,
@@ -274,7 +366,10 @@ const ProductTable = () => {
         }
 
         toast.dismiss('import-toast');
-        toast.success(`Importación finalizada. Creados: ${successCount}. Errores/Omitidos: ${errorCount}`);
+        const parts = [`Creados: ${successCount}`];
+        if (duplicateCount) parts.push(`Duplicados omitidos: ${duplicateCount}`);
+        if (errorCount) parts.push(`Errores: ${errorCount}`);
+        toast.success(`Importación finalizada. ${parts.join(' | ')}`);
         fetchProducts();
       } catch (err) {
         toast.dismiss('import-toast');
@@ -305,6 +400,48 @@ const ProductTable = () => {
         <strong className="text-foreground">&quot;{itemToDelete?.name}&quot;</strong>?
         Esta acción no se puede deshacer.
       </ConfirmationModal>
+
+      {isBatchSupplierModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4 p-6">
+            <h3 className="text-lg font-semibold mb-4">Asignar Proveedor</h3>
+            <p className="text-sm text-foreground-muted mb-4">
+              Asignar proveedor a {selectedIds.size} producto{selectedIds.size !== 1 ? 's' : ''}.
+            </p>
+            <Select
+              label="Proveedor"
+              name="batchSupplierId"
+              value={batchSupplierId}
+              onChange={(e) => setBatchSupplierId(e.target.value)}
+            >
+              <option value="">Seleccionar proveedor...</option>
+              {suppliers.map(s => (
+                <option key={s.id} value={String(s.id)}>{s.name}</option>
+              ))}
+            </Select>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsBatchSupplierModalOpen(false);
+                  setBatchSupplierId('');
+                }}
+                disabled={isSavingBatch}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleBatchSupplier}
+                disabled={isSavingBatch || !batchSupplierId}
+              >
+                {isSavingBatch ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
         {/* --- Sección de Filtros y Búsqueda --- */}
@@ -366,6 +503,19 @@ const ProductTable = () => {
                 </option>
               ))}
             </Select>
+            <Select
+              name="supplierId"
+              value={filters.supplierId}
+              onChange={handleFilterChange}
+              aria-label="Filtrar por Proveedor"
+            >
+              <option value="">Todos los Proveedores</option>
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={String(supplier.id)}>
+                  {supplier.name}
+                </option>
+              ))}
+            </Select>
             <Button
               onClick={handleClearFilters}
               variant="outline"
@@ -387,15 +537,50 @@ const ProductTable = () => {
             <Loader2 size={24} className="animate-spin text-primary" />
           </div>
         )}
+        {selectedIds.size > 0 && (
+          <div className="mb-4 p-3 bg-primary/5 border border-primary/30 rounded-lg flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">
+              {selectedIds.size} producto{selectedIds.size !== 1 ? 's' : ''} seleccionado{selectedIds.size !== 1 ? 's' : ''}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                <X size={14} className="mr-1" />
+                Limpiar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsBatchSupplierModalOpen(true)}
+              >
+                <Users size={14} className="mr-1" />
+                Asignar Proveedor
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="overflow-x-auto">
           {/* Tabla para Escritorio (oculta en móvil) */}
           <table className="hidden md:table w-full min-w-max text-left">
             <thead className="border-b border-border">
               <tr>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-10">
+                  <input
+                    type="checkbox"
+                    checked={products.length > 0 && selectedIds.size === products.length}
+                    onChange={handleSelectAll}
+                    className="rounded border-border"
+                  />
+                </th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Nombre</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">SKU</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Marca</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Categoría</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Proveedor</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Compra</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Venta</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Stock</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Acciones</th>
@@ -403,14 +588,24 @@ const ProductTable = () => {
             </thead>
             <tbody>
               {!loading && products.length === 0 ? (
-                <tr><td colSpan={7} className="text-center text-foreground-muted py-8">No se encontraron productos.</td></tr>
+                <tr><td colSpan={10} className="text-center text-foreground-muted py-8">No se encontraron productos.</td></tr>
               ) : (
                 products.map((product) => (
                   <tr key={product.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
+                    <td className="p-3 sm:p-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(product.id)}
+                        onChange={() => handleToggleSelect(product.id)}
+                        className="rounded border-border"
+                      />
+                    </td>
                     <td className="p-3 sm:p-4 text-sm text-foreground font-medium">{product.name}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.sku || '-'}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.brand.name}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.category.name}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.supplier?.name || '-'}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.pricePurchase ?? 0)}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.priceSale)}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">{product.quantityStock}</td>
                     <td className="p-3 sm:p-4 text-sm text-center">
@@ -451,10 +646,14 @@ const ProductTable = () => {
                         </div>
                         <div className="mt-4 pt-4 border-t border-border/60 grid grid-cols-2 gap-4 text-sm">
                             <div>
-                                <p className="text-xs text-foreground-muted">Precio</p>
+                                <p className="text-xs text-foreground-muted">Precio Venta</p>
                                 <p className="font-semibold text-foreground">{formatCurrency(product.priceSale)}</p>
                             </div>
                             <div className="text-right">
+                                <p className="text-xs text-foreground-muted">Precio Compra</p>
+                                <p className="font-semibold text-foreground">{formatCurrency(product.pricePurchase ?? 0)}</p>
+                            </div>
+                            <div>
                                 <p className="text-xs text-foreground-muted">Stock</p>
                                 <p className="font-semibold text-foreground">{product.quantityStock}</p>
                             </div>
@@ -465,6 +664,10 @@ const ProductTable = () => {
                              <div className="col-span-1 text-right">
                                 <p className="text-xs text-foreground-muted">Categoría</p>
                                 <p className="font-medium text-foreground">{product.category.name}</p>
+                            </div>
+                            <div className="col-span-2">
+                                <p className="text-xs text-foreground-muted">Proveedor</p>
+                                <p className="font-medium text-foreground">{product.supplier?.name || '-'}</p>
                             </div>
                         </div>
                     </div>

@@ -1,7 +1,7 @@
 // components/layout/Sidebar.tsx
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import pkg from "../../package.json";
 import {
@@ -19,6 +19,10 @@ import {
   LayoutDashboard,
   Wallet,
   Settings,
+  Barcode,
+  ShoppingBag,
+  Percent,
+  AlertTriangle,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -50,6 +54,10 @@ const navItems = [
   { href: "/proveedores", label: "Proveedores", icon: <Truck size={20} /> },
   { href: "/clientes", label: "Clientes", icon: <Users size={20} /> },
   { href: "/productos", label: "Productos", icon: <Package size={20} /> },
+  { href: "/stock", label: "Carga de Stock", icon: <Barcode size={20} /> },
+  { href: "/stock/alertas", label: "Alertas de Stock", icon: <AlertTriangle size={20} /> },
+  { href: "/combos", label: "Combos", icon: <ShoppingBag size={20} /> },
+  { href: "/promociones", label: "Promociones", icon: <Percent size={20} /> },
   { href: "/categorias", label: "Categorías", icon: <Tag size={20} /> },
   { href: "/marcas", label: "Marcas", icon: <Tag size={20} /> },
   { href: "/vendedores", label: "Vendedores", icon: <UserPlus size={20} /> },
@@ -61,6 +69,25 @@ const navItems = [
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+  const [alertCount, setAlertCount] = useState(0);
+
+  useEffect(() => {
+    const fetchAlertCount = async () => {
+      try {
+        const res = await fetch('/api/products/alert-count');
+        if (res.ok) {
+          const data = await res.json();
+          setAlertCount(data.count);
+        }
+      } catch {
+        // Silently fail
+      }
+    };
+    fetchAlertCount();
+    const interval = setInterval(fetchAlertCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Construimos las clases dinámicamente
   const sidebarClasses = `
     fixed inset-y-0 left-0 z-50 h-full w-64 bg-muted text-foreground-muted flex-col border-r border-border
@@ -104,7 +131,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               className="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-primary-light hover:text-primary transition-colors duration-150 ease-in-out font-medium"
             >
               {item.icon}
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.label === "Alertas de Stock" && alertCount > 0 && (
+                <span className="bg-destructive text-destructive-foreground text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                  {alertCount > 99 ? '99+' : alertCount}
+                </span>
+              )}
             </Link>
           ))}
         </nav>

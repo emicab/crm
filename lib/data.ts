@@ -47,7 +47,7 @@ export async function getCategoryCount() {
 }
 
 // Podríamos añadir más aquí, como "productos con stock bajo", etc.
-export async function getLowStockProductCount(minStockThreshold = 5) {
+export async function getLowStockProductCount() {
     try {
         const result = await prisma.$queryRaw<any[]>`
             SELECT COUNT(*) as count FROM Product
@@ -568,8 +568,6 @@ export async function getDailySalesCountForCurrentWeek(): Promise<DailySalesCoun
       salesMap.set(dayIndex, (salesMap.get(dayIndex) || 0) + 1);
     });
 
-    // Construir el array final para el gráfico, asegurando que todos los días de la semana estén presentes
-    const weekDays = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
     const result: DailySalesCount[] = [];
 
     // Reordenamos para que empiece en Lunes y termine en Domingo
@@ -588,6 +586,40 @@ export async function getDailySalesCountForCurrentWeek(): Promise<DailySalesCoun
 
   } catch (error) {
     console.error("Error al obtener el conteo de ventas diarias:", error);
+    return [];
+  }
+}
+
+export interface PaymentTypeDistribution {
+  paymentType: string;
+  total: number;
+}
+
+export async function getPaymentTypeDistribution(): Promise<PaymentTypeDistribution[]> {
+  try {
+    const now = new Date();
+    const startOfMonth = getLocalDateBoundary(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const endOfMonth = getLocalDateBoundary(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const sales = await prisma.sale.findMany({
+      where: {
+        saleDate: { gte: startOfMonth, lte: endOfMonth },
+      },
+      select: { paymentType: true, totalAmount: true },
+    });
+
+    const map = new Map<string, Decimal>();
+    for (const sale of sales) {
+      const key = sale.paymentType;
+      const current = map.get(key) || new Decimal(0);
+      map.set(key, current.plus(sale.totalAmount));
+    }
+
+    return Array.from(map.entries())
+      .map(([paymentType, total]) => ({ paymentType, total: total.toNumber() }))
+      .sort((a, b) => b.total - a.total);
+  } catch (error) {
+    console.error("Error fetching payment type distribution:", error);
     return [];
   }
 }

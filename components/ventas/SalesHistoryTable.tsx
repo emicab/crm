@@ -29,7 +29,7 @@ const SalesHistoryTable = () => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Error HTTP: ${response.status}`);
       }
-      let data: any[] = await response.json();
+      const data: any[] = await response.json();
       const typedSales: Sale[] = data.map((sale) => ({
         ...sale,
         totalAmount: parseFloat(String(sale.totalAmount)),

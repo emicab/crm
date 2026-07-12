@@ -1,7 +1,8 @@
 // pages/api/compras/[id].ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { PurchaseStatus } from '@prisma/client';
+import { Prisma, PurchaseStatus, PaymentType } from '@prisma/client';
+const Decimal = Prisma.Decimal;
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
 
@@ -54,7 +55,7 @@ export default async function handler(
       handleApiError(res, error, `fetching purchase ${id}`);
     }
   } else if (req.method === 'PUT') {
-    let { status, invoiceNumber, notes } = req.body;
+    let { status, paymentType, supplierId, invoiceNumber, notes, items } = req.body;
     
     if (invoiceNumber) invoiceNumber = sanitizeString(invoiceNumber);
     if (notes) notes = sanitizeString(notes);
@@ -64,7 +65,7 @@ export default async function handler(
         // 1. Obtener la compra actual con sus items
         const existingPurchase = await tx.purchase.findUnique({
           where: { id },
-          include: { items: true },
+          include: { items: true, supplier: true },
         });
 
         if (!existingPurchase) {
@@ -79,24 +80,61 @@ export default async function handler(
           throw new Error('Estado de compra inválido.');
         }
 
-        // 2. Si cambia el estado, ajustar stock
-        if (oldStatus !== newStatus) {
-          for (const item of existingPurchase.items) {
-            // Caso 1: PENDING/CANCELLED -> RECEIVED (Incrementar)
-            if (oldStatus !== PurchaseStatus.RECEIVED && newStatus === PurchaseStatus.RECEIVED) {
-              await tx.product.update({
-                where: { id: item.productId },
-                data: { quantityStock: { increment: item.quantity } },
-              });
-            }
-            // Caso 2: RECEIVED -> PENDING/CANCELLED (Decrementar)
-            else if (oldStatus === PurchaseStatus.RECEIVED && newStatus !== PurchaseStatus.RECEIVED) {
+        // 2. Si se enviaron items, reemplazar
+        if (items) {
+          // Revertir stock de items viejos si estaban recibidos
+          if (oldStatus === PurchaseStatus.RECEIVED) {
+            for (const item of existingPurchase.items) {
               const product = await tx.product.findUnique({
                 where: { id: item.productId },
                 select: { quantityStock: true, name: true },
               });
               if (product && product.quantityStock < item.quantity) {
-                throw new Error(`Stock insuficiente para revertir la compra de "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${item.quantity}.`);
+                throw new Error(`Stock insuficiente para revertir "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${item.quantity}.`);
+              }
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { quantityStock: { decrement: item.quantity } },
+              });
+            }
+          }
+
+          // Eliminar items viejos
+          await tx.purchaseItem.deleteMany({ where: { purchaseId: id } });
+
+          // Crear items nuevos y aplicar stock si RECEIVED
+          for (const item of items) {
+            await tx.purchaseItem.create({
+              data: {
+                purchaseId: id,
+                productId: item.productId,
+                quantity: item.quantity,
+                purchasePrice: new Decimal(item.purchasePrice),
+              },
+            });
+
+            if (newStatus === PurchaseStatus.RECEIVED) {
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { quantityStock: { increment: item.quantity } },
+              });
+            }
+          }
+        } else if (oldStatus !== newStatus) {
+          // Sin cambio de items, solo ajustar stock por cambio de estado
+          for (const item of existingPurchase.items) {
+            if (oldStatus !== PurchaseStatus.RECEIVED && newStatus === PurchaseStatus.RECEIVED) {
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { quantityStock: { increment: item.quantity } },
+              });
+            } else if (oldStatus === PurchaseStatus.RECEIVED && newStatus !== PurchaseStatus.RECEIVED) {
+              const product = await tx.product.findUnique({
+                where: { id: item.productId },
+                select: { quantityStock: true, name: true },
+              });
+              if (product && product.quantityStock < item.quantity) {
+                throw new Error(`Stock insuficiente para revertir "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${item.quantity}.`);
               }
               await tx.product.update({
                 where: { id: item.productId },
@@ -106,19 +144,83 @@ export default async function handler(
           }
         }
 
-        // 3. Actualizar la compra
+        // 3. Calcular total (recalcular si hay items nuevos, sino mantener)
+        let calculatedTotal: any = existingPurchase.totalAmount;
+        if (items) {
+          calculatedTotal = new Decimal(0);
+          for (const item of items) {
+            calculatedTotal = calculatedTotal.plus(new Decimal(item.purchasePrice).times(item.quantity));
+          }
+        }
+
+        // 4. Preparar datos de actualización
+        const updateData: any = { status: newStatus, totalAmount: calculatedTotal };
+        if (paymentType !== undefined) updateData.paymentType = paymentType || null;
+        if (invoiceNumber !== undefined) updateData.invoiceNumber = invoiceNumber;
+        if (notes !== undefined) updateData.notes = notes;
+        if (supplierId !== undefined) updateData.supplier = { connect: { id: parseInt(supplierId) } };
+
         const updatedPurchase = await tx.purchase.update({
           where: { id },
-          data: {
-            status: newStatus,
-            ...(invoiceNumber !== undefined && { invoiceNumber }),
-            ...(notes !== undefined && { notes }),
-          },
-          include: {
-            supplier: true,
-            items: { include: { product: true } },
-          },
+          data: updateData,
+          include: { supplier: true, items: { include: { product: true } } },
         });
+
+        // 5. Si se asignó un medio de pago, sincronizar gasto y movimiento de caja
+        if (paymentType) {
+          const supplierName = updatedPurchase.supplier?.name || existingPurchase.supplier?.name || `Proveedor #${existingPurchase.supplierId}`;
+          const desc = `Compra #${id} - ${supplierName}`;
+
+          const existingExpense = await tx.expense.findFirst({ where: { description: desc } });
+          if (existingExpense) {
+            await tx.expense.update({
+              where: { id: existingExpense.id },
+              data: {
+                amount: calculatedTotal,
+                paymentType: paymentType as PaymentType,
+                notes: updatedPurchase.notes || null,
+              },
+            });
+          } else {
+            await tx.expense.create({
+              data: {
+                expenseDate: updatedPurchase.purchaseDate,
+                description: desc,
+                amount: calculatedTotal,
+                category: 'Mercadería',
+                paymentType: paymentType as PaymentType,
+                notes: updatedPurchase.notes || null,
+              },
+            });
+          }
+
+          const existingMovement = await tx.cashMovement.findFirst({
+            where: { sourceId: id, type: 'EXPENSE' },
+          });
+          if (existingMovement) {
+            await tx.cashMovement.update({
+              where: { id: existingMovement.id },
+              data: {
+                amount: calculatedTotal.negated(),
+                paymentType: paymentType as PaymentType,
+              },
+            });
+          } else {
+            const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
+            if (openRegister) {
+              await tx.cashMovement.create({
+                data: {
+                  cashRegisterId: openRegister.id,
+                  type: 'EXPENSE',
+                  paymentType: paymentType as PaymentType,
+                  sourceId: id,
+                  amount: calculatedTotal.negated(),
+                  description: desc,
+                },
+              });
+            }
+          }
+        }
 
         return updatedPurchase;
       });
@@ -173,6 +275,16 @@ export default async function handler(
             });
           }
         }
+
+        // Eliminar movimiento de caja asociado a la compra
+        await tx.cashMovement.deleteMany({
+          where: { sourceId: id, type: 'EXPENSE' },
+        });
+
+        // Eliminar gasto generado automáticamente desde la compra
+        await tx.expense.deleteMany({
+          where: { description: { startsWith: `Compra #${id} - ` } },
+        });
 
         // Eliminar compra. Los items se eliminan en cascada en la BD si está configurado en schema.prisma.
         await tx.purchase.delete({

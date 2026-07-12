@@ -12,7 +12,7 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === 'GET') {
-    const { search, brandId, categoryId } = req.query;
+    const { search, brandId, categoryId, supplierId } = req.query;
 
     let whereClause: Prisma.ProductWhereInput = {};
 
@@ -42,6 +42,14 @@ export default async function handler(
         }
     }
 
+    // Filtro por ID de Proveedor
+    if (supplierId && typeof supplierId === 'string' && supplierId !== '') {
+        const parsedSupplierId = parseInt(supplierId);
+        if (!isNaN(parsedSupplierId)) {
+            whereClause.supplierId = parsedSupplierId;
+        }
+    }
+
     const page = req.query.page ? parseInt(req.query.page as string) : undefined;
     const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
     const skip = page ? (page - 1) * limit : undefined;
@@ -53,6 +61,7 @@ export default async function handler(
           include: {
             brand: true,
             category: true,
+            supplier: true,
           },
           orderBy: {
             name: 'asc',
@@ -82,7 +91,7 @@ export default async function handler(
     let {
         name, sku, description,
         pricePurchase, priceSale, quantityStock, stockMinAlert,
-        brandId, categoryId
+        brandId, categoryId, supplierId
     } = req.body;
 
     // --- Validación más robusta de los datos de entrada ---
@@ -126,10 +135,12 @@ export default async function handler(
           stockMinAlert: stockMinAlert ? parseInt(stockMinAlert) : null,
           brand: { connect: { id: brandIdInt } },
           category: { connect: { id: categoryIdInt } },
+          ...(supplierId ? { supplier: { connect: { id: parseInt(supplierId) } } } : {}),
         },
         include: {
             brand: true,
             category: true,
+            supplier: true,
         }
       });
       res.status(201).json(newProduct);

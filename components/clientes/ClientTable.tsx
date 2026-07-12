@@ -5,7 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import type { Client } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input'; // Importamos Input para el buscador
-import { Edit3, Trash2, Loader2, AlertCircle, Search } from 'lucide-react'; // Importamos Search
+import { Edit3, Trash2, Loader2, AlertCircle } from 'lucide-react'; // Importamos Search
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import ConfirmationModal from '../ui/ConfirmationModal';
@@ -15,7 +15,6 @@ const ClientTable = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   
   // --- Estado para el término de búsqueda ---
   const [searchTerm, setSearchTerm] = useState('');

@@ -119,20 +119,40 @@ export default async function handler(
     }
 
     try {
-      const newExpense = await prisma.expense.create({
-        data: {
-          description,
-          amount: new Decimal(amount),
-          category,
-          paymentType,
-          expenseDate: parsedExpenseDate || new Date(), // Usar fecha proveída o la actual
-          notes: notes || null,
-        },
+      const result = await prisma.$transaction(async (tx) => {
+        const newExpense = await tx.expense.create({
+          data: {
+            description,
+            amount: new Decimal(amount),
+            category,
+            paymentType,
+            expenseDate: parsedExpenseDate || new Date(),
+            notes: notes || null,
+          },
+        });
+
+        // Registrar movimiento en caja si hay una abierta
+        const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
+        if (openRegister) {
+          await tx.cashMovement.create({
+            data: {
+              cashRegisterId: openRegister.id,
+              type: 'EXPENSE',
+              paymentType,
+              sourceId: newExpense.id,
+              amount: -Math.abs(amount), // gasto: monto negativo
+              description: `Gasto: ${category} - ${description}`,
+            },
+          });
+        }
+
+        return newExpense;
       });
+
       // Convertir Decimal a string para la respuesta JSON
       const expenseForJson = {
-        ...newExpense,
-        amount: newExpense.amount.toString(),
+        ...result,
+        amount: result.amount.toString(),
       }
       res.status(201).json(expenseForJson);
     } catch (error: any) {

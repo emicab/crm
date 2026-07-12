@@ -27,8 +27,8 @@ const KbdFooter = () => {
     { keys: ['Ctrl', 'E'], label: 'Nueva Compra', action: () => router.push('/compras/nueva') },
     { keys: ['Ctrl', 'P'], label: 'Productos', action: () => router.push('/productos') },
     { keys: ['Ctrl', 'Shift', 'P'], label: 'Nuevo Producto', action: () => router.push('/productos/nuevo') },
-    { keys: ['Ctrl', 'C'], label: 'Clientes', action: () => router.push('/clientes') },
-    { keys: ['Ctrl', 'V'], label: 'Proveedores', action: () => router.push('/proveedores') },
+    { keys: ['Ctrl', 'Shift', 'L'], label: 'Clientes', action: () => router.push('/clientes') },
+    { keys: ['Ctrl', 'Shift', 'R'], label: 'Proveedores', action: () => router.push('/proveedores') },
     { keys: ['Ctrl', 'J'], label: 'Caja', action: () => router.push('/caja') },
     { keys: ['Ctrl', 'G'], label: 'Gastos', action: () => router.push('/gastos') },
     { keys: ['Ctrl', 'Alt', 'G'], label: 'Nuevo Gasto', action: () => router.push('/gastos/nuevo') },
@@ -55,7 +55,7 @@ const KbdFooter = () => {
       if (ctrl && !shift && !alt) {
         const map: Record<string, string> = {
           n: '/ventas/nueva', e: '/compras/nueva', p: '/productos',
-          c: '/clientes', v: '/proveedores', j: '/caja',
+          j: '/caja',
           g: '/gastos', a: '/analiticas',
         };
         if (map[key]) { e.preventDefault(); router.push(map[key]); return; }
@@ -64,6 +64,8 @@ const KbdFooter = () => {
         if (key === 'p') { e.preventDefault(); router.push('/productos/nuevo'); return; }
         if (key === 'v') { e.preventDefault(); router.push('/ventas'); return; }
         if (key === 'c') { e.preventDefault(); router.push('/compras'); return; }
+        if (key === 'l') { e.preventDefault(); router.push('/clientes'); return; }
+        if (key === 'r') { e.preventDefault(); router.push('/proveedores'); return; }
       }
       if (ctrl && !shift && alt && key === 'g') {
         e.preventDefault(); router.push('/gastos/nuevo'); return;

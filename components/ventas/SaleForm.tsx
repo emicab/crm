@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Client, Seller, Product, PaymentTypeEnum } from "@/types";
+import { Client, Seller, Product, PaymentTypeEnum, Combo, Promotion } from "@/types";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import Input from "@/components/ui/Input";
 import { toast } from "react-hot-toast";
-import { Loader2, ShoppingCart, Trash2, XCircle } from "lucide-react";
+import { Loader2, ShoppingCart, Trash2, XCircle, Package, Percent, ShoppingBag } from "lucide-react";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 
 // --- Interfaces para el estado del formulario ---
@@ -28,6 +28,7 @@ interface SaleItemInCart
   quantity: number;
   priceAtSale: number;
   subtotal: number;
+  comboBatchId?: number; // para rastrear items agregados por combo
 }
 
 // Para el estado principal del formulario
@@ -68,9 +69,7 @@ const SaleForm = () => {
 
   // --- Estados del Componente ---
   const [formData, setFormData] = useState<SaleFormData>(initialFormData);
-  const [clients, setClients] = useState<Client[]>([]);
   const [sellers, setSellers] = useState<Seller[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingInitialData, setIsFetchingInitialData] = useState(true);
   const [productSearchTerm, setProductSearchTerm] = useState("");
@@ -80,15 +79,25 @@ const SaleForm = () => {
   );
   const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [searchedClients, setSearchedClients] = useState<Client[]>([]);
+  const [recentProducts, setRecentProducts] = useState<Product[]>([]);
+  const [combos, setCombos] = useState<Combo[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [appliedPromotion, setAppliedPromotion] = useState<{ promotionId: number; name: string; type: string; discountAmount: number; discountLabel: string } | null>(null);
+  const [comboDiscounts, setComboDiscounts] = useState<Record<number, number>>({});
+  const comboDiscount = Object.values(comboDiscounts).reduce((sum, d) => sum + d, 0);
+  const [config, setConfig] = useState<Record<string, string>>({});
 
   // --- Carga de Datos Inicial ---
   useEffect(() => {
     const fetchData = async () => {
       setIsFetchingInitialData(true);
       try {
-        const [sellersRes, cajaRes] = await Promise.all([
+        const [sellersRes, cajaRes, combosRes, promosRes, configRes] = await Promise.all([
           fetch("/api/vendedores"),
           fetch("/api/caja"),
+          fetch("/api/combos"),
+          fetch("/api/promotions"),
+          fetch("/api/config"),
         ]);
 
         if (!sellersRes.ok) {
@@ -107,6 +116,33 @@ const SaleForm = () => {
             setFormData((prev) => ({ ...prev, sellerId: String(cajaData.open.seller.id) }));
           }
         }
+
+        if (combosRes.ok) {
+          const combosData = await combosRes.json();
+          setCombos(combosData.filter((c: any) => c.active).map((c: any) => ({
+            ...c,
+            price: parseFloat(c.price),
+            items: c.items.map((i: any) => ({ ...i, customPrice: i.customPrice ? parseFloat(i.customPrice) : null })),
+          })));
+        }
+
+        if (promosRes.ok) {
+          const promosData = await promosRes.json();
+          setPromotions(promosData.filter((p: any) => {
+            if (p.status !== 'ACTIVE') return false;
+            const now = new Date();
+            if (p.startDate && new Date(p.startDate) > now) return false;
+            if (p.endDate && new Date(p.endDate) < now) return false;
+            return true;
+          }).map((p: any) => ({
+            ...p,
+            discountValue: parseFloat(p.discountValue),
+          })));
+        }
+
+        if (configRes.ok) {
+          setConfig(await configRes.json());
+        }
       } catch (err: unknown) {
         toast.error(
           err instanceof Error ? err.message : "Error cargando datos."
@@ -116,6 +152,22 @@ const SaleForm = () => {
       }
     };
     fetchData();
+  }, []);
+
+  // Cargar productos recientemente vendidos
+  useEffect(() => {
+    fetch('/api/ventas/recent-products')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) {
+          setRecentProducts(data.map((p: any) => ({
+            ...p,
+            priceSale: parseFloat(p.priceSale),
+            quantityStock: parseInt(p.quantityStock),
+          })));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Auto-foco en input de producto al cargar
@@ -128,8 +180,6 @@ const SaleForm = () => {
   // --- Atajos de Teclado Globales ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInput = target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA';
 
       // F8 o Ctrl+K: enfocar búsqueda de producto
       if (e.key === 'F8' || (e.ctrlKey && e.key === 'k')) {
@@ -287,7 +337,13 @@ const SaleForm = () => {
   };
 
   const handleSelectProduct = (product: Product) => {
-    // Agregar directamente al carrito con cantidad 1
+    if (product.quantityStock <= 0) {
+      toast.error(`"${product.name}" no tiene stock disponible.`);
+      setProductSearchTerm("");
+      setSearchedProducts([]);
+      productInputRef.current?.focus();
+      return;
+    }
     if (formData.items.some(i => i.productId === String(product.id))) {
       toast.error(`"${product.name}" ya está en la venta.`);
       setProductSearchTerm("");
@@ -393,7 +449,7 @@ const SaleForm = () => {
       ...prev,
       items: prev.items.map((item) => {
         if (item.tempId === tempIdToUpdate) {
-          let updatedItem = { ...item };
+          const updatedItem = { ...item };
           if (field === "quantity") {
             if (numericValue > item.availableStock) {
               toast.error(
@@ -416,10 +472,22 @@ const SaleForm = () => {
   };
 
   const handleRemoveItem = (tempIdToRemove: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.filter((item) => item.tempId !== tempIdToRemove),
-    }));
+    setFormData((prev) => {
+      const removedItem = prev.items.find(i => i.tempId === tempIdToRemove);
+      const remaining = prev.items.filter((item) => item.tempId !== tempIdToRemove);
+      // si el item eliminado pertenecía a un combo, limpiar descuento si no quedan items de ese batch
+      if (removedItem?.comboBatchId) {
+        const batchStillPresent = remaining.some(i => i.comboBatchId === removedItem.comboBatchId);
+        if (!batchStillPresent) {
+          setComboDiscounts(prevDiscounts => {
+            const next = { ...prevDiscounts };
+            delete next[removedItem.comboBatchId!];
+            return next;
+          });
+        }
+      }
+      return { ...prev, items: remaining };
+    });
   };
 
   // --- Handlers de Formulario Principal ---
@@ -435,6 +503,10 @@ const SaleForm = () => {
   const calculateTotal = useCallback(() => {
     return formData.items.reduce((sum, item) => sum + item.subtotal, 0);
   }, [formData.items]);
+
+  const subtotal = calculateTotal();
+  const paymentMethodDiscountPct = formData.paymentType ? parseFloat(config[`discount_${formData.paymentType}`] || '0') : 0;
+  const paymentMethodDiscount = subtotal * (paymentMethodDiscountPct / 100);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -461,6 +533,16 @@ const SaleForm = () => {
         priceAtSale: item.priceAtSale,
       })),
       discountCodeApplied: formData.discountCode.trim() || null,
+      paymentMethodDiscount,
+      promotionsApplied: [
+        ...(comboDiscount > 0 ? [{ promotionId: 0, name: 'Descuento combo', type: 'COMBO', discountAmount: comboDiscount }] : []),
+        ...(appliedPromotion ? [{
+          promotionId: appliedPromotion.promotionId,
+          name: appliedPromotion.name,
+          type: appliedPromotion.type,
+          discountAmount: appliedPromotion.discountAmount,
+        }] : []),
+      ],
     };
     try {
       const response = await fetch("/api/ventas", {
@@ -475,10 +557,9 @@ const SaleForm = () => {
       toast.success("¡Venta registrada exitosamente!");
       setFormData(initialFormData);
       setClientSearchTerm("");
-      setTimeout(() => {
-        router.push("/ventas");
-        router.refresh();
-      }, 1500);
+      setComboDiscounts({});
+      setAppliedPromotion(null);
+      router.push("/ventas");
     } catch (err: unknown) {
       toast.error(
         err instanceof Error
@@ -489,6 +570,126 @@ const SaleForm = () => {
       setIsLoading(false);
     }
   };
+
+  const handleSelectCombo = (combo: Combo) => {
+    if (!combo.items || combo.items.length === 0) {
+      toast.error('El combo no tiene productos.');
+      return;
+    }
+
+    const batchId = Date.now();
+    const newItems: SaleItemInCart[] = combo.items.map(item => ({
+      productId: String(item.productId),
+      productName: `${item.product?.name || `#${item.productId}`} (Combo: ${combo.name})`,
+      availableStock: item.product?.quantityStock ?? 999,
+      quantity: item.quantity,
+      priceAtSale: item.customPrice ?? item.product?.priceSale ?? 0,
+      tempId: batchId + item.productId,
+      subtotal: (item.customPrice ?? item.product?.priceSale ?? 0) * item.quantity,
+      comboBatchId: batchId,
+    }));
+
+    const fullSum = newItems.reduce((sum, item) => sum + item.subtotal, 0);
+    const discount = Math.max(0, fullSum - combo.price);
+
+    setFormData((prev) => ({ ...prev, items: [...prev.items, ...newItems] }));
+    setComboDiscounts(prev => ({ ...prev, [batchId]: discount }));
+    setProductSearchTerm("");
+    setSearchedProducts([]);
+    toast.success(`Combo "${combo.name}" agregado ($${combo.price}, ahorro $${discount}).`);
+    setTimeout(() => productInputRef.current?.focus(), 50);
+  };
+
+  const evaluatePromotions = useCallback((items: SaleItemInCart[], subtotal: number) => {
+    if (!promotions.length || items.length === 0) {
+      setAppliedPromotion(null);
+      return;
+    }
+
+    const itemCountByProductId: Record<string, number> = {};
+    const itemSubtotalByProductId: Record<string, number> = {};
+
+    items.forEach(item => {
+      const pid = item.productId;
+      itemCountByProductId[pid] = (itemCountByProductId[pid] || 0) + item.quantity;
+      itemSubtotalByProductId[pid] = (itemSubtotalByProductId[pid] || 0) + item.subtotal;
+      // We don't have category info in cart items, so category-based promos are limited
+    });
+
+    let bestPromo: { promotionId: number; name: string; type: string; discountAmount: number; discountLabel: string } | null = null;
+
+    for (const promo of promotions) {
+      if (!promo.conditions || promo.conditions.length === 0) continue;
+
+      let discount = 0;
+      let qualifies = false;
+
+      if (promo.type === 'BUY_X_GET_Y') {
+        // Check each condition: if cart has >= minQuantity of the product, apply discount
+        for (const cond of promo.conditions) {
+          if (!cond.productId) continue;
+          const pid = String(cond.productId);
+          const qtyInCart = itemCountByProductId[pid] || 0;
+          if (qtyInCart >= cond.minQuantity) {
+            qualifies = true;
+            const times = Math.floor(qtyInCart / cond.minQuantity);
+            const maxDiscountUnits = promo.maxDiscountQty || 1;
+            const discountUnits = Math.min(times, maxDiscountUnits);
+            const unitPrice = itemSubtotalByProductId[pid] / qtyInCart;
+            if (promo.discountType === 'PERCENTAGE') {
+              discount += unitPrice * discountUnits * (promo.discountValue / 100);
+            } else {
+              discount += promo.discountValue * discountUnits;
+            }
+          }
+        }
+      } else if (promo.type === 'SET_DISCOUNT') {
+        // Check if ALL conditions are met (each product in cart with required qty)
+        qualifies = promo.conditions.every(cond => {
+          if (cond.productId) {
+            return (itemCountByProductId[String(cond.productId)] || 0) >= cond.minQuantity;
+          }
+          return false;
+        });
+        if (qualifies) {
+          if (promo.discountType === 'PERCENTAGE') {
+            discount = subtotal * (promo.discountValue / 100);
+          } else {
+            discount = promo.discountValue;
+          }
+        }
+      } else if (promo.type === 'THRESHOLD') {
+        const threshold = promo.minQuantity || 0;
+        if (subtotal >= threshold) {
+          qualifies = true;
+          if (promo.discountType === 'PERCENTAGE') {
+            discount = subtotal * (promo.discountValue / 100);
+          } else {
+            discount = promo.discountValue;
+          }
+        }
+      }
+
+      if (qualifies && discount > 0 && (!bestPromo || discount > bestPromo.discountAmount)) {
+        const label = promo.discountType === 'PERCENTAGE' ? `${promo.discountValue}%` : `$${promo.discountValue}`;
+        bestPromo = {
+          promotionId: promo.id,
+          name: promo.name,
+          type: promo.type,
+          discountAmount: discount,
+          discountLabel: label,
+        };
+      }
+    }
+
+    setAppliedPromotion(bestPromo);
+  }, [promotions]);
+
+  // Re-evaluate promos when items change
+  useEffect(() => {
+    const subtotal = calculateTotal();
+    evaluatePromotions(formData.items, subtotal);
+  }, [formData.items, calculateTotal, evaluatePromotions]);
 
   const handleClearCurrentItem = () => {
     setCurrentItem(initialCurrentItemState);
@@ -538,16 +739,73 @@ const SaleForm = () => {
             <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px] ml-1">Esc</kbd> limpiar &middot;
             código de barras automático
           </p>
+          {combos.length > 0 && !productSearchTerm && searchedProducts.length === 0 && (
+            <div className="mt-2 mb-1">
+              <p className="text-[10px] text-foreground-muted/70 mb-1.5 flex items-center gap-1">
+                <ShoppingBag size={10} /> Combos disponibles
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {combos.map((combo) => (
+                  <button
+                    key={combo.id}
+                    type="button"
+                    onClick={() => handleSelectCombo(combo)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border border-amber-400/40 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                  >
+                    <ShoppingBag size={12} />
+                    {combo.name}
+                    <span className="text-[10px] text-amber-500/70">{formatCurrency(combo.price)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {recentProducts.length > 0 && !productSearchTerm && searchedProducts.length === 0 && (
+            <div className="mt-2 mb-1">
+              <p className="text-[10px] text-foreground-muted/70 mb-1.5 flex items-center gap-1">
+                <Package size={10} /> Últimos vendidos
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {recentProducts.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleSelectProduct(p)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                      p.quantityStock <= 0
+                        ? 'border-destructive/40 text-destructive hover:bg-destructive/10'
+                        : 'border-primary/30 text-primary hover:bg-primary/10'
+                    }`}
+                  >
+                    {p.name}
+                    <span className={`text-[10px] ${p.quantityStock <= 0 ? 'text-destructive/70' : 'text-primary/70'}`}>
+                      {formatCurrency(p.priceSale)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {searchedProducts.length > 0 && (
-            <ul className="absolute z-10 w-full bg-background border border-border rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+            <ul className="absolute z-10 w-full bg-background border border-border rounded-md shadow-lg max-h-72 overflow-y-auto mt-1">
               {searchedProducts.map((product) => (
                 <li
                   key={product.id}
                   onClick={() => handleSelectProduct(product)}
-                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
+                  className="px-4 py-3 hover:bg-muted cursor-pointer border-b border-border last:border-b-0"
                 >
-                  {product.name} (Stock: {product.quantityStock}) -{" "}
-                  {formatCurrency(product.priceSale)}
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1 mr-4">
+                      <p className="font-medium text-sm text-foreground truncate">{product.name}</p>
+                      {product.sku && <p className="text-[11px] text-foreground-muted truncate">SKU: {product.sku}</p>}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-lg font-bold text-primary">{formatCurrency(product.priceSale)}</p>
+                      <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-medium ${product.quantityStock <= 0 ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
+                        Stock: {product.quantityStock}
+                      </span>
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -799,9 +1057,32 @@ const SaleForm = () => {
       )}
       {/* Total y Botones de Envío */}
       <div className="flex flex-col items-end mt-6">
-        <p className="text-2xl font-bold text-foreground mb-4">
-          TOTAL: {formatCurrency(calculateTotal())}
-        </p>
+        <div className="text-right mb-4 space-y-1">
+          <p className="text-lg text-foreground-muted">
+            Subtotal: {formatCurrency(subtotal)}
+          </p>
+          {comboDiscount > 0 && (
+            <p className="text-sm font-medium text-amber-600 flex items-center justify-end gap-1">
+              <ShoppingBag size={14} />
+              Descuento combo: -{formatCurrency(comboDiscount)}
+            </p>
+          )}
+          {paymentMethodDiscount > 0 && (
+            <p className="text-sm font-medium text-blue-600 flex items-center justify-end gap-1">
+              <Percent size={14} />
+              Desc. {getPaymentTypeDisplay(formData.paymentType as any)} ({paymentMethodDiscountPct}%): -{formatCurrency(paymentMethodDiscount)}
+            </p>
+          )}
+          {appliedPromotion && (
+            <p className="text-sm font-medium text-success flex items-center justify-end gap-1">
+              <Percent size={14} />
+              Promo: {appliedPromotion.name} (-{appliedPromotion.discountLabel})
+            </p>
+          )}
+          <p className="text-2xl font-bold text-foreground">
+            TOTAL: {formatCurrency(subtotal - comboDiscount - paymentMethodDiscount - (appliedPromotion?.discountAmount || 0))}
+          </p>
+        </div>
         <div className="flex justify-end space-x-3 w-full">
           <Button
             type="button"

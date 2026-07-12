@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import type { Brand, Category, Product } from '@/types';
+import type { Brand, Category, Supplier, Product } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import Button from '@/components/ui/Button';
@@ -18,10 +18,11 @@ interface ProductFormModalProps {
 
 const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, onProductCreated }) => {
   const [formData, setFormData] = useState({
-    name: '', sku: '', brandId: '', categoryId: '', priceSale: '', pricePurchase: ''
+    name: '', sku: '', brandId: '', categoryId: '', supplierId: '', priceSale: '', pricePurchase: ''
   });
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Cargar Marcas y Categorías para los desplegables del modal
@@ -29,13 +30,15 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
     if (isOpen) {
       const fetchDropdownData = async () => {
         try {
-          const [brandsRes, categoriesRes] = await Promise.all([
+          const [brandsRes, categoriesRes, suppliersRes] = await Promise.all([
             fetch('/api/brands'),
             fetch('/api/categories'),
+            fetch('/api/proveedores'),
           ]);
           setBrands(await brandsRes.json());
           setCategories(await categoriesRes.json());
-        } catch (error) {
+          setSuppliers(await suppliersRes.json());
+        } catch {
           toast.error("Error al cargar marcas y categorías.");
         }
       };
@@ -60,11 +63,12 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
     // El stock inicial será 0, ya que se añadirá en el formulario de compra
     const dataToSend = {
       ...formData,
-      quantityStock: 0, 
+      quantityStock: 0,
       priceSale: parseFloat(formData.priceSale),
       pricePurchase: formData.pricePurchase ? parseFloat(formData.pricePurchase) : 0,
       brandId: parseInt(formData.brandId),
       categoryId: parseInt(formData.categoryId),
+      supplierId: formData.supplierId ? parseInt(formData.supplierId) : null,
     };
 
     try {
@@ -83,7 +87,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
       toast.success(`Producto "${newProduct.name}" creado exitosamente.`);
       onProductCreated(newProduct); // Llama al callback con el nuevo producto
       onClose(); // Cierra el modal
-      setFormData({ name: '', sku: '', brandId: '', categoryId: '', priceSale: '', pricePurchase: '' }); // Resetea el form
+      setFormData({ name: '', sku: '', brandId: '', categoryId: '', supplierId: '', priceSale: '', pricePurchase: '' }); // Resetea el form
 
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Ocurrió un error inesperado.');
@@ -115,6 +119,10 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
                     {categories.map(category => <option key={category.id} value={String(category.id)}>{category.name}</option>)}
                   </Select>
                 </div>
+                <Select label="Proveedor (Opcional)" name="supplierId" value={formData.supplierId} onChange={handleChange}>
+                  <option value="">Sin proveedor</option>
+                  {suppliers.map(supplier => <option key={supplier.id} value={String(supplier.id)}>{supplier.name}</option>)}
+                </Select>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input label="Precio de Compra (Costo)" name="pricePurchase" type="number" step="0.01" value={formData.pricePurchase} onChange={handleChange} />
                     <Input label="Precio de Venta *" name="priceSale" type="number" step="0.01" value={formData.priceSale} onChange={handleChange} required />

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Save, Building, Receipt, Percent, RefreshCw } from 'lucide-react';
+import { Save, Building, Receipt, Percent, RefreshCw, Smartphone } from 'lucide-react';
+import QRCode from 'qrcode';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -43,12 +44,40 @@ export default function ConfiguracionPage() {
     }
   };
 
+  // --- QR para carga de stock ---
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [qrUrl, setQrUrl] = useState('');
+  const [qrError, setQrError] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const port = window.location.port;
+      fetch('/api/server-info')
+        .then(res => res.ok ? res.json() : { ip: window.location.hostname })
+        .then((info: { ip: string }) => {
+          const host = info.ip;
+          const url = port ? `http://${host}:${port}/stock` : `http://${host}/stock`;
+          setQrUrl(url);
+          QRCode.toDataURL(url, { width: 180, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } })
+            .then((dataUrl: string) => { setQrDataUrl(dataUrl); setQrError(''); })
+            .catch(() => setQrError('Error al generar QR'));
+        })
+        .catch(() => {
+          const fallback = port ? `http://127.0.0.1:${port}/stock` : 'http://127.0.0.1/stock';
+          setQrUrl(fallback);
+          QRCode.toDataURL(fallback, { width: 180, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } })
+            .then((dataUrl: string) => { setQrDataUrl(dataUrl); })
+            .catch(() => setQrError('Error al generar QR'));
+        });
+    }
+  }, []);
+
   // --- Estado de actualizaciones ---
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [updatePercent, setUpdatePercent] = useState(0);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
-  const version = '1.1.3';
+  const version = '1.2.0';
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.updateAPI) {
@@ -158,6 +187,30 @@ export default function ConfiguracionPage() {
             <div className="bg-primary h-full transition-all duration-300" style={{ width: `${updatePercent}%` }} />
           </div>
         )}
+      </section>
+
+      <section className="bg-muted p-6 rounded-xl shadow space-y-4">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <Smartphone size={20} className="text-primary" /> Carga de Stock desde Celular
+        </h2>
+        <p className="text-sm text-foreground-muted">
+          Escaneá este código QR desde tu celular para abrir la herramienta de carga de stock.
+          Asegurate de estar conectado a la misma red WiFi.
+        </p>
+        <div className="flex flex-col items-center gap-3 py-2">
+          {qrError ? (
+            <p className="text-destructive text-sm">{qrError}</p>
+          ) : qrDataUrl ? (
+            <img src={qrDataUrl} alt="QR para carga de stock" className="rounded-lg border border-border" />
+          ) : (
+            <p className="text-sm text-foreground-muted">Generando QR...</p>
+          )}
+          {qrUrl && (
+            <p className="text-xs text-foreground-muted/70 font-mono bg-background px-3 py-1.5 rounded border border-border break-all text-center max-w-full">
+              {qrUrl}
+            </p>
+          )}
+        </div>
       </section>
 
       <div className="flex justify-end">

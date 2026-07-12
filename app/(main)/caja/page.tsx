@@ -192,6 +192,32 @@ export default function CajaPage() {
 
           {openRegister.movements.length > 0 && (
             <div>
+              {/* Desglose por medio de pago */}
+              {(() => {
+                const breakdown: Record<string, { income: number; expense: number }> = {};
+                openRegister.movements.forEach(m => {
+                  const method = getPaymentTypeDisplay(m.paymentType) || 'Sin medio';
+                  const amount = parseFloat(m.amount);
+                  if (!breakdown[method]) breakdown[method] = { income: 0, expense: 0 };
+                  if (amount >= 0) breakdown[method].income += amount;
+                  else breakdown[method].expense += Math.abs(amount);
+                });
+                return (
+                  <div className="bg-background p-4 rounded-lg mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {Object.entries(breakdown).map(([method, { income, expense }]) => (
+                      <div key={method} className="flex flex-col">
+                        <span className="text-xs text-foreground-muted">{method}</span>
+                        <div className="text-sm font-medium">
+                          {income > 0 && <span className="text-success">+{formatCurrency(income)}</span>}
+                          {income > 0 && expense > 0 && <span> / </span>}
+                          {expense > 0 && <span className="text-destructive">-{formatCurrency(expense)}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
               <h3 className="text-sm font-medium text-foreground-muted mb-2">Últimos Movimientos</h3>
               <div className="overflow-x-auto border border-border rounded-lg">
                 <table className="w-full text-left text-sm">
@@ -300,21 +326,54 @@ export default function CajaPage() {
         </div>
       )}
 
-      {showCloseModal && (
+      {showCloseModal && openRegister && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCloseModal(false)}>
-          <div className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4 p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-lg m-4 p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">Cerrar Caja</h3>
             <div className="space-y-4">
               <div className="bg-background p-3 rounded-lg">
                 <p className="text-xs text-foreground-muted">Saldo Inicial</p>
-                <p className="text-lg font-bold">{formatCurrency(openRegister?.initialBalance || 0)}</p>
+                <p className="text-lg font-bold">{formatCurrency(openRegister.initialBalance)}</p>
               </div>
-              <div className="bg-background p-3 rounded-lg">
-                <p className="text-xs text-foreground-muted">Total Movimientos</p>
-                <p className="text-lg font-bold">
-                  {formatCurrency(openRegister?.movements.reduce((sum, m) => sum + parseFloat(m.amount), 0) || 0)}
-                </p>
-              </div>
+
+              {/* Desglose por medio de pago */}
+              {(() => {
+                const breakdown: Record<string, { income: number; expense: number }> = {};
+                openRegister.movements.forEach(m => {
+                  const method = getPaymentTypeDisplay(m.paymentType) || 'Sin medio';
+                  const amount = parseFloat(m.amount);
+                  if (!breakdown[method]) breakdown[method] = { income: 0, expense: 0 };
+                  if (amount >= 0) breakdown[method].income += amount;
+                  else breakdown[method].expense += Math.abs(amount);
+                });
+                return (
+                  <div className="bg-background p-3 rounded-lg space-y-2">
+                    <p className="text-xs text-foreground-muted font-medium">Desglose por medio de pago</p>
+                    {Object.entries(breakdown).length === 0 ? (
+                      <p className="text-sm text-foreground-muted">Sin movimientos</p>
+                    ) : (
+                      Object.entries(breakdown).map(([method, { income, expense }]) => (
+                        <div key={method} className="flex items-center justify-between text-sm">
+                          <span className="text-foreground">{method}</span>
+                          <span className="font-medium text-foreground">
+                            {income > 0 && <span className="text-success">+{formatCurrency(income)}</span>}
+                            {income > 0 && expense > 0 && <span> / </span>}
+                            {expense > 0 && <span className="text-destructive">-{formatCurrency(expense)}</span>}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                    <hr className="border-border" />
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <span className="text-foreground">Total movimientos</span>
+                      <span className={openRegister.movements.reduce((s, m) => s + parseFloat(m.amount), 0) >= 0 ? 'text-success' : 'text-destructive'}>
+                        {formatCurrency(openRegister.movements.reduce((s, m) => s + parseFloat(m.amount), 0))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <Input label="Saldo Real en Caja ($) *" type="number" step="0.01" value={actualBalance} onChange={(e) => setActualBalance(e.target.value)} required />
               <Input label="Notas (opcional)" type="text" value={closeNotes} onChange={(e) => setCloseNotes(e.target.value)} />
             </div>

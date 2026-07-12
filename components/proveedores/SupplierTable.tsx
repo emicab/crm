@@ -5,7 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import type { Supplier } from '@/types';
 import Button from '@/components/ui/Button';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
-import { Edit3, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { Edit3, Trash2, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 

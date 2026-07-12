@@ -52,26 +52,106 @@ export default async function handler(
     }
     
     try {
-      const updatedExpense = await prisma.expense.update({
-        where: { id },
-        data: {
-          description,
-          amount: new Decimal(amountNumber),
-          category,
-          paymentType,
-          expenseDate: finalExpenseDate,
-          notes,
-        },
+      const result = await prisma.$transaction(async (tx) => {
+        const updatedExpense = await tx.expense.update({
+          where: { id },
+          data: {
+            description,
+            amount: new Decimal(amountNumber),
+            category,
+            paymentType,
+            expenseDate: finalExpenseDate,
+            notes,
+          },
+        });
+
+        // Buscar movimiento existente: primero por sourceId=expenseId,
+        // y si el gasto viene de una compra, también por sourceId=purchaseId
+        const existingMovement = await tx.cashMovement.findFirst({
+          where: {
+            OR: [
+              { sourceId: id, type: 'EXPENSE' },
+              ...(updatedExpense.description.match(/^Compra #(\d+) - /)
+                ? [{ sourceId: parseInt(updatedExpense.description.match(/^Compra #(\d+) - /)![1]), type: 'EXPENSE' as const }]
+                : []),
+            ],
+          },
+        });
+
+        if (existingMovement) {
+          await tx.cashMovement.update({
+            where: { id: existingMovement.id },
+            data: {
+              amount: -Math.abs(amountNumber),
+              paymentType,
+              description: updatedExpense.description.match(/^Compra #(\d+) - /)
+                ? updatedExpense.description
+                : `Gasto: ${category} - ${description}`,
+            },
+          });
+        } else {
+          // Si no existía pero ahora hay caja abierta, crearlo
+          const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
+          if (openRegister) {
+            await tx.cashMovement.create({
+              data: {
+                cashRegisterId: openRegister.id,
+                type: 'EXPENSE',
+                paymentType,
+                sourceId: id,
+                amount: -Math.abs(amountNumber),
+                description: `Gasto: ${category} - ${description}`,
+              },
+            });
+          }
+        }
+
+        return updatedExpense;
       });
-      const expenseForJson = { ...updatedExpense, amount: updatedExpense.amount.toString() };
+
+      const expenseForJson = { ...result, amount: result.amount.toString() };
       res.status(200).json(expenseForJson);
     } catch (error: unknown) {
       handleApiError(res, error, `updating expense ${id}`);
     }
   } else if (req.method === 'DELETE') {
     try {
-      await prisma.expense.delete({ where: { id } });
-      res.status(204).end(); // No Content, éxito
+      await prisma.$transaction(async (tx) => {
+        const expense = await tx.expense.findUnique({ where: { id } });
+        if (!expense) {
+          throw new Error('Gasto no encontrado.');
+        }
+
+        // Eliminar TODOS los movimientos de caja relacionados:
+        // - Si el gasto es manual: sourceId = expense.id
+        // - Si el gasto viene de una compra: sourceId = purchaseId
+        // - También por si quedó un duplicado con sourceId = expense.id (PUT previo)
+        const match = expense.description.match(/^Compra #(\d+) - /);
+        if (match) {
+          const purchaseId = parseInt(match[1]);
+          await tx.cashMovement.deleteMany({
+            where: {
+              type: 'EXPENSE',
+              OR: [
+                { sourceId: purchaseId },
+                { sourceId: id },
+              ],
+            },
+          });
+          await tx.purchase.updateMany({
+            where: { id: purchaseId, paymentType: { not: null } },
+            data: { paymentType: null },
+          });
+        } else {
+          await tx.cashMovement.deleteMany({
+            where: { sourceId: id, type: 'EXPENSE' },
+          });
+        }
+
+        await tx.expense.delete({ where: { id } });
+      });
+
+      res.status(204).end();
     } catch (error: unknown) {
       handleApiError(res, error, `deleting expense ${id}`);
     }

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Brand, Category, Product } from '@/types'; 
+import type { Brand, Category, Supplier, Product } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -21,6 +21,7 @@ interface ProductFormData {
   stockMinAlert: string;
   brandId: string;
   categoryId: string;
+  supplierId: string;
 }
 
 
@@ -32,10 +33,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const router = useRouter();
   const [formData, setFormData] = useState<ProductFormData>({
     name: '', sku: '', description: '', pricePurchase: '', priceSale: '',
-    quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '',
+    quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
   });
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingDropdowns, setIsFetchingDropdowns] = useState(true); 
@@ -110,17 +112,20 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
     const fetchData = async () => {
       setIsFetchingDropdowns(true);
       try {
-        const [brandsRes, categoriesRes] = await Promise.all([
+        const [brandsRes, categoriesRes, suppliersRes] = await Promise.all([
           fetch('/api/brands'),
           fetch('/api/categories'),
+          fetch('/api/proveedores'),
         ]);
-        if (!brandsRes.ok || !categoriesRes.ok) {
+        if (!brandsRes.ok || !categoriesRes.ok || !suppliersRes.ok) {
           throw new Error('Error al cargar datos para el formulario.');
         }
         const brandsData = await brandsRes.json();
         const categoriesData = await categoriesRes.json();
+        const suppliersData = await suppliersRes.json();
         setBrands(brandsData);
         setCategories(categoriesData);
+        setSuppliers(suppliersData);
       } catch (err: any) {
         setError(err.message || 'Error cargando datos.');
       } finally {
@@ -144,6 +149,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         stockMinAlert: initialProductData.stockMinAlert !== null && initialProductData.stockMinAlert !== undefined ? String(initialProductData.stockMinAlert) : '',
         brandId: String(initialProductData.brandId) || '',
         categoryId: String(initialProductData.categoryId) || '',
+        supplierId: initialProductData.supplierId ? String(initialProductData.supplierId) : '',
       });
     }
   }, [initialProductData]);
@@ -184,6 +190,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         stockMinAlert: formData.stockMinAlert ? parseInt(formData.stockMinAlert) : null,
         brandId: parseInt(formData.brandId), 
         categoryId: parseInt(formData.categoryId), 
+        supplierId: formData.supplierId ? parseInt(formData.supplierId) : null,
     };
     
     
@@ -207,7 +214,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       if (!initialProductData) { 
         setFormData({
             name: '', sku: '', description: '', pricePurchase: '', priceSale: '',
-            quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '',
+            quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
         });
       }
 
@@ -294,6 +301,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
           </button>
         </div>
       </div>
+
+      <Select label="Proveedor (Opcional)" name="supplierId" value={formData.supplierId} onChange={handleChange} disabled={isFetchingDropdowns}>
+        <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Sin proveedor'}</option>
+        {suppliers.map(supplier => <option key={supplier.id} value={String(supplier.id)}>{supplier.name}</option>)}
+      </Select>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input label="Precio de Compra" name="pricePurchase" type="number" step="0.01" value={formData.pricePurchase} onChange={handleChange} />

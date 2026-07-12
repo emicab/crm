@@ -25,6 +25,7 @@ export default async function handler(
         include: {
           brand: true,
           category: true,
+          supplier: true,
         },
       });
       if (!product) {
@@ -38,7 +39,7 @@ export default async function handler(
     let {
       name, sku, description,
       pricePurchase, priceSale, quantityStock, stockMinAlert,
-      brandId, categoryId,
+      brandId, categoryId, supplierId,
     } = req.body;
 
     // Validaciones básicas
@@ -93,13 +94,18 @@ export default async function handler(
       if (stockMinAlert !== undefined && stockMinAlert !== null && stockMinAlert !== '') {
         dataToUpdate.stockMinAlert = parseInt(stockMinAlert);
       } else if (stockMinAlert === '' || stockMinAlert === null) {
-        dataToUpdate.stockMinAlert = null; // Permitir borrar la alerta de stock
+        dataToUpdate.stockMinAlert = null;
       }
-      
+      if (supplierId !== undefined && supplierId !== null && supplierId !== '') {
+        dataToUpdate.supplier = { connect: { id: parseInt(supplierId) } };
+      } else if (supplierId === '' || supplierId === null) {
+        dataToUpdate.supplier = { disconnect: true };
+      }
+
       const updatedProduct = await prisma.product.update({
         where: { id },
         data: dataToUpdate,
-        include: { brand: true, category: true },
+        include: { brand: true, category: true, supplier: true },
       });
       res.status(200).json(updatedProduct);
     } catch (error: any) {
@@ -133,8 +139,22 @@ export default async function handler(
     } catch (error: any) {
       handleApiError(res, error, `deleting product ${id}`);
     }
+  } else if (req.method === 'PATCH') {
+    const { quantityStock } = req.body;
+    if (quantityStock === undefined || isNaN(parseInt(quantityStock))) {
+      return res.status(400).json({ message: 'quantityStock es obligatorio y debe ser un número entero.' });
+    }
+    try {
+      const updated = await prisma.product.update({
+        where: { id },
+        data: { quantityStock: parseInt(quantityStock) },
+      });
+      res.status(200).json(updated);
+    } catch (error: any) {
+      handleApiError(res, error, `patching product ${id} stock`);
+    }
   } else {
-    res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);
+    res.setHeader('Allow', ['GET', 'PUT', 'PATCH', 'DELETE']);
     res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 }

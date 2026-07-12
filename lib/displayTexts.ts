@@ -6,6 +6,7 @@ export const paymentTypeDisplayMap: Record<PaymentTypeEnum, string> = {
   [PaymentTypeEnum.CASH]: 'Efectivo',
   [PaymentTypeEnum.TRANSFER]: 'Transferencia',
   [PaymentTypeEnum.CARD]: 'Tarjeta',
+  [PaymentTypeEnum.QR]: 'QR',
   [PaymentTypeEnum.OTHER]: 'Otro',
 };
 

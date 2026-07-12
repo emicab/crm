@@ -12,13 +12,22 @@ interface SaleItemInput {
   priceAtSale: number;
 }
 
+interface PromoAppliedInput {
+  promotionId: number;
+  name: string;
+  type: string;
+  discountAmount: number;
+}
+
 interface CreateSaleInput {
   clientId?: number;
   sellerId: number;
   paymentType: PaymentType;
   notes?: string;
   items: SaleItemInput[];
-  discountCodeApplied?: string; // <--- NUEVO CAMPO EN EL INPUT
+  discountCodeApplied?: string;
+  promotionsApplied?: PromoAppliedInput[];
+  paymentMethodDiscount?: number;
 }
 
 export default async function handler(
@@ -103,7 +112,7 @@ export default async function handler(
       handleApiError(res, error, "fetching sales");
     }
   } else if (req.method === 'POST') {
-    let { clientId, sellerId, paymentType, notes, items, discountCodeApplied } = req.body as CreateSaleInput; // <--- AÑADIR discountCodeApplied
+    let { clientId, sellerId, paymentType, notes, items, discountCodeApplied, promotionsApplied, paymentMethodDiscount } = req.body as CreateSaleInput;
 
     if (!sellerId || !paymentType || !items || items.length === 0) {
       return res.status(400).json({ message: 'Faltan datos obligatorios: vendedor, tipo de pago o ítems.' });
@@ -161,6 +170,48 @@ export default async function handler(
       calculatedTotalAmount = calculatedTotalAmount.minus(discountAmount);
     }
 
+    // Validar y aplicar promociones
+    let promotionsAppliedJson: string | null = null;
+    if (promotionsApplied && Array.isArray(promotionsApplied) && promotionsApplied.length > 0) {
+      for (const promo of promotionsApplied) {
+        // COMBO discounts are auto-calculated from the combo, skip DB validation
+        if (promo.type === 'COMBO') continue;
+
+        const promoRecord = await prisma.promotion.findUnique({ where: { id: promo.promotionId } });
+        if (!promoRecord || promoRecord.status !== 'ACTIVE') {
+          return res.status(400).json({ message: `La promoción "${promo.name}" no está activa o no existe.` });
+        }
+        const now = new Date();
+        if (promoRecord.startDate && now < promoRecord.startDate) {
+          return res.status(400).json({ message: `La promoción "${promo.name}" aún no es válida.` });
+        }
+        if (promoRecord.endDate && now > promoRecord.endDate) {
+          return res.status(400).json({ message: `La promoción "${promo.name}" ha expirado.` });
+        }
+      }
+
+      // Recalcular descuento total de promos (server-side)
+      let totalPromoDiscount = new Decimal(0);
+      for (const promo of promotionsApplied) {
+        totalPromoDiscount = totalPromoDiscount.plus(new Decimal(promo.discountAmount));
+      }
+      calculatedTotalAmount = calculatedTotalAmount.minus(totalPromoDiscount);
+      if (calculatedTotalAmount.lessThan(0)) {
+        calculatedTotalAmount = new Decimal(0);
+      }
+
+      promotionsAppliedJson = JSON.stringify(promotionsApplied);
+    }
+
+    // Aplicar descuento por método de pago (sobre el subtotal bruto)
+    const paymentMethodDiscountDecimal = new Decimal(paymentMethodDiscount || 0);
+    if (paymentMethodDiscountDecimal.greaterThan(0)) {
+      calculatedTotalAmount = calculatedTotalAmount.minus(paymentMethodDiscountDecimal);
+      if (calculatedTotalAmount.lessThan(0)) {
+        calculatedTotalAmount = new Decimal(0);
+      }
+    }
+
     try {
       const result = await prisma.$transaction(async (tx) => {
         if (discountCodeRecord) {
@@ -176,7 +227,8 @@ export default async function handler(
             totalAmount: calculatedTotalAmount,
             paymentType,
             notes: notes || null,
-            discountCodeApplied: discountCodeApplied || null, // <--- GUARDAR EL CÓDIGO
+            discountCodeApplied: discountCodeApplied || null,
+            promotionsApplied: promotionsAppliedJson,
             ...(clientId && { client: { connect: { id: clientId } } }),
             seller: { connect: { id: sellerId } },
           },

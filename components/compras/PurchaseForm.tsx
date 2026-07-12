@@ -2,14 +2,16 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Supplier, Product } from "@/types";
+import { PaymentTypeEnum as PaymentTypeEnumType } from "@/types";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import Input from "@/components/ui/Input";
 import { toast } from "react-hot-toast";
-import { Loader2, PlusCircle, ShoppingCart, Trash2, XCircle } from "lucide-react";
+import { Loader2, PlusCircle, ShoppingCart, Trash2 } from "lucide-react";
 import ProductFormModal from "../productos/ProductFormModal";
+import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 
 // --- Interfaces para el estado del formulario ---
 interface CurrentPurchaseItemState {
@@ -33,6 +35,7 @@ interface PurchaseItemInCart extends CurrentPurchaseItemState {
 
 interface PurchaseFormData {
     supplierId: string;
+    paymentType: string;
     invoiceNumber: string;
     notes: string;
     items: PurchaseItemInCart[];
@@ -40,6 +43,7 @@ interface PurchaseFormData {
 
 const initialFormData: PurchaseFormData = {
     supplierId: "",
+    paymentType: "",
     invoiceNumber: "",
     notes: "",
     items: [],
@@ -48,11 +52,11 @@ const initialFormData: PurchaseFormData = {
 // --- Componente Principal ---
 const PurchaseForm = () => {
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     // --- Estados ---
     const [formData, setFormData] = useState<PurchaseFormData>(initialFormData);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-    const [allProducts, setAllProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isFetchingInitialData, setIsFetchingInitialData] = useState(true);
     const [productSearchTerm, setProductSearchTerm] = useState("");
@@ -71,7 +75,36 @@ const PurchaseForm = () => {
                 if (!suppliersRes.ok)
                     throw new Error("Error al cargar datos iniciales.");
 
-                setSuppliers(await suppliersRes.json());
+                const suppliersData = await suppliersRes.json();
+                setSuppliers(suppliersData);
+
+                // Si hay productId en query params, precargar producto
+                const productId = searchParams ? searchParams.get("productId") : null;
+                if (productId) {
+                    const prodRes = await fetch(`/api/products/${productId}`);
+                    if (prodRes.ok) {
+                        const product = await prodRes.json();
+                        const parsed = {
+                            ...product,
+                            pricePurchase: product.pricePurchase ? parseFloat(product.pricePurchase) : 0,
+                            priceSale: parseFloat(product.priceSale),
+                        };
+                        setCurrentItem({
+                            productId: String(parsed.id),
+                            productName: parsed.name,
+                            quantity: 1,
+                            purchasePrice: parsed.pricePurchase || 0,
+                        });
+                        setProductSearchTerm(parsed.name);
+                        // Pre-seleccionar proveedor si el producto tiene uno
+                        if (parsed.supplierId) {
+                            const supplierExists = suppliersData.some((s: Supplier) => s.id === parsed.supplierId);
+                            if (supplierExists) {
+                                setFormData(prev => ({ ...prev, supplierId: String(parsed.supplierId) }));
+                            }
+                        }
+                    }
+                }
             } catch (err: unknown) {
                 toast.error(
                     err instanceof Error ? err.message : "Error cargando datos."
@@ -81,7 +114,7 @@ const PurchaseForm = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [searchParams]);
 
     // --- Handlers de Producto/Ítems ---
     useEffect(() => {
@@ -144,8 +177,6 @@ const PurchaseForm = () => {
     };
 
     const handleNewProductCreated = (newProduct: Product) => {
-        // Añadir el nuevo producto a la lista de productos disponibles en el formulario
-        setAllProducts(prev => [...prev, newProduct]);
         // Seleccionar automáticamente el producto recién creado para añadirlo a la compra
         handleSelectProduct(newProduct);
     };
@@ -202,6 +233,7 @@ const PurchaseForm = () => {
         }
         const dataToSend = {
             supplierId: parseInt(formData.supplierId),
+            paymentType: formData.paymentType || null,
             invoiceNumber: formData.invoiceNumber.trim() || null,
             notes: formData.notes.trim() || null,
             items: formData.items.map((item) => ({
@@ -288,6 +320,24 @@ const PurchaseForm = () => {
                             {suppliers.map((s) => (
                                 <option key={s.id} value={String(s.id)}>
                                     {s.name}
+                                </option>
+                            ))}
+                        </Select>
+                        <Select
+                            label='Medio de Pago'
+                            name='paymentType'
+                            value={formData.paymentType}
+                            onChange={(e) =>
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    paymentType: e.target.value,
+                                }))
+                            }
+                        >
+                            <option value=''>Seleccionar...</option>
+                            {Object.values(PaymentTypeEnumType).map((type) => (
+                                <option key={type} value={type}>
+                                    {getPaymentTypeDisplay(type)}
                                 </option>
                             ))}
                         </Select>

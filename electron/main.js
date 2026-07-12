@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, safeStorage, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -47,6 +47,56 @@ function mainApp() {
         });
     }
 
+    function createAppMenu() {
+        const template = [
+            {
+                label: 'Ignite CRM',
+                submenu: [
+                    { role: 'about' },
+                    { type: 'separator' },
+                    { role: 'quit' },
+                ]
+            },
+            {
+                label: 'Editar',
+                submenu: [
+                    { role: 'undo', label: 'Deshacer' },
+                    { role: 'redo', label: 'Rehacer' },
+                    { type: 'separator' },
+                    { role: 'cut', label: 'Cortar' },
+                    { role: 'copy', label: 'Copiar' },
+                    { role: 'paste', label: 'Pegar' },
+                    { role: 'selectAll', label: 'Seleccionar todo' },
+                ]
+            },
+            {
+                label: 'Ver',
+                submenu: [
+                    { role: 'reload', label: 'Recargar' },
+                    { role: 'forceReload', label: 'Forzar recarga' },
+                    { role: 'toggleDevTools', label: 'Herramientas de desarrollo' },
+                    { type: 'separator' },
+                    { role: 'resetZoom', label: 'Restablecer zoom' },
+                    { role: 'zoomIn', label: 'Acercar' },
+                    { role: 'zoomOut', label: 'Alejar' },
+                    { type: 'separator' },
+                    { role: 'togglefullscreen', label: 'Pantalla completa' },
+                ]
+            },
+            {
+                label: 'Ventana',
+                submenu: [
+                    { role: 'minimize', label: 'Minimizar' },
+                    { role: 'zoom', label: 'Zoom' },
+                    { role: 'close', label: 'Cerrar' },
+                ]
+            },
+        ];
+
+        const menu = Menu.buildFromTemplate(template);
+        Menu.setApplicationMenu(menu);
+    }
+
     function createWindow(urlOverride) {
         mainWindow = new BrowserWindow({
             width: 1366,
@@ -88,18 +138,64 @@ function mainApp() {
             if (!fs.existsSync(userDataPath)) {
                 fs.mkdirSync(userDataPath, { recursive: true });
             }
+            
+            const templateDbSrcPath = path.join(process.resourcesPath, 'crm_template.db');
+            
             if (!fs.existsSync(dbPathInUserData)) {
-                const templateDbSrcPath = path.join(process.resourcesPath, 'crm_template.db');
                 if (!fs.existsSync(templateDbSrcPath)) {
                     throw new Error(`Plantilla de BD 'crm_template.db' NO ENCONTRADA en ${templateDbSrcPath}`);
                 }
                 fs.copyFileSync(templateDbSrcPath, dbPathInUserData);
+                console.log('[DB] Base de datos creada desde plantilla.');
+            } else {
+                // Comprobar si necesita actualización de esquema basándonos en columnas/tablas faltantes
+                applySchemaUpdates(dbPathInUserData, templateDbSrcPath);
             }
             return true;
         } catch (error) {
             dialog.showErrorBox("Error Crítico de Base de Datos", error.message);
             app.quit();
             return false;
+        }
+    }
+
+    function applySchemaUpdates(dbPath, templatePath) {
+        try {
+            console.log('[DB] Checking DB at:', dbPath);
+            const fs = require('fs');
+            // Aumentamos a 5MB por si la base de datos es más grande y el esquema está fragmentado
+            const fd = fs.openSync(dbPath, 'r');
+            const buffer = Buffer.alloc(5000000);
+            const bytesRead = fs.readSync(fd, buffer, 0, 5000000, 0);
+            fs.closeSync(fd);
+            
+            const userDbStr = buffer.toString('utf8', 0, bytesRead);
+            
+            // Usamos 'Product_supplierId_fkey' que es específico de la nueva relación en Product
+            // 'supplierId' por sí solo daba falso positivo porque ya existía en la tabla Purchase.
+            const checks = ['Product_supplierId_fkey'];
+            const missing = checks.filter(c => !userDbStr.includes(c));
+            console.log('[DB] Missing keys:', missing);
+            
+            if (missing.length > 0) {
+                console.log('[DB] Base de datos desactualizada. Actualizando esquema (copiando template temporalmente)...');
+                
+                // NOTA: Para una app en producción real, aquí se usaría better-sqlite3 
+                // para migrar los datos. Por ahora, si estamos en este punto, el usuario
+                // ya eliminaba el crm_prod.db antes. Hacemos backup por seguridad y reemplazamos.
+                const backupPath = dbPath + '.backup-' + Date.now();
+                try {
+                    fs.copyFileSync(dbPath, backupPath);
+                    fs.copyFileSync(templatePath, dbPath);
+                    console.log('[DB] Esquema actualizado. Backup guardado en:', backupPath);
+                } catch (err) {
+                    console.error('[DB] Error actualizando BD:', err);
+                }
+            } else {
+                console.log('[DB] El esquema está actualizado.');
+            }
+        } catch (error) {
+            console.error('[DB] Error verificando el esquema de BD:', error);
         }
     }
 
@@ -447,6 +543,7 @@ function mainApp() {
     }
 
     app.on('ready', () => {
+        createAppMenu();
         createSplashWindow();
         const minimumWait = new Promise(resolve => setTimeout(resolve, 3000));
         const appReady = startApp();
