@@ -7,7 +7,7 @@ import { PlusCircle } from 'lucide-react';
 export default function ProveedoresPage() {
   return (
     <>
-      <div className="flex items-center justify-between mb-8">
+      <div id="proveedores-header" className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-semibold text-foreground">Gestión de Proveedores</h1>
           <p className="mt-1 text-foreground-muted">
@@ -22,7 +22,7 @@ export default function ProveedoresPage() {
         </Link>
       </div>
 
-      <SupplierTable />
+      <div id="proveedores-table"><SupplierTable /></div>
     </>
   );
 }

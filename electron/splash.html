@@ -3,60 +3,155 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cargando...</title>
+  <title>Ignite CRM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..700&display=swap" rel="stylesheet">
   <style>
-    /* Estilos básicos */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background-color: #f9fafb; /* Un gris muy claro, puedes cambiarlo por un color de tu paleta */
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       height: 100vh;
       overflow: hidden;
-      -webkit-app-region: drag; /* Permite arrastrar la ventana desde el fondo */
+      -webkit-app-region: drag;
+      user-select: none;
     }
 
-    /* Contenedor principal */
     .container {
       text-align: center;
-      background-color: #fff;
+      padding: 2rem;
     }
 
-    /* Estilo del logo */
-    .logo {
-      width: 100%; /* Ajusta el tamaño de tu logo */
-      height: auto;
+    .logo-wrapper {
       margin-bottom: 2rem;
+      animation: fadeInDown 0.8s ease-out;
     }
 
-    /* Animación de carga (spinner) */
-    .spinner {
-      border: 4px solid rgba(0, 0, 0, 0.1);
-      width: 36px;
-      height: 36px;
+    .logo {
+      width: 120px;
+      height: auto;
+      filter: drop-shadow(0 4px 20px rgba(96, 165, 250, 0.3));
+    }
+
+    .brand-name {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: 0.05em;
+      margin-top: 1rem;
+      animation: fadeInUp 0.8s ease-out 0.2s both;
+    }
+
+    .brand-name span {
+      color: #60A5FA;
+    }
+
+    .tagline {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      font-weight: 300;
+      margin-top: 0.25rem;
+      animation: fadeInUp 0.8s ease-out 0.3s both;
+    }
+
+    .loader-container {
+      margin-top: 2.5rem;
+      animation: fadeInUp 0.8s ease-out 0.5s both;
+    }
+
+    .progress-bar-track {
+      width: 280px;
+      height: 4px;
+      background: rgba(148, 163, 184, 0.15);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #60A5FA, #3b82f6);
+      border-radius: 4px;
+      animation: loadProgress 2.5s ease-in-out infinite;
+    }
+
+    @keyframes loadProgress {
+      0% { width: 0%; }
+      50% { width: 70%; }
+      100% { width: 100%; }
+    }
+
+    .status-text {
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-top: 1rem;
+      font-weight: 300;
+      letter-spacing: 0.02em;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .spinner-ring {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(96, 165, 250, 0.1);
+      border-top-color: #60A5FA;
       border-radius: 50%;
-      border-left-color: #0ea5e9; /* Un color de acento, puedes usar el de tu paleta */
-      animation: spin 1s ease infinite;
-      margin: 0 auto;
+      animation: spin 1s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
     }
 
     @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-      100% {
-        transform: rotate(360deg);
-      }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+
+    .version {
+      position: absolute;
+      bottom: 1.5rem;
+      font-size: 0.7rem;
+      color: #475569;
+      font-weight: 300;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <img src="../public/IgniteCRM.png" alt="Logo de Ignite CRM" class="logo" />
-    <div class="spinner"></div>
+    <div class="logo-wrapper">
+      <img src="../public/IgniteCRM.png" alt="Ignite CRM" class="logo" />
+    </div>
+    <div class="brand-name">Ignite <span>CRM</span></div>
+    <p class="tagline">Gestión de negocios simplificada</p>
+    <div class="loader-container">
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill"></div>
+      </div>
+      <p class="status-text">
+        <span class="spinner-ring"></span>
+        Iniciando...
+      </p>
+    </div>
   </div>
+  <div class="version">v1.3.2</div>
 </body>
 </html>

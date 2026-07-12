@@ -113,7 +113,7 @@ export default function ConfiguracionPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
-      <div>
+      <div id="config-header">
         <h1 className="text-3xl font-semibold text-foreground">Configuración</h1>
         <p className="mt-1 text-foreground-muted">Ajusta los parámetros generales del sistema.</p>
       </div>

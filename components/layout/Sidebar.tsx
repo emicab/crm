@@ -1,4 +1,3 @@
-// components/layout/Sidebar.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -23,6 +22,7 @@ import {
   ShoppingBag,
   Percent,
   AlertTriangle,
+  ChevronDown,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -30,46 +30,85 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const navItems = [
-  // Si tu página principal es la raíz, usa href: '/' para el Dashboard
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
   {
-    href: "/analiticas",
-    label: "Analíticas",
-    icon: <LayoutDashboard size={20} />,
+    title: "Ventas y Caja",
+    items: [
+      { href: "/caja", label: "Caja", icon: <Wallet size={20} /> },
+      { href: "/ventas/nueva", label: "Nueva Venta", icon: <PlusSquare size={20} /> },
+      { href: "/ventas", label: "Historial Ventas", icon: <FileText size={20} /> },
+    ],
   },
-  { href: "/ventas", label: "Historial Ventas", icon: <FileText size={20} /> },
   {
-    href: "/ventas/nueva",
-    label: "Nueva Venta",
-    icon: <PlusSquare size={20} />,
+    title: "Productos y Stock",
+    items: [
+      { href: "/productos", label: "Productos", icon: <Package size={20} /> },
+      { href: "/stock", label: "Carga de Stock", icon: <Barcode size={20} /> },
+      { href: "/stock/alertas", label: "Alertas de Stock", icon: <AlertTriangle size={20} /> },
+      { href: "/combos", label: "Combos", icon: <ShoppingBag size={20} /> },
+      { href: "/promociones", label: "Promociones", icon: <Percent size={20} /> },
+      { href: "/categorias", label: "Categorías", icon: <Tag size={20} /> },
+      { href: "/marcas", label: "Marcas", icon: <Tag size={20} /> },
+    ],
   },
-  { href: "/caja", label: "Caja", icon: <Wallet size={20} /> },
-  { href: "/compras", label: "Historial Compras", icon: <History size={20} /> },
   {
-    href: "/compras/nueva",
-    label: "Nueva Compra",
-    icon: <ArrowUpRightSquare size={20} />,
+    title: "Compras y Gastos",
+    items: [
+      { href: "/compras/nueva", label: "Nueva Compra", icon: <ArrowUpRightSquare size={20} /> },
+      { href: "/compras", label: "Historial Compras", icon: <History size={20} /> },
+      { href: "/gastos", label: "Gastos", icon: <TrendingDown size={20} /> },
+    ],
   },
-  { href: "/gastos", label: "Gastos", icon: <TrendingDown size={20} /> },
-  { href: "/proveedores", label: "Proveedores", icon: <Truck size={20} /> },
-  { href: "/clientes", label: "Clientes", icon: <Users size={20} /> },
-  { href: "/productos", label: "Productos", icon: <Package size={20} /> },
-  { href: "/stock", label: "Carga de Stock", icon: <Barcode size={20} /> },
-  { href: "/stock/alertas", label: "Alertas de Stock", icon: <AlertTriangle size={20} /> },
-  { href: "/combos", label: "Combos", icon: <ShoppingBag size={20} /> },
-  { href: "/promociones", label: "Promociones", icon: <Percent size={20} /> },
-  { href: "/categorias", label: "Categorías", icon: <Tag size={20} /> },
-  { href: "/marcas", label: "Marcas", icon: <Tag size={20} /> },
-  { href: "/vendedores", label: "Vendedores", icon: <UserPlus size={20} /> },
   {
-    href: "/configuracion",
-    label: "Configuración",
-    icon: <Settings size={20} />,
+    title: "Contactos",
+    items: [
+      { href: "/clientes", label: "Clientes", icon: <Users size={20} /> },
+      { href: "/proveedores", label: "Proveedores", icon: <Truck size={20} /> },
+      { href: "/vendedores", label: "Vendedores", icon: <UserPlus size={20} /> },
+    ],
+  },
+  {
+    title: "General",
+    items: [
+      { href: "/analiticas", label: "Analíticas", icon: <LayoutDashboard size={20} /> },
+      { href: "/configuracion", label: "Configuración", icon: <Settings size={20} /> },
+    ],
   },
 ];
 
+const STORAGE_KEY = "sidebar-collapsed-groups";
+
+function loadCollapsed(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch { /* ignore */ }
+  return new Set();
+}
+
+function saveCollapsed(groups: Set<string>) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([...groups]));
+}
+
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [alertCount, setAlertCount] = useState(0);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(loadCollapsed);
+
+  useEffect(() => {
+    saveCollapsed(collapsedGroups);
+  }, [collapsedGroups]);
 
   useEffect(() => {
     const fetchAlertCount = async () => {
@@ -88,7 +127,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Construimos las clases dinámicamente
+  const toggleGroup = (title: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(title)) {
+        next.delete(title);
+      } else {
+        next.add(title);
+      }
+      return next;
+    });
+  };
+
   const sidebarClasses = `
     fixed inset-y-0 left-0 z-50 h-full w-64 bg-muted text-foreground-muted flex-col border-r border-border
     transform transition-transform duration-300 ease-in-out
@@ -104,11 +154,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Overlay para el fondo en móvil */}
       <div className={overlayClasses} onClick={onClose} />
 
-      {/* La Sidebar */}
-      <aside className={sidebarClasses}>
+      <aside id="sidebar" className={sidebarClasses}>
         <div className="flex h-16 items-center justify-between border-b border-border px-4">
           <Link href="/" className="text-xl font-semibold text-primary">
             Ignite CRM
@@ -122,23 +170,48 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        <nav className="flex-grow p-4 space-y-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              onClick={onClose}
-              className="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-primary-light hover:text-primary transition-colors duration-150 ease-in-out font-medium"
-            >
-              {item.icon}
-              <span className="flex-1">{item.label}</span>
-              {item.label === "Alertas de Stock" && alertCount > 0 && (
-                <span className="bg-destructive text-destructive-foreground text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
-                  {alertCount > 99 ? '99+' : alertCount}
-                </span>
-              )}
-            </Link>
-          ))}
+        <nav className="flex-grow overflow-y-auto p-4 space-y-3">
+          {navGroups.map((group) => {
+            const isCollapsed = collapsedGroups.has(group.title);
+            return (
+              <div key={group.title}>
+                <button
+                  onClick={() => toggleGroup(group.title)}
+                  className="flex w-full items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-foreground-muted/70 hover:text-foreground transition-colors rounded-md"
+                >
+                  {group.title}
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`}
+                  />
+                </button>
+                <div
+                  className={`overflow-hidden transition-all duration-200 ease-in-out ${
+                    isCollapsed ? "max-h-0 opacity-0" : "max-h-96 opacity-100"
+                  }`}
+                >
+                  <div className="space-y-0.5 pt-0.5">
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.label}
+                        href={item.href}
+                        onClick={onClose}
+                        className="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-primary-light hover:text-primary transition-colors duration-150 ease-in-out font-medium text-sm"
+                      >
+                        {item.icon}
+                        <span className="flex-1">{item.label}</span>
+                        {item.label === "Alertas de Stock" && alertCount > 0 && (
+                          <span className="bg-destructive text-destructive-foreground text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                            {alertCount > 99 ? '99+' : alertCount}
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </nav>
 
         <div className="p-4 border-t border-border space-y-2">

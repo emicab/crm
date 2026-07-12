@@ -151,7 +151,7 @@ export default function CajaPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div id="caja-header" className="flex items-center justify-between">
         <h1 className="text-3xl font-semibold text-foreground">Caja</h1>
         {!openRegister ? (
           <Button onClick={() => setShowOpenModal(true)}>
@@ -173,7 +173,7 @@ export default function CajaPage() {
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-success/20 text-success">Abierta</span>
           </div>
           <p className="text-sm text-foreground-muted">Abierta el: {formatDate(openRegister.openDate)} {openRegister.seller ? <span className="ml-2">Vendedor: <strong>{openRegister.seller.name}</strong></span> : null}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div id="caja-balances" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-background p-4 rounded-lg">
               <p className="text-xs text-foreground-muted mb-1">Saldo Inicial</p>
               <p className="text-xl font-bold text-foreground">{formatCurrency(openRegister.initialBalance)}</p>

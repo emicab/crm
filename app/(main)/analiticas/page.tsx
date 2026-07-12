@@ -72,7 +72,7 @@ export default async function AnaliticasPage() {
       </div>
 
       {/* --- NIVEL 1: Fila Principal de Tarjetas Financieras --- */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div id="analiticas-cards" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
         <StatCard 
           title="Ingresos (Mes Actual)" 
           value={formatCurrency(currentMonthData.totalRevenue)}
@@ -122,7 +122,7 @@ export default async function AnaliticasPage() {
       </div>
 
       {/* --- NIVEL 3: Grilla de Gráficos (50% y 50%) --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div id="analiticas-charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Gráfico de Rentabilidad Mensual */}
         <div className="bg-muted p-4 sm:p-6 rounded-xl shadow">

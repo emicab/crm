@@ -58,7 +58,7 @@ const CombosPage = () => {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div id="combos-header" className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
           <Tag size={24} className="text-primary" /> Combos
         </h1>
@@ -67,7 +67,7 @@ const CombosPage = () => {
         </Link>
       </div>
 
-      <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
+      <div id="combos-table" className="bg-muted p-4 sm:p-6 rounded-lg shadow">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="border-b border-border">

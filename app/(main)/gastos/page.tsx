@@ -7,7 +7,7 @@ import { PlusCircle } from 'lucide-react';
 export default function GastosPage() {
   return (
     <>
-      <div className="flex items-center justify-between mb-8">
+      <div id="gastos-header" className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-semibold text-foreground">Registro de Gastos</h1>
           <p className="mt-1 text-foreground-muted">
@@ -22,7 +22,7 @@ export default function GastosPage() {
         </Link>
       </div>
 
-      <ExpenseTable />
+      <div id="gastos-table"><ExpenseTable /></div>
     </>
   );
 }

@@ -86,6 +86,11 @@ const SaleForm = () => {
   const [comboDiscounts, setComboDiscounts] = useState<Record<number, number>>({});
   const comboDiscount = Object.values(comboDiscounts).reduce((sum, d) => sum + d, 0);
   const [config, setConfig] = useState<Record<string, string>>({});
+  const [hasOpenCaja, setHasOpenCaja] = useState(false);
+  const [showCajaModal, setShowCajaModal] = useState(false);
+  const [cajaInitialBalance, setCajaInitialBalance] = useState('0');
+  const [cajaSellerId, setCajaSellerId] = useState('');
+  const [isOpeningCaja, setIsOpeningCaja] = useState(false);
 
   // --- Carga de Datos Inicial ---
   useEffect(() => {
@@ -112,6 +117,7 @@ const SaleForm = () => {
         // Auto-seleccionar vendedor desde caja abierta
         if (cajaRes.ok) {
           const cajaData = await cajaRes.json();
+          setHasOpenCaja(!!cajaData.open);
           if (cajaData.open?.seller?.id) {
             setFormData((prev) => ({ ...prev, sellerId: String(cajaData.open.seller.id) }));
           }
@@ -511,14 +517,23 @@ const SaleForm = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    if (
-      !formData.sellerId ||
-      !formData.paymentType ||
-      formData.items.length === 0
-    ) {
-      toast.error(
-        "Completa Vendedor, Tipo de Pago y añade al menos un producto."
-      );
+    if (!formData.paymentType) {
+      toast.error("Seleccioná un tipo de pago.");
+      setIsLoading(false);
+      return;
+    }
+    if (formData.items.length === 0) {
+      toast.error("Añadí al menos un producto a la venta.");
+      setIsLoading(false);
+      return;
+    }
+    if (!formData.sellerId) {
+      if (!hasOpenCaja) {
+        setShowCajaModal(true);
+        setIsLoading(false);
+        return;
+      }
+      toast.error("La caja abierta no tiene un vendedor asignado. Asigná un vendedor en la caja.");
       setIsLoading(false);
       return;
     }
@@ -559,7 +574,7 @@ const SaleForm = () => {
       setClientSearchTerm("");
       setComboDiscounts({});
       setAppliedPromotion(null);
-      router.push("/ventas");
+      setTimeout(() => productInputRef.current?.focus(), 50);
     } catch (err: unknown) {
       toast.error(
         err instanceof Error
@@ -568,6 +583,39 @@ const SaleForm = () => {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleOpenCajaFromSale = async () => {
+    if (!cajaSellerId) {
+      toast.error("Seleccioná un vendedor para abrir la caja.");
+      return;
+    }
+    setIsOpeningCaja(true);
+    try {
+      const res = await fetch("/api/caja", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initialBalance: parseFloat(cajaInitialBalance) || 0,
+          sellerId: cajaSellerId,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message);
+      }
+      toast.success("Caja abierta exitosamente.");
+      setShowCajaModal(false);
+      setHasOpenCaja(true);
+      setFormData((prev) => ({ ...prev, sellerId: cajaSellerId }));
+      setTimeout(() => productInputRef.current?.focus(), 50);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Error al abrir la caja."
+      );
+    } finally {
+      setIsOpeningCaja(false);
     }
   };
 
@@ -715,8 +763,10 @@ const SaleForm = () => {
 
   // --- JSX del Componente ---
   return (
+    <>
     <form
       onSubmit={handleSubmit}
+      noValidate
       className="bg-muted p-6 sm:p-8 rounded-lg shadow space-y-6"
     >
       {/* Sección Producto (principal) */}
@@ -1110,6 +1160,31 @@ const SaleForm = () => {
         </div>
       </div>
     </form>
+
+      {showCajaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCajaModal(false)}>
+          <div className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-1">No tenés una caja abierta</h3>
+            <p className="text-sm text-foreground-muted mb-4">
+              Para registrar una venta necesitás tener una caja abierta. Seleccioná el vendedor y el saldo inicial.
+            </p>
+            <div className="space-y-4">
+              <Select label="Vendedor *" value={cajaSellerId} onChange={(e) => setCajaSellerId(e.target.value)} required>
+                <option value="">Selecciona un vendedor</option>
+                {sellers.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+              </Select>
+              <Input label="Saldo Inicial ($)" type="number" step="0.01" value={cajaInitialBalance} onChange={(e) => setCajaInitialBalance(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button type="button" variant="outline" onClick={() => setShowCajaModal(false)} disabled={isOpeningCaja}>Cancelar</Button>
+              <Button type="button" variant="primary" onClick={handleOpenCajaFromSale} disabled={isOpeningCaja || !cajaSellerId}>
+                {isOpeningCaja ? 'Abriendo...' : 'Abrir Caja'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

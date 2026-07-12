@@ -111,7 +111,7 @@ function mainApp() {
             icon: path.join(app.getAppPath(), '../assets/crm_icono.png'),
         });
 
-        const url = urlOverride || `http://127.0.0.1:${PORT}`;
+        const url = urlOverride || `http://127.0.0.1:${PORT}/caja`;
         mainWindow.loadURL(url).catch(err => {
             dialog.showErrorBox("Error de Conexión", `No se pudo conectar a ${url}.`);
         });
@@ -271,7 +271,7 @@ function mainApp() {
             if (isDev) {
                 // En desarrollo, Next.js ya corre en puerto 3000
                 isServerReady = true;
-                createWindow(`http://127.0.0.1:${DEV_PORT}`);
+                createWindow(`http://127.0.0.1:${DEV_PORT}/caja`);
             } else {
                 await checkServerReady();
                 isServerReady = true;
@@ -584,7 +584,7 @@ function mainApp() {
 
     app.on('activate', () => {
         if (mainWindow === null && isServerReady) {
-            createWindow();
+            createWindow(`http://127.0.0.1:${PORT}/caja`);
             mainWindow.show();
             mainWindow.center();
         } else if (mainWindow) {
