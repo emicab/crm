@@ -1122,7 +1122,82 @@ const SaleForm = () => {
         )}
       </fieldset>
 
-      {/* Sección Pago */}
+      {/* Lista de Productos Añadidos */}
+      {formData.items.length > 0 && (
+        <fieldset className="border border-border p-4 rounded-md">
+          <legend className="text-lg font-medium text-primary px-2 flex items-center gap-2">
+            <ShoppingCart size={18} />
+            Carrito ({formData.items.length} {formData.items.length === 1 ? 'producto' : 'productos'})
+          </legend>
+          <div className="mt-4 overflow-x-auto max-h-[300px] overflow-y-auto border border-border rounded-md bg-background">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-muted border-b border-border sticky top-0 z-10">
+                <tr>
+                  <th className="p-3 text-sm font-semibold text-foreground">Producto</th>
+                  <th className="p-3 text-sm font-semibold text-foreground text-center w-24">Cantidad</th>
+                  <th className="p-3 text-sm font-semibold text-foreground text-right w-32">
+                    {formData.items.some(i => i.unitType === 'WEIGHT') ? 'Precio/kg' : formData.items.some(i => i.unitType === 'VOLUME') ? 'Precio/L' : 'Precio Unit.'}
+                  </th>
+                  <th className="p-3 text-sm font-semibold text-foreground text-right w-32">Subtotal</th>
+                  <th className="p-3 text-sm font-semibold text-foreground text-center w-16">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formData.items.map((item) => (
+                  <tr key={item.tempId} className="border-b border-border last:border-b-0 hover:bg-muted/50 transition-colors">
+                    <td className="p-3 text-sm text-foreground font-medium align-middle">
+                      {item.productName}
+                      <p className="text-xs text-foreground-muted">
+                        Stock: {item.availableStock}{item.unitType === 'WEIGHT' ? ' kg' : item.unitType === 'VOLUME' ? ' L' : ''}
+                      </p>
+                    </td>
+                    <td className="p-3 align-middle text-center">
+                      <Input
+                        type="number"
+                        value={String(item.quantity)}
+                        onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)}
+                        min="0"
+                        max={String(item.availableStock)}
+                        step="any"
+                        className="w-20 text-center h-9 py-1 inline-block"
+                        aria-label={`Cantidad para ${item.productName}`}
+                      />
+                    </td>
+                    <td className="p-3 align-middle text-right">
+                      <Input
+                        type="number"
+                        value={String(item.priceAtSale)}
+                        onChange={(e) => handleItemDetailChange(item.tempId, 'priceAtSale', e.target.value)}
+                        step="0.01"
+                        min="0"
+                        className="w-28 text-right h-9 py-1 inline-block"
+                        aria-label={`Precio para ${item.productName}`}
+                      />
+                    </td>
+                    <td className="p-3 text-sm text-foreground text-right align-middle font-semibold">
+                      {formatCurrency(item.subtotal)}
+                    </td>
+                    <td className="p-3 text-center align-middle">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveItem(item.tempId)}
+                        title="Eliminar item"
+                        className="h-8 w-8 p-0"
+                      >
+                        <Trash2 size={16} className="text-destructive hover:text-destructive/80" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+      )}
+
+      {/* Tipo de Pago / Sección Pago */}
       <fieldset className="border border-border p-4 rounded-md">
         <legend className="text-lg font-medium text-primary px-2">
           Pago
