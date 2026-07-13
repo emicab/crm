@@ -661,10 +661,13 @@ const SaleForm = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const calculateTotal = useCallback(() => {
+    return formData.items.reduce((sum, item) => sum + item.subtotal, 0);
+  }, [formData.items]);
+
   const subtotal = calculateTotal(); // Subtotal Bruto
   
   // 1. Descuento de Combo (item-level)
-  const comboDiscount = Object.values(comboDiscounts).reduce((sum, d) => sum + d, 0);
   const totalAfterCombo = Math.max(0, subtotal - comboDiscount);
 
   // 2. Descuento de Promociones (automáticas)
@@ -1250,7 +1253,7 @@ const SaleForm = () => {
                 {appliedPromotion && (
                   <p className="text-xs text-success font-medium">{appliedPromotion.name}: -{appliedPromotion.discountLabel}</p>
                 )}
-                {discountCodeDiscount > 0 && (
+                {discountCodeDiscount > 0 && validDiscountCode && (
                   <p className="text-xs text-purple-600 font-medium">Desc. cupón ({validDiscountCode.code}): -{formatCurrency(discountCodeDiscount)}</p>
                 )}
                 {paymentMethodDiscount > 0 && (
