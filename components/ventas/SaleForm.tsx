@@ -1313,8 +1313,8 @@ const SaleForm = () => {
       </details>
 
       {formData.items.length > 0 && (
-        <div className="border-t border-border/60 pt-6 mt-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="fixed bottom-0 left-0 md:left-64 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg transition-all duration-300">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2 text-sm text-foreground-muted">
               <ShoppingCart size={18} className="text-primary" />
               <span className="font-semibold">{formData.items.length} {formData.items.length === 1 ? 'producto' : 'productos'}</span>
@@ -1380,6 +1380,8 @@ const SaleForm = () => {
           </Button>
         </div>
       )}
+      
+      {formData.items.length > 0 && <div className="h-28" />}
     </form>
 
       {showCajaModal && (
