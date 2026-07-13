@@ -9,6 +9,7 @@ import Input from "@/components/ui/Input";
 import { toast } from "react-hot-toast";
 import { Loader2, ShoppingCart, Trash2, XCircle, Package, ShoppingBag, ChevronUp } from "lucide-react";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
+import { motion, AnimatePresence } from "motion/react";
 
 // --- Interfaces para el estado del formulario ---
 
@@ -984,16 +985,18 @@ const SaleForm = () => {
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {combos.map((combo) => (
-                  <button
+                  <motion.button
                     key={combo.id}
                     type="button"
+                    whileHover={{ scale: 1.03, y: -1 }}
+                    whileTap={{ scale: 0.97 }}
                     onClick={() => handleSelectCombo(combo)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border border-amber-400/40 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border border-amber-400/40 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors cursor-pointer"
                   >
                     <ShoppingBag size={12} />
                     {combo.name}
                     <span className="text-[10px] text-amber-500/70">{formatCurrency(combo.price)}</span>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
@@ -1005,11 +1008,13 @@ const SaleForm = () => {
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {recentProducts.map((p) => (
-                  <button
+                  <motion.button
                     key={p.id}
                     type="button"
+                    whileHover={{ scale: 1.03, y: -1 }}
+                    whileTap={{ scale: 0.97 }}
                     onClick={() => handleSelectProduct(p)}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${
                       p.quantityStock <= 0
                         ? 'border-destructive/40 text-destructive hover:bg-destructive/10'
                         : 'border-primary/30 text-primary hover:bg-primary/10'
@@ -1020,7 +1025,7 @@ const SaleForm = () => {
                       {formatCurrency(p.priceSale)}
                       <span className="text-[9px] opacity-60">/{p.unitType === 'WEIGHT' ? 'kg' : p.unitType === 'VOLUME' ? 'L' : 'u.'}</span>
                     </span>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
@@ -1059,67 +1064,75 @@ const SaleForm = () => {
             </ul>
           )}
         </div>
-        {currentItem.productId && (
-          <div className="mt-4 p-4 border border-primary/50 rounded-md bg-primary/5 space-y-3 relative">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="font-medium text-foreground">
-                Añadir: {currentItem.productName}
-              </h3>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={handleClearCurrentItem}
-                title="Cancelar selección de este producto"
-                className="absolute top-2 right-2 p-1 h-auto w-auto"
-              >
-                <XCircle
-                  size={20}
-                  className="text-destructive hover:text-destructive/80"
+        <AnimatePresence>
+          {currentItem.productId && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: -10, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="mt-4 p-4 border border-primary/50 rounded-md bg-primary/5 space-y-3 relative overflow-hidden"
+            >
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium text-foreground">
+                  Añadir: {currentItem.productName}
+                </h3>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleClearCurrentItem}
+                  title="Cancelar selección de este producto"
+                  className="absolute top-2 right-2 p-1 h-auto w-auto"
+                >
+                  <XCircle
+                    size={20}
+                    className="text-destructive hover:text-destructive/80"
+                  />
+                </Button>
+              </div>
+              <p className="text-xs text-foreground-muted">
+                Stock Disponible: {currentItem.availableStock}{currentItem.unitType === 'WEIGHT' ? ' kg' : currentItem.unitType === 'VOLUME' ? ' L' : ''}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                <Input
+                  label={`Cantidad${currentItem.unitType === 'WEIGHT' ? ' (kg)' : currentItem.unitType === 'VOLUME' ? ' (L)' : ''} *`}
+                  type="number"
+                  name="quantity"
+                  value={String(currentItem.quantity)}
+                  onChange={handleCurrentItemFieldChange}
+                  min="0"
+                  step={currentItem.unitType && currentItem.unitType !== 'UNIT' ? 'any' : '1'}
+                  required
+                  className="h-10"
                 />
-              </Button>
-            </div>
-            <p className="text-xs text-foreground-muted">
-              Stock Disponible: {currentItem.availableStock}{currentItem.unitType === 'WEIGHT' ? ' kg' : currentItem.unitType === 'VOLUME' ? ' L' : ''}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-              <Input
-                label={`Cantidad${currentItem.unitType === 'WEIGHT' ? ' (kg)' : currentItem.unitType === 'VOLUME' ? ' (L)' : ''} *`}
-                type="number"
-                name="quantity"
-                value={String(currentItem.quantity)}
-                onChange={handleCurrentItemFieldChange}
-                min="0"
-                step={currentItem.unitType && currentItem.unitType !== 'UNIT' ? 'any' : '1'}
-                required
-                className="h-10"
-              />
-              <Input
-                label={`Precio${currentItem.unitType === 'WEIGHT' ? ' por kg' : currentItem.unitType === 'VOLUME' ? ' por L' : ' Venta (u.)'} *`}
-                type="number"
-                name="priceAtSale"
-                value={String(currentItem.priceAtSale)}
-                onChange={handleCurrentItemFieldChange}
-                step="0.01"
-                min="0"
-                required
-                className="h-10"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleAddItemToSaleList}
-                className="h-10"
-              >
-                <ShoppingCart size={16} className="mr-2" /> Añadir a Venta
-              </Button>
-            </div>
-            <p className="text-[10px] text-foreground-muted/60 mt-2">
-              <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px]">Enter</kbd> añadir &middot;
-              <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px] ml-1">Ctrl+Enter</kbd> finalizar venta
-            </p>
-          </div>
-        )}
+                <Input
+                  label={`Precio${currentItem.unitType === 'WEIGHT' ? ' por kg' : currentItem.unitType === 'VOLUME' ? ' por L' : ' Venta (u.)'} *`}
+                  type="number"
+                  name="priceAtSale"
+                  value={String(currentItem.priceAtSale)}
+                  onChange={handleCurrentItemFieldChange}
+                  step="0.01"
+                  min="0"
+                  required
+                  className="h-10"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleAddItemToSaleList}
+                  className="h-10"
+                >
+                  <ShoppingCart size={16} className="mr-2" /> Añadir a Venta
+                </Button>
+              </div>
+              <p className="text-[10px] text-foreground-muted/60 mt-2">
+                <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px]">Enter</kbd> añadir &middot;
+                <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px] ml-1">Ctrl+Enter</kbd> finalizar venta
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </fieldset>
 
       {/* Lista de Productos Añadidos */}
@@ -1142,55 +1155,65 @@ const SaleForm = () => {
                   <th className="p-3 text-sm font-semibold text-foreground text-center w-16">Acción</th>
                 </tr>
               </thead>
-              <tbody>
-                {formData.items.map((item) => (
-                  <tr key={item.tempId} className="border-b border-border last:border-b-0 hover:bg-muted/50 transition-colors">
-                    <td className="p-3 text-sm text-foreground font-medium align-middle">
-                      {item.productName}
-                      <p className="text-xs text-foreground-muted">
-                        Stock: {item.availableStock}{item.unitType === 'WEIGHT' ? ' kg' : item.unitType === 'VOLUME' ? ' L' : ''}
-                      </p>
-                    </td>
-                    <td className="p-3 align-middle text-center">
-                      <Input
-                        type="number"
-                        value={String(item.quantity)}
-                        onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)}
-                        min="0"
-                        max={String(item.availableStock)}
-                        step="any"
-                        className="w-20 text-center h-9 py-1 inline-block"
-                        aria-label={`Cantidad para ${item.productName}`}
-                      />
-                    </td>
-                    <td className="p-3 align-middle text-right">
-                      <Input
-                        type="number"
-                        value={String(item.priceAtSale)}
-                        onChange={(e) => handleItemDetailChange(item.tempId, 'priceAtSale', e.target.value)}
-                        step="0.01"
-                        min="0"
-                        className="w-28 text-right h-9 py-1 inline-block"
-                        aria-label={`Precio para ${item.productName}`}
-                      />
-                    </td>
-                    <td className="p-3 text-sm text-foreground text-right align-middle font-semibold">
-                      {formatCurrency(item.subtotal)}
-                    </td>
-                    <td className="p-3 text-center align-middle">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveItem(item.tempId)}
-                        title="Eliminar item"
-                        className="h-8 w-8 p-0"
-                      >
-                        <Trash2 size={16} className="text-destructive hover:text-destructive/80" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-border">
+                <AnimatePresence mode="popLayout">
+                  {formData.items.map((item) => (
+                    <motion.tr
+                      key={item.tempId}
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -15 }}
+                      transition={{ duration: 0.15 }}
+                      className="border-b border-border last:border-b-0 hover:bg-muted/50 transition-colors"
+                    >
+                      <td className="p-3 text-sm text-foreground font-medium align-middle">
+                        {item.productName}
+                        <p className="text-xs text-foreground-muted">
+                          Stock: {item.availableStock}{item.unitType === 'WEIGHT' ? ' kg' : item.unitType === 'VOLUME' ? ' L' : ''}
+                        </p>
+                      </td>
+                      <td className="p-3 align-middle text-center">
+                        <Input
+                          type="number"
+                          value={String(item.quantity)}
+                          onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)}
+                          min="0"
+                          max={String(item.availableStock)}
+                          step="any"
+                          className="w-20 text-center h-9 py-1 inline-block"
+                          aria-label={`Cantidad para ${item.productName}`}
+                        />
+                      </td>
+                      <td className="p-3 align-middle text-right">
+                        <Input
+                          type="number"
+                          value={String(item.priceAtSale)}
+                          onChange={(e) => handleItemDetailChange(item.tempId, 'priceAtSale', e.target.value)}
+                          step="0.01"
+                          min="0"
+                          className="w-28 text-right h-9 py-1 inline-block"
+                          aria-label={`Precio para ${item.productName}`}
+                        />
+                      </td>
+                      <td className="p-3 text-sm text-foreground text-right align-middle font-semibold">
+                        {formatCurrency(item.subtotal)}
+                      </td>
+                      <td className="p-3 text-center align-middle">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveItem(item.tempId)}
+                          title="Eliminar item"
+                          className="h-8 w-8 p-0"
+                        >
+                          <Trash2 size={16} className="text-destructive hover:text-destructive/80" />
+                        </Button>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
               </tbody>
             </table>
           </div>
@@ -1312,64 +1335,72 @@ const SaleForm = () => {
         </div>
       </details>
 
-      {formData.items.length > 0 && (
-        <div className="fixed bottom-[20px] left-4 md:left-[272px] right-4 z-50 bg-background/95 backdrop-blur-sm border border-border shadow-2xl rounded-2xl transition-all duration-300">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2 text-sm text-foreground-muted">
-              <ShoppingCart size={18} className="text-primary" />
-              <span className="font-semibold">{formData.items.length} {formData.items.length === 1 ? 'producto' : 'productos'}</span>
-            </div>
-            
-            <div className="flex flex-col md:flex-row items-center gap-6 w-full md:w-auto">
-              <div className="text-center md:text-right">
-                {comboDiscount > 0 && (
-                  <p className="text-xs text-amber-600 font-medium">Desc. combo: -{formatCurrency(comboDiscount)}</p>
-                )}
-                {appliedPromotion && (
-                  <p className="text-xs text-success font-medium">{appliedPromotion.name}: -{appliedPromotion.discountLabel}</p>
-                )}
-                {discountCodeDiscount > 0 && validDiscountCode && (
-                  <p className="text-xs text-purple-600 font-medium">Desc. cupón ({validDiscountCode.code}): -{formatCurrency(discountCodeDiscount)}</p>
-                )}
-                {paymentMethodDiscount > 0 && (
-                  <p className="text-xs text-blue-600 font-medium">Desc. pago: -{formatCurrency(paymentMethodDiscount)}</p>
-                )}
-                <p className="text-2xl font-bold text-foreground mt-1">
-                  TOTAL: {formatCurrency(finalTotal)}
-                </p>
+      <AnimatePresence>
+        {formData.items.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="fixed bottom-[20px] left-4 md:left-[272px] right-4 z-50 bg-background/95 backdrop-blur-sm border border-border shadow-2xl rounded-2xl transition-all duration-300"
+          >
+            <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-2 text-sm text-foreground-muted">
+                <ShoppingCart size={18} className="text-primary" />
+                <span className="font-semibold">{formData.items.length} {formData.items.length === 1 ? 'producto' : 'productos'}</span>
               </div>
               
-              <div className="flex flex-col items-center md:items-end gap-1.5 w-full md:w-auto">
-                <div className="flex gap-3 w-full md:w-auto">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => { clearCart(); router.push("/ventas"); }}
-                    disabled={isLoading}
-                    className="w-full md:w-auto"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    ref={submitButtonRef}
-                    type="submit"
-                    variant="primary"
-                    disabled={isLoading}
-                    className="w-full md:w-auto px-8 py-3 text-base flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
-                  >
-                    {isLoading ? <Loader2 size={16} className="animate-spin" /> : null}
-                    Finalizar Venta
-                  </Button>
+              <div className="flex flex-col md:flex-row items-center gap-6 w-full md:w-auto">
+                <div className="text-center md:text-right">
+                  {comboDiscount > 0 && (
+                    <p className="text-xs text-amber-600 font-medium">Desc. combo: -{formatCurrency(comboDiscount)}</p>
+                  )}
+                  {appliedPromotion && (
+                    <p className="text-xs text-success font-medium">{appliedPromotion.name}: -{appliedPromotion.discountLabel}</p>
+                  )}
+                  {discountCodeDiscount > 0 && validDiscountCode && (
+                    <p className="text-xs text-purple-600 font-medium">Desc. cupón ({validDiscountCode.code}): -{formatCurrency(discountCodeDiscount)}</p>
+                  )}
+                  {paymentMethodDiscount > 0 && (
+                    <p className="text-xs text-blue-600 font-medium">Desc. pago: -{formatCurrency(paymentMethodDiscount)}</p>
+                  )}
+                  <p className="text-2xl font-bold text-foreground mt-1">
+                    TOTAL: {formatCurrency(finalTotal)}
+                  </p>
                 </div>
-                <p className="text-[9px] text-foreground-muted/60 hidden md:block">
-                  <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[8px]">Ctrl+Enter</kbd> &middot;
-                  <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[8px] ml-1">F10</kbd> finalizar
-                </p>
+                
+                <div className="flex flex-col items-center md:items-end gap-1.5 w-full md:w-auto">
+                  <div className="flex gap-3 w-full md:w-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => { clearCart(); router.push("/ventas"); }}
+                      disabled={isLoading}
+                      className="w-full md:w-auto"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      ref={submitButtonRef}
+                      type="submit"
+                      variant="primary"
+                      disabled={isLoading}
+                      className="w-full md:w-auto px-8 py-3 text-base flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                    >
+                      {isLoading ? <Loader2 size={16} className="animate-spin" /> : null}
+                      Finalizar Venta
+                    </Button>
+                  </div>
+                  <p className="text-[9px] text-foreground-muted/60 hidden md:block">
+                    <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[8px]">Ctrl+Enter</kbd> &middot;
+                    <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[8px] ml-1">F10</kbd> finalizar
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {formData.items.length === 0 && (
         <div className="flex justify-between items-center mt-4">
