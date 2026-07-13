@@ -7,7 +7,7 @@ import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
 import Input from "@/components/ui/Input";
 import { toast } from "react-hot-toast";
-import { Loader2, ShoppingCart, Trash2, XCircle, Package, Percent, ShoppingBag } from "lucide-react";
+import { Loader2, ShoppingCart, Trash2, XCircle, Package, ShoppingBag, ChevronUp } from "lucide-react";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 
 // --- Interfaces para el estado del formulario ---
@@ -61,6 +61,36 @@ const initialFormData: SaleFormData = {
   discountCode: "",
 };
 
+const SALE_CART_KEY = 'sale_cart';
+
+interface SaleCartSnapshot {
+  items: SaleItemInCart[];
+  clientId: string;
+  sellerId: string;
+  paymentType: PaymentTypeEnum | "";
+  notes: string;
+  discountCode: string;
+  comboDiscounts: Record<number, number>;
+  appliedPromotion: AppliedPromotion;
+}
+
+type AppliedPromotion = { promotionId: number; name: string; type: string; discountAmount: number; discountLabel: string } | null;
+
+const saveCart = (snapshot: SaleCartSnapshot) => {
+  try { localStorage.setItem(SALE_CART_KEY, JSON.stringify(snapshot)); } catch {}
+};
+
+const loadCart = (): SaleCartSnapshot | null => {
+  try {
+    const raw = localStorage.getItem(SALE_CART_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
+
+const clearCart = () => {
+  try { localStorage.removeItem(SALE_CART_KEY); } catch {}
+};
+
 // --- Componente Principal ---
 
 const SaleForm = () => {
@@ -71,10 +101,31 @@ const SaleForm = () => {
   const submitButtonRef = useRef<HTMLButtonElement>(null);
 
   // --- Estados del Componente ---
-  const [formData, setFormData] = useState<SaleFormData>(initialFormData);
+  const [formData, setFormData] = useState<SaleFormData>(() => {
+    const saved = loadCart();
+    if (saved) {
+      return {
+        clientId: saved.clientId,
+        sellerId: saved.sellerId,
+        paymentType: saved.paymentType as PaymentTypeEnum | "",
+        notes: saved.notes,
+        items: saved.items,
+        discountCode: saved.discountCode,
+      };
+    }
+    return initialFormData;
+  });
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingInitialData, setIsFetchingInitialData] = useState(true);
+  const [comboDiscounts, setComboDiscounts] = useState<Record<number, number>>(() => {
+    const saved = loadCart();
+    return saved?.comboDiscounts || {};
+  });
+  const [appliedPromotion, setAppliedPromotion] = useState<AppliedPromotion>(() => {
+    const saved = loadCart();
+    return saved?.appliedPromotion ?? null;
+  });
   const [productSearchTerm, setProductSearchTerm] = useState("");
   const [searchedProducts, setSearchedProducts] = useState<Product[]>([]);
   const [currentItem, setCurrentItem] = useState<CurrentItemState>(
@@ -85,8 +136,6 @@ const SaleForm = () => {
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
   const [combos, setCombos] = useState<Combo[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
-  const [appliedPromotion, setAppliedPromotion] = useState<{ promotionId: number; name: string; type: string; discountAmount: number; discountLabel: string } | null>(null);
-  const [comboDiscounts, setComboDiscounts] = useState<Record<number, number>>({});
   const comboDiscount = Object.values(comboDiscounts).reduce((sum, d) => sum + d, 0);
   const [config, setConfig] = useState<Record<string, string>>({});
   const [hasOpenCaja, setHasOpenCaja] = useState(false);
@@ -97,6 +146,37 @@ const SaleForm = () => {
   const [showUnitTypeModal, setShowUnitTypeModal] = useState(false);
   const [pendingUnitTypeProduct, setPendingUnitTypeProduct] = useState<Product | null>(null);
   const [selectedUnitType, setSelectedUnitType] = useState<string>('');
+  const [validDiscountCode, setValidDiscountCode] = useState<{ code: string; percent: number } | null>(null);
+  const [showWeightModal, setShowWeightModal] = useState(false);
+
+  useEffect(() => {
+    const code = formData.discountCode.trim().toUpperCase();
+    if (!code) {
+      setValidDiscountCode(null);
+      return;
+    }
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/discount-codes?code=${encodeURIComponent(code)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const exact = (Array.isArray(data) ? data : data.data)?.find((c: any) => c.code === code && c.isActive);
+          if (exact) {
+            setValidDiscountCode({ code: exact.code, percent: parseFloat(exact.discountPercent) });
+          } else {
+            setValidDiscountCode(null);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 500);
+    return () => clearTimeout(delayDebounce);
+  }, [formData.discountCode]);
+  const [weightInputValue, setWeightInputValue] = useState('');
+  const [pendingWeightProduct, setPendingWeightProduct] = useState<Product | null>(null);
+  const [pendingWeightUnitType, setPendingWeightUnitType] = useState('');
+  const weightInputRef = useRef<HTMLInputElement>(null);
 
   // --- Carga de Datos Inicial ---
   useEffect(() => {
@@ -356,8 +436,32 @@ const SaleForm = () => {
       productInputRef.current?.focus();
       return;
     }
-    if (formData.items.some(i => i.productId === String(product.id))) {
-      toast.error(`"${product.name}" ya está en la venta.`);
+    const existing = formData.items.find(i => i.productId === String(product.id));
+    const unitType = product.unitType || 'UNIT';
+
+    // Weight/volume: show quick input modal for grams/mL
+    if (unitType === 'WEIGHT' || unitType === 'VOLUME') {
+      setPendingWeightProduct(product);
+      setPendingWeightUnitType(unitType);
+      setWeightInputValue(existing ? String(existing.quantity * 1000) : '');
+      setShowWeightModal(true);
+      setProductSearchTerm("");
+      setSearchedProducts([]);
+      setTimeout(() => weightInputRef.current?.focus(), 100);
+      return;
+    }
+
+    // UNIT: increment qty if existing, otherwise add
+    if (existing) {
+      setFormData(prev => ({
+        ...prev,
+        items: prev.items.map(i =>
+          i.tempId === existing.tempId
+            ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.priceAtSale }
+            : i
+        ),
+      }));
+      toast.success(`${product.name}: cantidad incrementada a ${existing.quantity + 1}`);
       setProductSearchTerm("");
       setSearchedProducts([]);
       productInputRef.current?.focus();
@@ -372,7 +476,7 @@ const SaleForm = () => {
       setSearchedProducts([]);
       return;
     }
-    addProductToCart(product, product.unitType);
+    addProductToCart(product, unitType);
     setTimeout(() => productInputRef.current?.focus(), 50);
   };
 
@@ -457,16 +561,31 @@ const SaleForm = () => {
       return;
     }
 
-    const newItem: SaleItemInCart = {
-      productId: currentItem.productId,
-      productName: currentItem.productName,
-      availableStock: currentItem.availableStock,
-      quantity,
-      priceAtSale,
-      tempId: Date.now(),
-      subtotal: quantity * priceAtSale,
-    };
-    setFormData((prev) => ({ ...prev, items: [...prev.items, newItem] }));
+    const existing = formData.items.find(i => i.productId === currentItem.productId);
+    if (existing) {
+      const newQty = existing.quantity + quantity;
+      setFormData(prev => ({
+        ...prev,
+        items: prev.items.map(i =>
+          i.tempId === existing.tempId
+            ? { ...i, quantity: newQty, subtotal: newQty * i.priceAtSale }
+            : i
+        ),
+      }));
+      toast.success(`${currentItem.productName}: cantidad actualizada a ${newQty}`);
+    } else {
+      const newItem: SaleItemInCart = {
+        productId: currentItem.productId,
+        productName: currentItem.productName,
+        availableStock: currentItem.availableStock,
+        quantity,
+        priceAtSale,
+        tempId: Date.now(),
+        subtotal: quantity * priceAtSale,
+        unitType: currentItem.unitType || undefined,
+      };
+      setFormData((prev) => ({ ...prev, items: [...prev.items, newItem] }));
+    }
     setCurrentItem(initialCurrentItemState);
     setProductSearchTerm("");
     // Auto-foco para el siguiente producto
@@ -542,13 +661,27 @@ const SaleForm = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const calculateTotal = useCallback(() => {
-    return formData.items.reduce((sum, item) => sum + item.subtotal, 0);
-  }, [formData.items]);
+  const subtotal = calculateTotal(); // Subtotal Bruto
+  
+  // 1. Descuento de Combo (item-level)
+  const comboDiscount = Object.values(comboDiscounts).reduce((sum, d) => sum + d, 0);
+  const totalAfterCombo = Math.max(0, subtotal - comboDiscount);
 
-  const subtotal = calculateTotal();
+  // 2. Descuento de Promociones (automáticas)
+  const promoDiscountAmount = appliedPromotion ? appliedPromotion.discountAmount : 0;
+  const totalAfterPromo = Math.max(0, totalAfterCombo - promoDiscountAmount);
+
+  // 3. Descuento de Cupón / Código de Descuento (porcentaje)
+  const discountCodePercent = validDiscountCode ? validDiscountCode.percent : 0;
+  const discountCodeDiscount = totalAfterPromo * (discountCodePercent / 100);
+  const totalAfterCoupon = Math.max(0, totalAfterPromo - discountCodeDiscount);
+
+  // 4. Descuento por Método de Pago (porcentaje)
   const paymentMethodDiscountPct = formData.paymentType ? parseFloat(config[`discount_${formData.paymentType}`] || '0') : 0;
-  const paymentMethodDiscount = subtotal * (paymentMethodDiscountPct / 100);
+  const paymentMethodDiscount = totalAfterCoupon * (paymentMethodDiscountPct / 100);
+
+  // 5. Total Final
+  const finalTotal = Math.max(0, totalAfterCoupon - paymentMethodDiscount);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -606,6 +739,7 @@ const SaleForm = () => {
         throw new Error(errorData.message || `Error HTTP: ${response.status}`);
       }
       toast.success("¡Venta registrada exitosamente!");
+      clearCart();
       setFormData(initialFormData);
       setClientSearchTerm("");
       setComboDiscounts({});
@@ -772,8 +906,23 @@ const SaleForm = () => {
   // Re-evaluate promos when items change
   useEffect(() => {
     const subtotal = calculateTotal();
-    evaluatePromotions(formData.items, subtotal);
-  }, [formData.items, calculateTotal, evaluatePromotions]);
+    const comboDisc = Object.values(comboDiscounts).reduce((sum, d) => sum + d, 0);
+    evaluatePromotions(formData.items, Math.max(0, subtotal - comboDisc));
+  }, [formData.items, calculateTotal, comboDiscounts, evaluatePromotions]);
+
+  // Persist cart to localStorage when state changes
+  useEffect(() => {
+    saveCart({
+      items: formData.items,
+      clientId: formData.clientId,
+      sellerId: formData.sellerId,
+      paymentType: formData.paymentType,
+      notes: formData.notes,
+      discountCode: formData.discountCode,
+      comboDiscounts,
+      appliedPromotion,
+    });
+  }, [formData.items, formData.clientId, formData.sellerId, formData.paymentType, formData.notes, formData.discountCode, comboDiscounts, appliedPromotion]);
 
   const handleClearCurrentItem = () => {
     setCurrentItem(initialCurrentItemState);
@@ -866,6 +1015,7 @@ const SaleForm = () => {
                     {p.name}
                     <span className={`text-[10px] ${p.quantityStock <= 0 ? 'text-destructive/70' : 'text-primary/70'}`}>
                       {formatCurrency(p.priceSale)}
+                      <span className="text-[9px] opacity-60">/{p.unitType === 'WEIGHT' ? 'kg' : p.unitType === 'VOLUME' ? 'L' : 'u.'}</span>
                     </span>
                   </button>
                 ))}
@@ -883,12 +1033,21 @@ const SaleForm = () => {
                   <div className="flex items-center justify-between">
                     <div className="min-w-0 flex-1 mr-4">
                       <p className="font-medium text-sm text-foreground truncate">{product.name}</p>
-                      {product.sku && <p className="text-[11px] text-foreground-muted truncate">SKU: {product.sku}</p>}
+                      <p className="text-[11px] text-foreground-muted truncate">
+                        {product.sku && <>SKU: {product.sku} &middot; </>}
+                        {product.unitType ? (product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'unidad') : 'unidad'}
+                      </p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-lg font-bold text-primary">{formatCurrency(product.priceSale)}</p>
+                      <p className="text-lg font-bold text-primary">
+                        {formatCurrency(product.priceSale)}
+                        <span className="text-xs text-foreground-muted font-normal ml-0.5">
+                          /{product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u.'}
+                        </span>
+                      </p>
                       <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-medium ${product.quantityStock <= 0 ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
                         Stock: {product.quantityStock}
+                        {product.unitType === 'WEIGHT' ? ' kg' : product.unitType === 'VOLUME' ? ' L' : ''}
                       </span>
                     </div>
                   </div>
@@ -918,21 +1077,22 @@ const SaleForm = () => {
               </Button>
             </div>
             <p className="text-xs text-foreground-muted">
-              Stock Disponible: {currentItem.availableStock}
+              Stock Disponible: {currentItem.availableStock}{currentItem.unitType === 'WEIGHT' ? ' kg' : currentItem.unitType === 'VOLUME' ? ' L' : ''}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
               <Input
-                label="Cantidad *"
+                label={`Cantidad${currentItem.unitType === 'WEIGHT' ? ' (kg)' : currentItem.unitType === 'VOLUME' ? ' (L)' : ''} *`}
                 type="number"
                 name="quantity"
                 value={String(currentItem.quantity)}
                 onChange={handleCurrentItemFieldChange}
-                min="1"
+                min="0"
+                step={currentItem.unitType && currentItem.unitType !== 'UNIT' ? 'any' : '1'}
                 required
                 className="h-10"
               />
               <Input
-                label="Precio Venta (u.) *"
+                label={`Precio${currentItem.unitType === 'WEIGHT' ? ' por kg' : currentItem.unitType === 'VOLUME' ? ' por L' : ' Venta (u.)'} *`}
                 type="number"
                 name="priceAtSale"
                 value={String(currentItem.priceAtSale)}
@@ -1071,132 +1231,77 @@ const SaleForm = () => {
             onChange={handleFormChange}
             className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-        </div>
-      </details>
-
-      {/* Sección Ítems en la Venta */}
       {formData.items.length > 0 && (
-        <fieldset className="border border-border p-4 rounded-md">
-          <legend className="text-lg font-medium text-primary px-2">Ítems en la Venta</legend>
-          
-          {/* Tabla para Escritorio (oculta en móvil) */}
-          <div className="mt-4 overflow-x-auto hidden md:block">
-            <table className="w-full min-w-[600px] text-left">
-              <thead className="border-b border-border">
-                <tr>
-                  <th className="p-2 text-sm font-semibold text-foreground">Producto</th>
-                  <th className="p-2 text-sm font-semibold text-foreground w-28 text-center">Cantidad</th>
-                  <th className="p-2 text-sm font-semibold text-foreground w-36 text-right">Precio Unit.</th>
-                  <th className="p-2 text-sm font-semibold text-foreground w-36 text-right">Subtotal</th>
-                  <th className="p-2 text-sm font-semibold text-foreground w-20 text-center">Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {formData.items.map((item) => (
-                  <tr key={item.tempId} className="border-b border-border last:border-b-0">
-                    <td className="p-2 text-sm text-foreground font-medium align-middle">{item.productName}<p className="text-xs text-foreground-muted">Stock: {item.availableStock}{item.unitType === 'WEIGHT' ? ' kg' : item.unitType === 'VOLUME' ? ' L' : ''}</p></td>
-                    <td className="p-2 align-middle"><Input type="number" value={String(item.quantity)} onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)} min="0" max={String(item.availableStock)} step="any" className="w-20 text-center h-9 py-1 mx-auto" aria-label={`Cantidad para ${item.productName}`} /></td>
-                    <td className="p-2 align-middle"><Input type="number" value={String(item.priceAtSale)} onChange={(e) => handleItemDetailChange(item.tempId, 'priceAtSale', e.target.value)} step="0.01" min="0" className="w-28 text-right h-9 py-1 ml-auto" aria-label={`Precio para ${item.productName}`} /></td>
-                    <td className="p-2 text-sm text-foreground text-right align-middle">{formatCurrency(item.subtotal)}</td>
-                    <td className="p-2 text-center align-middle"><Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(item.tempId)} title="Eliminar item"><Trash2 size={16} className="text-destructive" /></Button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="border-t border-border/60 pt-6 mt-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-2 text-sm text-foreground-muted">
+              <ShoppingCart size={18} className="text-primary" />
+              <span className="font-semibold">{formData.items.length} {formData.items.length === 1 ? 'producto' : 'productos'}</span>
+            </div>
+            
+            <div className="flex flex-col md:flex-row items-center gap-6 w-full md:w-auto">
+              <div className="text-center md:text-right">
+                {comboDiscount > 0 && (
+                  <p className="text-xs text-amber-600 font-medium">Desc. combo: -{formatCurrency(comboDiscount)}</p>
+                )}
+                {appliedPromotion && (
+                  <p className="text-xs text-success font-medium">{appliedPromotion.name}: -{appliedPromotion.discountLabel}</p>
+                )}
+                {discountCodeDiscount > 0 && (
+                  <p className="text-xs text-purple-600 font-medium">Desc. cupón ({validDiscountCode.code}): -{formatCurrency(discountCodeDiscount)}</p>
+                )}
+                {paymentMethodDiscount > 0 && (
+                  <p className="text-xs text-blue-600 font-medium">Desc. pago: -{formatCurrency(paymentMethodDiscount)}</p>
+                )}
+                <p className="text-2xl font-bold text-foreground mt-1">
+                  TOTAL: {formatCurrency(finalTotal)}
+                </p>
+              </div>
+              
+              <div className="flex gap-3 w-full md:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { clearCart(); router.push("/ventas"); }}
+                  disabled={isLoading}
+                  className="w-full md:w-auto"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={isLoading}
+                  className="w-full md:w-auto px-8 py-3 text-base flex items-center justify-center gap-2"
+                >
+                  {isLoading ? <Loader2 size={16} className="animate-spin" /> : null}
+                  Finalizar Venta
+                </Button>
+              </div>
+            </div>
           </div>
-
-          {/* Lista de Tarjetas para Móvil (oculta en escritorio) */}
-          <div className="mt-4 space-y-3 md:hidden">
-            {formData.items.map((item) => (
-                <div key={item.tempId} className="bg-background p-3 rounded-lg border border-border">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <p className="font-semibold text-foreground">{item.productName}</p>
-                            <p className="text-xs text-foreground-muted">Subtotal: {formatCurrency(item.subtotal)}</p>
-                        </div>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(item.tempId)} title="Eliminar item" className="h-8 w-8 -mr-2 -mt-1">
-                            <Trash2 size={16} className="text-destructive" />
-                        </Button>
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-2 gap-3 items-end">
-                        <Input 
-                            label={`Cantidad${item.unitType === 'WEIGHT' ? ' (kg)' : item.unitType === 'VOLUME' ? ' (L)' : ''}`}
-                            type="number"
-                            value={String(item.quantity)}
-                            onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)}
-                            min="0" max={String(item.availableStock)}
-                            step="any"
-                            className="h-9 py-1"
-                        />
-                         <Input 
-                            label="Precio Unit."
-                            type="number"
-                            value={String(item.priceAtSale)}
-                            onChange={(e) => handleItemDetailChange(item.tempId, 'priceAtSale', e.target.value)}
-                            step="0.01" min="0"
-                            className="h-9 py-1"
-                        />
-                    </div>
-                </div>
-            ))}
-          </div>
-        </fieldset>
-      )}
-      {/* Total y Botones de Envío */}
-      <div className="flex flex-col items-end mt-6">
-        <div className="text-right mb-4 space-y-1">
-          <p className="text-lg text-foreground-muted">
-            Subtotal: {formatCurrency(subtotal)}
-          </p>
-          {comboDiscount > 0 && (
-            <p className="text-sm font-medium text-amber-600 flex items-center justify-end gap-1">
-              <ShoppingBag size={14} />
-              Descuento combo: -{formatCurrency(comboDiscount)}
-            </p>
-          )}
-          {paymentMethodDiscount > 0 && (
-            <p className="text-sm font-medium text-blue-600 flex items-center justify-end gap-1">
-              <Percent size={14} />
-              Desc. {getPaymentTypeDisplay(formData.paymentType as any)} ({paymentMethodDiscountPct}%): -{formatCurrency(paymentMethodDiscount)}
-            </p>
-          )}
-          {appliedPromotion && (
-            <p className="text-sm font-medium text-success flex items-center justify-end gap-1">
-              <Percent size={14} />
-              Promo: {appliedPromotion.name} (-{appliedPromotion.discountLabel})
-            </p>
-          )}
-          <p className="text-2xl font-bold text-foreground">
-            TOTAL: {formatCurrency(subtotal - comboDiscount - paymentMethodDiscount - (appliedPromotion?.discountAmount || 0))}
-          </p>
         </div>
-        <div className="flex justify-end space-x-3 w-full">
+      )}
+
+      {formData.items.length === 0 && (
+        <div className="flex justify-between items-center mt-4">
+          <p className="text-[10px] text-foreground-muted/60">
+            Agrega productos para finalizar la venta.
+          </p>
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push("/ventas")}
+            size="sm"
+            onClick={() => { clearCart(); router.push("/ventas"); }}
             disabled={isLoading}
           >
             Cancelar
           </Button>
-          <Button
-            ref={submitButtonRef}
-            type="submit"
-            variant="primary"
-            disabled={isLoading || formData.items.length === 0}
-          >
-            {isLoading ? (
-              <Loader2 size={18} className="animate-spin mr-2" />
-            ) : null}
-            {isLoading ? "Procesando Venta..." : "Finalizar Venta"}
-          </Button>
-          <p className="text-[10px] text-foreground-muted/60 mt-2 text-right w-full">
-            <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px]">Ctrl+Enter</kbd> &middot;
-            <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px] ml-1">F10</kbd> finalizar
-          </p>
         </div>
-      </div>
-    </form>
+      )}
+    </form>       </div>
+        </div>
+      )}
 
       {showCajaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCajaModal(false)}>
@@ -1218,6 +1323,80 @@ const SaleForm = () => {
                 {isOpeningCaja ? 'Abriendo...' : 'Abrir Caja'}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Weight/Volume quick input modal */}
+      {showWeightModal && pendingWeightProduct && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => { setShowWeightModal(false); setPendingWeightProduct(null); productInputRef.current?.focus(); }}
+        >
+          <div
+            className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-xs m-4 p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold mb-1">{pendingWeightProduct.name}</h3>
+            <p className="text-sm text-foreground-muted mb-4">
+              Ingresá cantidad en <strong>{pendingWeightUnitType === 'WEIGHT' ? 'gramos' : 'mililitros'}</strong>
+            </p>
+            <div className="relative">
+              <input
+                ref={weightInputRef}
+                type="number"
+                step="any"
+                min="0"
+                value={weightInputValue}
+                onChange={(e) => setWeightInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && weightInputValue.trim()) {
+                    const qtyInKgOrL = parseFloat(weightInputValue.replace(',', '.')) / 1000;
+                    if (qtyInKgOrL <= 0) return;
+                    const unitType = pendingWeightUnitType;
+                    // Check if product already in cart
+                    const existing = formData.items.find(i => i.productId === String(pendingWeightProduct.id));
+                    if (existing) {
+                      setFormData(prev => ({
+                        ...prev,
+                        items: prev.items.map(i =>
+                          i.tempId === existing.tempId
+                            ? { ...i, quantity: qtyInKgOrL, subtotal: qtyInKgOrL * i.priceAtSale }
+                            : i
+                        ),
+                      }));
+                    } else {
+                      addProductToCart(pendingWeightProduct, unitType);
+                      // Override quantity to the entered value
+                      setFormData(prev => ({
+                        ...prev,
+                        items: prev.items.map((item, idx, arr) =>
+                          idx === arr.length - 1 ? { ...item, quantity: qtyInKgOrL, subtotal: qtyInKgOrL * item.priceAtSale } : item
+                        ),
+                      }));
+                    }
+                    setShowWeightModal(false);
+                    setPendingWeightProduct(null);
+                    setTimeout(() => productInputRef.current?.focus(), 50);
+                  }
+                  if (e.key === 'Escape') {
+                    setShowWeightModal(false);
+                    setPendingWeightProduct(null);
+                    productInputRef.current?.focus();
+                  }
+                }}
+                placeholder={pendingWeightUnitType === 'WEIGHT' ? 'ej: 500' : 'ej: 350'}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                autoFocus
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-foreground-muted pointer-events-none">
+                {pendingWeightUnitType === 'WEIGHT' ? 'g' : 'mL'}
+              </span>
+            </div>
+            <p className="text-[10px] text-foreground-muted/60 mt-2">
+              <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px]">Enter</kbd> confirmar &middot;
+              <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[9px] ml-1">Esc</kbd> cancelar
+            </p>
           </div>
         </div>
       )}

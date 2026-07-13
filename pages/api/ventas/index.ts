@@ -166,11 +166,6 @@ export default async function handler(
       discountPercent = parseFloat(discountCodeRecord.discountPercent.toString());
     }
 
-    if (discountPercent > 0) {
-      const discountAmount = calculatedTotalAmount.times(discountPercent).div(100);
-      calculatedTotalAmount = calculatedTotalAmount.minus(discountAmount);
-    }
-
     // Validar y aplicar promociones
     let promotionsAppliedJson: string | null = null;
     if (promotionsApplied && Array.isArray(promotionsApplied) && promotionsApplied.length > 0) {
@@ -204,7 +199,13 @@ export default async function handler(
       promotionsAppliedJson = JSON.stringify(promotionsApplied);
     }
 
-    // Aplicar descuento por método de pago (sobre el subtotal bruto)
+    // Aplicar descuento por código de descuento en cascada
+    if (discountPercent > 0) {
+      const discountAmount = calculatedTotalAmount.times(discountPercent).div(100);
+      calculatedTotalAmount = calculatedTotalAmount.minus(discountAmount);
+    }
+
+    // Aplicar descuento por método de pago
     const paymentMethodDiscountDecimal = new Decimal(paymentMethodDiscount || 0);
     if (paymentMethodDiscountDecimal.greaterThan(0)) {
       calculatedTotalAmount = calculatedTotalAmount.minus(paymentMethodDiscountDecimal);
