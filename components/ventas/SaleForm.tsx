@@ -1313,7 +1313,7 @@ const SaleForm = () => {
       </details>
 
       {formData.items.length > 0 && (
-        <div className="fixed bottom-0 left-0 md:left-64 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg transition-all duration-300">
+        <div className="fixed bottom-[20px] left-4 md:left-[272px] right-4 z-50 bg-background/95 backdrop-blur-sm border border-border shadow-2xl rounded-2xl transition-all duration-300">
           <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2 text-sm text-foreground-muted">
               <ShoppingCart size={18} className="text-primary" />
@@ -1339,25 +1339,32 @@ const SaleForm = () => {
                 </p>
               </div>
               
-              <div className="flex gap-3 w-full md:w-auto">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => { clearCart(); router.push("/ventas"); }}
-                  disabled={isLoading}
-                  className="w-full md:w-auto"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={isLoading}
-                  className="w-full md:w-auto px-8 py-3 text-base flex items-center justify-center gap-2"
-                >
-                  {isLoading ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Finalizar Venta
-                </Button>
+              <div className="flex flex-col items-center md:items-end gap-1.5 w-full md:w-auto">
+                <div className="flex gap-3 w-full md:w-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => { clearCart(); router.push("/ventas"); }}
+                    disabled={isLoading}
+                    className="w-full md:w-auto"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    ref={submitButtonRef}
+                    type="submit"
+                    variant="primary"
+                    disabled={isLoading}
+                    className="w-full md:w-auto px-8 py-3 text-base flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                  >
+                    {isLoading ? <Loader2 size={16} className="animate-spin" /> : null}
+                    Finalizar Venta
+                  </Button>
+                </div>
+                <p className="text-[9px] text-foreground-muted/60 hidden md:block">
+                  <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[8px]">Ctrl+Enter</kbd> &middot;
+                  <kbd className="px-1 py-0.5 rounded bg-background border border-border font-mono text-[8px] ml-1">F10</kbd> finalizar
+                </p>
               </div>
             </div>
           </div>
