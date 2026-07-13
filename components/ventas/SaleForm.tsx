@@ -1231,6 +1231,9 @@ const SaleForm = () => {
             onChange={handleFormChange}
             className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
+        </div>
+      </details>
+
       {formData.items.length > 0 && (
         <div className="border-t border-border/60 pt-6 mt-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
@@ -1299,9 +1302,7 @@ const SaleForm = () => {
           </Button>
         </div>
       )}
-    </form>       </div>
-        </div>
-      )}
+    </form>
 
       {showCajaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCajaModal(false)}>
