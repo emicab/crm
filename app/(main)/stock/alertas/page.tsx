@@ -92,10 +92,10 @@ export default function StockAlertasPage() {
                     <td className="p-3 text-sm text-center">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 text-destructive font-semibold">
                         <AlertTriangle size={14} />
-                        {product.quantityStock}
+                        {product.quantityStock}{product.unitType === 'WEIGHT' ? ' kg' : product.unitType === 'VOLUME' ? ' L' : ''}
                       </span>
                     </td>
-                    <td className="p-3 text-sm text-center text-foreground-muted">{product.stockMinAlert}</td>
+                    <td className="p-3 text-sm text-center text-foreground-muted">{product.stockMinAlert}{product.unitType === 'WEIGHT' ? ' kg' : product.unitType === 'VOLUME' ? ' L' : ''}</td>
                     <td className="p-3 text-sm text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Link

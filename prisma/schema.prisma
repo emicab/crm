@@ -33,8 +33,9 @@ model Product {
   description   String?
   pricePurchase Decimal
   priceSale     Decimal
-  quantityStock Int
-  stockMinAlert Int?
+  quantityStock Float
+  stockMinAlert Float?
+  unitType      String?  // null=sin especificar, UNIT, WEIGHT, VOLUME
   brandId       Int
   categoryId    Int
   supplierId    Int?
@@ -77,25 +78,27 @@ model Seller {
 }
 
 model Sale {
-  id                  Int         @id @default(autoincrement())
-  saleDate            DateTime    @default(now())
+  id                  Int           @id @default(autoincrement())
+  saleDate            DateTime      @default(now())
   totalAmount         Decimal
   paymentType         PaymentType
   notes               String?
   clientId            Int?
   sellerId            Int
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  cashRegisterId      Int?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
   discountCodeApplied String?
-  promotionsApplied   String?   // JSON: [{promotionId, name, type, discountAmount}]
-  seller              Seller      @relation(fields: [sellerId], references: [id])
-  client              Client?     @relation(fields: [clientId], references: [id])
+  promotionsApplied   String?       // JSON: [{promotionId, name, type, discountAmount}]
+  seller              Seller        @relation(fields: [sellerId], references: [id])
+  client              Client?       @relation(fields: [clientId], references: [id])
+  cashRegister        CashRegister? @relation(fields: [cashRegisterId], references: [id])
   items               SaleItem[]
 }
 
 model SaleItem {
   id                  Int     @id @default(autoincrement())
-  quantity            Int
+  quantity            Float
   priceAtSale         Decimal
   purchasePriceAtSale Decimal
   saleId              Int
@@ -131,9 +134,8 @@ model ComboItem {
   id          Int      @id @default(autoincrement())
   comboId     Int
   productId   Int
-  quantity    Int      @default(1)
-  customPrice Decimal? // Null = usa priceSale del producto
-
+  quantity    Float    @default(1)
+  customPrice Decimal?
   combo   Combo   @relation(fields: [comboId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
 }
@@ -204,7 +206,7 @@ model Purchase {
 
 model PurchaseItem {
   id            Int     @id @default(autoincrement())
-  quantity      Int // Cantidad de unidades compradas
+  quantity      Float
   purchasePrice Decimal // Costo por unidad en esta compra específica
 
   purchaseId Int
@@ -256,6 +258,7 @@ model CashRegister {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   movements       CashMovement[]
+  sales           Sale[]
 }
 
 model CashMovement {

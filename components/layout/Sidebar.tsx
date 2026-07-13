@@ -159,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       <aside id="sidebar" className={sidebarClasses}>
         <div className="flex h-16 items-center justify-between border-b border-border px-4">
           <Link href="/" className="text-xl font-semibold text-primary">
-            Ignite CRM
+            ClinPOS
           </Link>
           <button
             onClick={onClose}
@@ -278,7 +278,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             </button>
           </div>
           <p className="text-xs text-center">
-            &copy; {new Date().getFullYear()} Ignite CRM | v{pkg.version}
+            &copy; {new Date().getFullYear()} ClinPOS | v{pkg.version}
           </p>
         </div>
       </aside>

@@ -1,4 +1,4 @@
-# Changelog - Ignite CRM
+# Changelog - ClinPOS
 
 Todos los cambios notables realizados en el proyecto están detallados a continuación.
 

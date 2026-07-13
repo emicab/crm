@@ -13,6 +13,8 @@ export interface Brand {
 
   
   
+  export type UnitType = 'UNIT' | 'WEIGHT' | 'VOLUME' | null;
+
   export interface Product {
     id: number;
     name: string;
@@ -22,6 +24,7 @@ export interface Brand {
     priceSale: number;
     quantityStock: number;
     stockMinAlert?: number | null;
+    unitType?: UnitType;
     brandId: number;
     categoryId: number;
     supplierId?: number | null;
@@ -118,6 +121,22 @@ export interface Brand {
     priceAtSale: number; // Precio por unidad al momento de la venta
   }
   
+  export interface CashRegister {
+    id: number;
+    openDate: string;
+    closeDate?: string | null;
+    initialBalance: number;
+    expectedBalance?: number | null;
+    actualBalance?: number | null;
+    difference?: number | null;
+    status: string;
+    notes?: string | null;
+    sellerId?: number | null;
+    seller?: Seller | null;
+    createdAt: string;
+    updatedAt: string;
+  }
+
   export interface Sale {
     id: number;
     discountCodeApplied: string;
@@ -130,6 +149,8 @@ export interface Brand {
     client?: Client | null;
     sellerId: number;
     seller?: Seller;
+    cashRegisterId?: number | null;
+    cashRegister?: CashRegister | null;
     items: SaleItem[];
     createdAt: string; // O Date
     updatedAt: string; // O Date

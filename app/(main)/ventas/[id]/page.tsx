@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import type { Sale, SaleItem, Product, Client, Seller } from "@/types";
+import type { Sale, SaleItem, Product, Client, Seller, CashRegister } from "@/types";
 import {
     Loader2,
     AlertCircle,
@@ -36,6 +36,7 @@ interface SaleDetail
     totalAmount: number;
     client?: Client | null;
     seller?: Seller;
+    cashRegister?: CashRegister | null;
 }
 
 const SaleDetailPage = () => {
@@ -91,8 +92,8 @@ const SaleDetailPage = () => {
                                       priceSale: parseFloat(
                                           item.product.priceSale
                                       ),
-                                      quantityStock: parseInt(
-                                          item.product.quantityStock
+                                      quantityStock: parseFloat(
+                                          String(item.product.quantityStock).replace(',', '.')
                                       ),
                                   }
                                 : null,
@@ -383,6 +384,15 @@ const SaleDetailPage = () => {
                         </h3>
                         <p className='text-foreground font-medium'>
                             {getPaymentTypeDisplay(sale.paymentType)}
+                        </p>
+                    </div>
+                    <div>
+                        <h3 className='text-sm font-medium text-foreground-muted mb-1 flex items-center'>
+                            <Hash size={16} className='mr-2 text-primary' />
+                            Caja
+                        </h3>
+                        <p className='text-foreground font-medium'>
+                            {sale.cashRegister ? `#${sale.cashRegister.id} - ${sale.cashRegister.status === 'OPEN' ? 'Abierta' : 'Cerrada'}` : 'Sin caja'}
                         </p>
                     </div>
                     {sale.discountCodeApplied && (

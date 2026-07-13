@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import type { Product, Brand, Category, Supplier } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Edit3, Trash2, Loader2, AlertCircle, Filter, X, Users } from 'lucide-react';
+import { Edit3, Trash2, Loader2, AlertCircle, Filter, X, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import ConfirmationModal from '../ui/ConfirmationModal';
@@ -37,6 +37,11 @@ const ProductTable = () => {
     supplierId: '',
   });
 
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
   // Cargar las opciones para los desplegables de filtro una sola vez al montar el componente
   useEffect(() => {
     const fetchFilterOptions = async () => {
@@ -60,9 +65,7 @@ const ProductTable = () => {
     fetchFilterOptions();
   }, []);
 
-  // Función para obtener productos, ahora depende de los filtros
-  // useCallback optimiza para que la función no se recree en cada render a menos que `filters` cambie
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (pageNum = 1) => {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams();
@@ -70,6 +73,8 @@ const ProductTable = () => {
     if (filters.brandId) params.append('brandId', filters.brandId);
     if (filters.categoryId) params.append('categoryId', filters.categoryId);
     if (filters.supplierId) params.append('supplierId', filters.supplierId);
+    params.append('page', String(pageNum));
+    params.append('limit', '20');
     const queryString = params.toString();
     
     try {
@@ -78,24 +83,46 @@ const ProductTable = () => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Error HTTP: ${response.status}`);
       }
-      const data = await response.json();
-      // Asegurarse de que los precios se conviertan a número para el formateo
-      setProducts(data.map((product: any) => ({
+      const result = await response.json();
+      // Paginated response: { data, pagination }
+      // Non-paginated: array (backward compat)
+      const items = Array.isArray(result) ? result : result.data;
+      setProducts(items.map((product: any) => ({
         ...product,
         pricePurchase: product.pricePurchase ? parseFloat(product.pricePurchase) : null,
         priceSale: parseFloat(product.priceSale),
       })));
+      if (!Array.isArray(result)) {
+        setTotalPages(result.pagination.totalPages);
+        setTotalProducts(result.pagination.total);
+        setPage(result.pagination.page);
+      } else {
+        setTotalPages(1);
+        setTotalProducts(items.length);
+        setPage(1);
+      }
     } catch (err: any) {
       setError(err.message || 'Error al cargar los productos.');
     } finally {
       setLoading(false);
     }
-  }, [filters]); // La función se recalcula solo si el objeto `filters` cambia
+  }, [filters]);
 
-  // Cargar productos al inicio y cada vez que se aplica un nuevo filtro
+  // Debounce search field changes; fire instantly for selects (brand, category, supplier)
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      fetchProducts(1);
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [filters]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    fetchProducts(newPage);
+  };
 
   const handleOpenDeleteModal = (product: Product) => {
     setItemToDelete(product);
@@ -109,6 +136,7 @@ const ProductTable = () => {
 
   const handleClearFilters = () => {
     setFilters({ search: '', brandId: '', categoryId: '', supplierId: '' });
+    setPage(1);
   };
 
   const handleToggleSelect = (productId: number) => {
@@ -151,7 +179,7 @@ const ProductTable = () => {
       setSelectedIds(new Set());
       setIsBatchSupplierModalOpen(false);
       setBatchSupplierId('');
-      fetchProducts();
+      fetchProducts(page);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Error inesperado.');
     } finally {
@@ -564,7 +592,7 @@ const ProductTable = () => {
         )}
         <div className="overflow-x-auto">
           {/* Tabla para Escritorio (oculta en móvil) */}
-          <table className="hidden md:table w-full min-w-max text-left">
+          <table className="hidden md:table w-full text-left">
             <thead className="border-b border-border">
               <tr>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-10">
@@ -575,15 +603,15 @@ const ProductTable = () => {
                     className="rounded border-border"
                   />
                 </th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Nombre</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">SKU</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Marca</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Categoría</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground">Proveedor</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground max-w-[240px]">Nombre</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-[90px]">SKU</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-[110px]">Marca</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground max-w-[140px]">Categoría</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground max-w-[130px]">Proveedor</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Compra</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Venta</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Stock</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center">Acciones</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center w-[70px]">Stock</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center w-[90px]">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -600,16 +628,16 @@ const ProductTable = () => {
                         className="rounded border-border"
                       />
                     </td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground font-medium">{product.name}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.sku || '-'}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.brand.name}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.category.name}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted">{product.supplier?.name || '-'}</td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground font-medium max-w-[240px]"><div className="truncate">{product.name}</div></td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted w-[90px]"><div className="truncate">{product.sku || '-'}</div></td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted w-[110px]"><div className="truncate">{product.brand.name}</div></td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted max-w-[140px]"><div className="truncate">{product.category.name}</div></td>
+                    <td className="p-3 sm:p-4 text-sm text-foreground-muted max-w-[130px]"><div className="truncate">{product.supplier?.name || '-'}</div></td>
                     <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.pricePurchase ?? 0)}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.priceSale)}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">{product.quantityStock}</td>
-                    <td className="p-3 sm:p-4 text-sm text-center">
-                       <div className="flex items-center space-x-1">
+                    <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">{product.quantityStock}{product.unitType === 'WEIGHT' ? ' kg' : product.unitType === 'VOLUME' ? ' L' : ''}</td>
+                    <td className="p-3 sm:p-4 text-sm text-center w-[90px] whitespace-nowrap">
+                       <div className="flex items-center justify-center space-x-1">
                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(product.id)} title="Editar" className="h-8 w-8">
                                     <Edit3 size={16} className="text-primary" />
                                 </Button>
@@ -655,7 +683,7 @@ const ProductTable = () => {
                             </div>
                             <div>
                                 <p className="text-xs text-foreground-muted">Stock</p>
-                                <p className="font-semibold text-foreground">{product.quantityStock}</p>
+                                <p className="font-semibold text-foreground">{product.quantityStock}{product.unitType === 'WEIGHT' ? ' kg' : product.unitType === 'VOLUME' ? ' L' : ''}</p>
                             </div>
                             <div className="col-span-1">
                                 <p className="text-xs text-foreground-muted">Marca</p>
@@ -675,6 +703,41 @@ const ProductTable = () => {
             )}
           </div>
         </div>
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-border mt-4">
+            <p className="text-sm text-foreground-muted whitespace-nowrap">
+              {totalProducts} producto{totalProducts !== 1 ? 's' : ''} · Página {page} de {totalPages}
+            </p>
+            <div className="flex items-center gap-1 flex-wrap justify-center">
+              <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
+                <ChevronLeft size={16} />
+              </Button>
+              {(() => {
+                const pages: (number | string)[] = [];
+                const range = 1;
+                const first = 1;
+                const last = totalPages;
+                const left = Math.max(first, page - range);
+                const right = Math.min(last, page + range);
+                if (left > first + 1) pages.push(first, 'left-ellipsis');
+                else if (left === first + 1) pages.push(first);
+                for (let i = left; i <= right; i++) pages.push(i);
+                if (right < last - 1) pages.push('right-ellipsis', last);
+                else if (right === last - 1) pages.push(last);
+                return pages.map((p) =>
+                  typeof p === 'string' ? (
+                    <span key={p} className="px-1 text-foreground-muted text-sm">...</span>
+                  ) : (
+                    <Button key={p} variant={p === page ? 'primary' : 'outline'} size="sm" onClick={() => handlePageChange(p)} className="min-w-[32px]">{p}</Button>
+                  )
+                );
+              })()}
+              <Button variant="outline" size="sm" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}>
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

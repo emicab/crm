@@ -137,7 +137,7 @@ export async function getSalesForLastXDays(
 ): Promise<DailySalesData[]> {
     try {
         const now = new Date();
-        const localNow = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+        const localNow = new Date(now.getTime() - (3 * 60 * 60 * 1000));
         const localTodayYear = localNow.getUTCFullYear();
         const localTodayMonth = localNow.getUTCMonth();
         const localTodayDate = localNow.getUTCDate();
@@ -165,7 +165,7 @@ export async function getSalesForLastXDays(
         const dailySalesMap = new Map<string, Decimal>();
 
         for (let i = 0; i < days; i++) {
-            const localStart = new Date(startDate.getTime() + (3 * 60 * 60 * 1000));
+            const localStart = new Date(startDate.getTime() - (3 * 60 * 60 * 1000));
             const d = new Date(localStart);
             d.setDate(localStart.getDate() + i);
             const dateString = d.toISOString().split("T")[0]; // YYYY-MM-DD
@@ -173,7 +173,7 @@ export async function getSalesForLastXDays(
         }
 
         sales.forEach((sale) => {
-            const localSaleDate = new Date(sale.saleDate.getTime() + (3 * 60 * 60 * 1000));
+            const localSaleDate = new Date(sale.saleDate.getTime() - (3 * 60 * 60 * 1000));
             const dateString = localSaleDate.toISOString().split("T")[0]; // YYYY-MM-DD
             const currentTotal =
                 dailySalesMap.get(dateString) || new Decimal(0);
@@ -478,7 +478,7 @@ export async function getMonthlyFinancialSummaries(numberOfMonths: number = 6): 
       })
     ]);
 
-    const localDate = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+    const localDate = new Date(now.getTime() - (3 * 60 * 60 * 1000));
 
     for (let i = 0; i < numberOfMonths; i++) {
       const date = new Date(localDate.getUTCFullYear(), localDate.getUTCMonth() - i, 1);
@@ -535,7 +535,7 @@ export interface DailySalesCount {
 export async function getDailySalesCountForCurrentWeek(): Promise<DailySalesCount[]> {
   try {
     const now = new Date();
-    const localNow = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+    const localNow = new Date(now.getTime() - (3 * 60 * 60 * 1000));
     
     // Ajuste para que la semana comience en Lunes (getDay() devuelve 0 para Domingo, 1 para Lunes...)
     const dayOfWeek = localNow.getUTCDay(); // 0 (Sun) to 6 (Sat)
@@ -563,7 +563,7 @@ export async function getDailySalesCountForCurrentWeek(): Promise<DailySalesCoun
     // Crear un mapa para acceder fácilmente a los resultados
     const salesMap = new Map<number, number>(); // <Día de la semana (0-6), Cantidad>
     sales.forEach(sale => {
-      const localSaleDate = new Date(sale.saleDate.getTime() + (3 * 60 * 60 * 1000));
+      const localSaleDate = new Date(sale.saleDate.getTime() - (3 * 60 * 60 * 1000));
       const dayIndex = localSaleDate.getUTCDay(); // 0 para Domingo, etc.
       salesMap.set(dayIndex, (salesMap.get(dayIndex) || 0) + 1);
     });

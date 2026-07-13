@@ -50,7 +50,7 @@ function mainApp() {
     function createAppMenu() {
         const template = [
             {
-                label: 'Ignite CRM',
+                label: 'ClinPOS',
                 submenu: [
                     { role: 'about' },
                     { type: 'separator' },

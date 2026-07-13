@@ -1,157 +1,195 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ignite CRM</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..700&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      overflow: hidden;
-      -webkit-app-region: drag;
-      user-select: none;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClinPOS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          "Outfit",
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        background: linear-gradient(
+          135deg,
+          #0f172a 0%,
+          #1e293b 50%,
+          #0f172a 100%
+        );
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+        -webkit-app-region: drag;
+        user-select: none;
+      }
 
-    .container {
-      text-align: center;
-      padding: 2rem;
-    }
+      .container {
+        text-align: center;
+        padding: 2rem;
+      }
 
-    .logo-wrapper {
-      margin-bottom: 2rem;
-      animation: fadeInDown 0.8s ease-out;
-    }
+      .logo-wrapper {
+        margin-bottom: 2rem;
+        animation: fadeInDown 0.8s ease-out;
+      }
 
-    .logo {
-      width: 120px;
-      height: auto;
-      filter: drop-shadow(0 4px 20px rgba(96, 165, 250, 0.3));
-    }
+      .logo {
+        width: 120px;
+        height: auto;
+        filter: drop-shadow(0 4px 20px rgba(96, 165, 250, 0.3));
+      }
 
-    .brand-name {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #f1f5f9;
-      letter-spacing: 0.05em;
-      margin-top: 1rem;
-      animation: fadeInUp 0.8s ease-out 0.2s both;
-    }
+      .brand-name {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #f1f5f9;
+        letter-spacing: 0.05em;
+        margin-top: 1rem;
+        animation: fadeInUp 0.8s ease-out 0.2s both;
+      }
 
-    .brand-name span {
-      color: #60A5FA;
-    }
+      .brand-name span {
+        color: #60a5fa;
+      }
 
-    .tagline {
-      font-size: 0.875rem;
-      color: #94a3b8;
-      font-weight: 300;
-      margin-top: 0.25rem;
-      animation: fadeInUp 0.8s ease-out 0.3s both;
-    }
+      .tagline {
+        font-size: 0.875rem;
+        color: #94a3b8;
+        font-weight: 300;
+        margin-top: 0.25rem;
+        animation: fadeInUp 0.8s ease-out 0.3s both;
+      }
 
-    .loader-container {
-      margin-top: 2.5rem;
-      animation: fadeInUp 0.8s ease-out 0.5s both;
-    }
+      .loader-container {
+        margin-top: 2.5rem;
+        animation: fadeInUp 0.8s ease-out 0.5s both;
+      }
 
-    .progress-bar-track {
-      width: 280px;
-      height: 4px;
-      background: rgba(148, 163, 184, 0.15);
-      border-radius: 4px;
-      overflow: hidden;
-    }
+      .progress-bar-track {
+        width: 280px;
+        height: 4px;
+        background: rgba(148, 163, 184, 0.15);
+        border-radius: 4px;
+        overflow: hidden;
+      }
 
-    .progress-bar-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #60A5FA, #3b82f6);
-      border-radius: 4px;
-      animation: loadProgress 2.5s ease-in-out infinite;
-    }
+      .progress-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #60a5fa, #3b82f6);
+        border-radius: 4px;
+        animation: loadProgress 2.5s ease-in-out infinite;
+      }
 
-    @keyframes loadProgress {
-      0% { width: 0%; }
-      50% { width: 70%; }
-      100% { width: 100%; }
-    }
+      @keyframes loadProgress {
+        0% {
+          width: 0%;
+        }
+        50% {
+          width: 70%;
+        }
+        100% {
+          width: 100%;
+        }
+      }
 
-    .status-text {
-      font-size: 0.8rem;
-      color: #64748b;
-      margin-top: 1rem;
-      font-weight: 300;
-      letter-spacing: 0.02em;
-      animation: pulse 2s ease-in-out infinite;
-    }
+      .status-text {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-top: 1rem;
+        font-weight: 300;
+        letter-spacing: 0.02em;
+        animation: pulse 2s ease-in-out infinite;
+      }
 
-    .spinner-ring {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(96, 165, 250, 0.1);
-      border-top-color: #60A5FA;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      vertical-align: middle;
-      margin-right: 8px;
-    }
+      .spinner-ring {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(96, 165, 250, 0.1);
+        border-top-color: #60a5fa;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        vertical-align: middle;
+        margin-right: 8px;
+      }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
 
-    @keyframes fadeInDown {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+      @keyframes fadeInDown {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
 
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 0.6; }
-      50% { opacity: 1; }
-    }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 0.6;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
 
-    .version {
-      position: absolute;
-      bottom: 1.5rem;
-      font-size: 0.7rem;
-      color: #475569;
-      font-weight: 300;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="logo-wrapper">
-      <img src="../public/IgniteCRM.png" alt="Ignite CRM" class="logo" />
-    </div>
-    <div class="brand-name">Ignite <span>CRM</span></div>
-    <p class="tagline">Gestión de negocios simplificada</p>
-    <div class="loader-container">
-      <div class="progress-bar-track">
-        <div class="progress-bar-fill"></div>
+      .version {
+        position: absolute;
+        bottom: 1.5rem;
+        font-size: 0.7rem;
+        color: #475569;
+        font-weight: 300;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="brand-name">Clin<span>POS</span></div>
+      <p class="tagline">Gestión de negocios simplificada</p>
+      <div class="loader-container">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill"></div>
+        </div>
+        <p class="status-text">
+          <span class="spinner-ring"></span>
+          Iniciando...
+        </p>
       </div>
-      <p class="status-text">
-        <span class="spinner-ring"></span>
-        Iniciando...
-      </p>
     </div>
-  </div>
-  <div class="version">v1.3.2</div>
-</body>
+    <div class="version">v1.3.4</div>
+  </body>
 </html>

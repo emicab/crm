@@ -91,7 +91,7 @@ export default async function handler(
     let {
         name, sku, description,
         pricePurchase, priceSale, quantityStock, stockMinAlert,
-        brandId, categoryId, supplierId
+        brandId, categoryId, supplierId, unitType
     } = req.body;
 
     // --- Validación más robusta de los datos de entrada ---
@@ -101,11 +101,11 @@ export default async function handler(
     
     // Validar y convertir los campos numéricos antes de usarlos
     const priceSaleNum = parseFloat(priceSale);
-    const quantityStockInt = parseInt(quantityStock);
+    const quantityStockNum = parseFloat(quantityStock);
     const brandIdInt = parseInt(brandId);
     const categoryIdInt = parseInt(categoryId);
 
-    if (isNaN(priceSaleNum) || isNaN(quantityStockInt) || isNaN(brandIdInt) || isNaN(categoryIdInt)) {
+    if (isNaN(priceSaleNum) || isNaN(quantityStockNum) || isNaN(brandIdInt) || isNaN(categoryIdInt)) {
         return res.status(400).json({ message: 'Precio de Venta, Stock, Marca o Categoría tienen un formato numérico inválido.' });
     }
     
@@ -123,16 +123,21 @@ export default async function handler(
     if (sku) sku = sanitizeString(sku);
     if (description) description = sanitizeString(description);
 
+    // Validar unitType
+    const validUnitTypes = [null, 'UNIT', 'WEIGHT', 'VOLUME'];
+    const resolvedUnitType = validUnitTypes.includes(unitType) ? (unitType || null) : null;
+
     try {
       const newProduct = await prisma.product.create({
         data: {
           name: name.trim(),
           sku: sku ? sku.trim() : null,
           description: description ? description.trim() : null,
-          pricePurchase: pricePurchaseDecimal || new Decimal(0), // Usar el Decimal convertido o 0 por defecto
+          pricePurchase: pricePurchaseDecimal || new Decimal(0),
           priceSale: new Decimal(priceSaleNum),
-          quantityStock: quantityStockInt,
-          stockMinAlert: stockMinAlert ? parseInt(stockMinAlert) : null,
+          quantityStock: quantityStockNum,
+          stockMinAlert: stockMinAlert ? parseFloat(stockMinAlert) : null,
+          unitType: resolvedUnitType,
           brand: { connect: { id: brandIdInt } },
           category: { connect: { id: categoryIdInt } },
           ...(supplierId ? { supplier: { connect: { id: parseInt(supplierId) } } } : {}),

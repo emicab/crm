@@ -22,6 +22,7 @@ interface ProductFormData {
   brandId: string;
   categoryId: string;
   supplierId: string;
+  unitType: string;
 }
 
 
@@ -34,6 +35,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const [formData, setFormData] = useState<ProductFormData>({
     name: '', sku: '', description: '', pricePurchase: '', priceSale: '',
     quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
+    unitType: '',
   });
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -142,14 +144,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         name: initialProductData.name || '',
         sku: initialProductData.sku || '',
         description: initialProductData.description || '',
-        
         pricePurchase: initialProductData.pricePurchase !== null && initialProductData.pricePurchase !== undefined ? String(initialProductData.pricePurchase) : '',
-        priceSale: String(initialProductData.priceSale) || '', 
-        quantityStock: String(initialProductData.quantityStock) || '', 
+        priceSale: String(initialProductData.priceSale) || '',
+        quantityStock: String(initialProductData.quantityStock) || '',
         stockMinAlert: initialProductData.stockMinAlert !== null && initialProductData.stockMinAlert !== undefined ? String(initialProductData.stockMinAlert) : '',
         brandId: String(initialProductData.brandId) || '',
         categoryId: String(initialProductData.categoryId) || '',
         supplierId: initialProductData.supplierId ? String(initialProductData.supplierId) : '',
+        unitType: initialProductData.unitType || '',
       });
     }
   }, [initialProductData]);
@@ -167,8 +169,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
     setError(null);
     setSuccessMessage(null);
 
-    if (!formData.name || !formData.brandId || !formData.categoryId || !formData.priceSale || !formData.quantityStock) {
-      setError('Por favor, completa todos los campos obligatorios (Nombre, Marca, Categoría, Precio Venta, Stock).');
+    if (!formData.name || !formData.brandId || !formData.categoryId || !formData.priceSale || !formData.quantityStock || !formData.unitType) {
+      setError('Por favor, completa todos los campos obligatorios (Nombre, Marca, Categoría, Tipo de Unidad, Precio Venta, Stock).');
       setIsLoading(false);
       return;
     }
@@ -180,23 +182,17 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
 
     const dataToSend = {
         name: formData.name,
-        sku: formData.sku || null, 
+        sku: formData.sku || null,
         description: formData.description || null,
-        
-        pricePurchase: formData.pricePurchase ? parseFloat(formData.pricePurchase) : null, 
-        priceSale: parseFloat(formData.priceSale), 
-        quantityStock: parseInt(formData.quantityStock), 
-        
-        stockMinAlert: formData.stockMinAlert ? parseInt(formData.stockMinAlert) : null,
-        brandId: parseInt(formData.brandId), 
-        categoryId: parseInt(formData.categoryId), 
+        pricePurchase: formData.pricePurchase ? parseFloat(formData.pricePurchase) : null,
+        priceSale: parseFloat(formData.priceSale),
+        quantityStock: parseFloat(formData.quantityStock),
+        stockMinAlert: formData.stockMinAlert ? parseFloat(formData.stockMinAlert) : null,
+        brandId: parseInt(formData.brandId),
+        categoryId: parseInt(formData.categoryId),
         supplierId: formData.supplierId ? parseInt(formData.supplierId) : null,
+        unitType: formData.unitType || null,
     };
-    
-    
-    
-    
-
     try {
       const response = await fetch(apiUrl, {
         method: method,
@@ -211,10 +207,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
 
       setSuccessMessage(initialProductData ? '¡Producto actualizado exitosamente!' : '¡Producto creado exitosamente!');
       
-      if (!initialProductData) { 
+      if (!initialProductData) {
         setFormData({
             name: '', sku: '', description: '', pricePurchase: '', priceSale: '',
             quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
+            unitType: '',
         });
       }
 
@@ -313,8 +310,17 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Input label="Cantidad en Stock *" name="quantityStock" type="number" step="1" value={formData.quantityStock} onChange={handleChange} required />
-        <Input label="Alerta Stock Mínimo (Opcional)" name="stockMinAlert" type="number" step="1" value={formData.stockMinAlert} onChange={handleChange} />
+        <Select label="Tipo de Unidad *" name="unitType" value={formData.unitType} onChange={handleChange} required>
+          <option value="">Seleccionar...</option>
+          <option value="UNIT">Unidad</option>
+          <option value="WEIGHT">Peso (kg)</option>
+          <option value="VOLUME">Volumen (L)</option>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Input label={`Cantidad en Stock * ${formData.unitType === 'WEIGHT' ? '(kg)' : formData.unitType === 'VOLUME' ? '(L)' : ''}`} name="quantityStock" type="number" step="0.001" value={formData.quantityStock} onChange={handleChange} required />
+        <Input label={`Alerta Stock Mínimo ${formData.unitType === 'WEIGHT' ? '(kg)' : formData.unitType === 'VOLUME' ? '(L)' : '(Opcional)'}`} name="stockMinAlert" type="number" step="0.001" value={formData.stockMinAlert} onChange={handleChange} />
       </div>
 
       <div className="flex justify-end pt-4">

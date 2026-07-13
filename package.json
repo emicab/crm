@@ -52,7 +52,7 @@
   },
   "build": {
     "appId": "com.emidev.crm",
-    "productName": "Ignite CRM",
+    "productName": "ClinPOS",
     "publish": {
       "provider": "github",
       "owner": "emicab",

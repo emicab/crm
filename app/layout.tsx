@@ -14,7 +14,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: 'Ignite CRM',
+  title: 'ClinPOS',
   description: 'Gestión de negocios simplificada',
 };
 

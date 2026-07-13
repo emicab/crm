@@ -100,11 +100,9 @@ export default async function handler(
     }
 
     try {
-      // Usamos una transacción para asegurar que todo se ejecute correctamente o nada lo haga.
       const result = await prisma.$transaction(async (tx) => {
         const purchaseStatus = status || PurchaseStatus.RECEIVED;
 
-        // 1. Crear el registro principal de la Compra
         const newPurchase = await tx.purchase.create({
           data: {
             purchaseDate: new Date(),
@@ -117,7 +115,6 @@ export default async function handler(
           },
         });
 
-        // 2. Crear los PurchaseItems y, crucialmente, INCREMENTAR el stock de los productos si se recibió
         for (const item of items) {
           await tx.purchaseItem.create({
             data: {

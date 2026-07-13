@@ -68,6 +68,7 @@ export default async function handler(
           include: {
             client: true,
             seller: true,
+            cashRegister: true,
             items: {
               include: {
                 product: true,
@@ -221,6 +222,9 @@ export default async function handler(
           });
         }
 
+        // Registrar movimiento en caja si hay una abierta
+        const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
+
         const newSale = await tx.sale.create({
           data: {
             saleDate: new Date(),
@@ -231,11 +235,10 @@ export default async function handler(
             promotionsApplied: promotionsAppliedJson,
             ...(clientId && { client: { connect: { id: clientId } } }),
             seller: { connect: { id: sellerId } },
+            ...(openRegister && { cashRegister: { connect: { id: openRegister.id } } }),
           },
         });
 
-        // Registrar movimiento en caja si hay una abierta
-        const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
         if (openRegister) {
           const cashAmount = paymentType === 'CASH' ? calculatedTotalAmount : new Decimal(0);
           const otherAmount = paymentType !== 'CASH' ? calculatedTotalAmount : new Decimal(0);
@@ -270,7 +273,7 @@ export default async function handler(
           if (!product) {
             throw new Error(`Producto con ID ${item.productId} no encontrado.`);
           }
-          if (product.quantityStock < item.quantity) {
+          if (Number(product.quantityStock) < item.quantity) {
             throw new Error(`Stock insuficiente para el producto "${product.name}". Disponible: ${product.quantityStock}, Solicitado: ${item.quantity}.`);
           }
 

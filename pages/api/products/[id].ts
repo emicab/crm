@@ -39,7 +39,7 @@ export default async function handler(
     let {
       name, sku, description,
       pricePurchase, priceSale, quantityStock, stockMinAlert,
-      brandId, categoryId, supplierId,
+      brandId, categoryId, supplierId, unitType,
     } = req.body;
 
     // Validaciones básicas
@@ -49,8 +49,8 @@ export default async function handler(
     if (priceSale === undefined || isNaN(parseFloat(priceSale))) {
       return res.status(400).json({ message: 'El precio de venta es obligatorio y debe ser un número.' });
     }
-    if (quantityStock === undefined || isNaN(parseInt(quantityStock))) {
-      return res.status(400).json({ message: 'La cantidad en stock es obligatoria y debe ser un número entero.' });
+    if (quantityStock === undefined || isNaN(parseFloat(quantityStock))) {
+      return res.status(400).json({ message: 'La cantidad en stock es obligatoria.' });
     }
     if (brandId === undefined || isNaN(parseInt(brandId))) {
       return res.status(400).json({ message: 'La marca es obligatoria.' });
@@ -74,7 +74,7 @@ export default async function handler(
       const dataToUpdate: Prisma.ProductUpdateInput = {
         name: name.trim(),
         priceSale: new Decimal(parseFloat(priceSale)),
-        quantityStock: parseInt(quantityStock),
+        quantityStock: parseFloat(quantityStock),
         brand: { connect: { id: parseInt(brandId) } },
         category: { connect: { id: parseInt(categoryId) } },
       };
@@ -89,12 +89,16 @@ export default async function handler(
       if (pricePurchase !== undefined && pricePurchase !== null && pricePurchase !== '') {
         dataToUpdate.pricePurchase = new Decimal(parseFloat(pricePurchase));
       } else if (pricePurchase === '' || pricePurchase === null) {
-        dataToUpdate.pricePurchase = null as any; // Permitir borrar el precio de compra
+        dataToUpdate.pricePurchase = null as any;
       }
       if (stockMinAlert !== undefined && stockMinAlert !== null && stockMinAlert !== '') {
-        dataToUpdate.stockMinAlert = parseInt(stockMinAlert);
+        dataToUpdate.stockMinAlert = parseFloat(stockMinAlert);
       } else if (stockMinAlert === '' || stockMinAlert === null) {
         dataToUpdate.stockMinAlert = null;
+      }
+      if (unitType !== undefined) {
+        const validUnitTypes = [null, 'UNIT', 'WEIGHT', 'VOLUME'];
+        dataToUpdate.unitType = validUnitTypes.includes(unitType) ? (unitType || null) : null;
       }
       if (supplierId !== undefined && supplierId !== null && supplierId !== '') {
         dataToUpdate.supplier = { connect: { id: parseInt(supplierId) } };
@@ -140,14 +144,25 @@ export default async function handler(
       handleApiError(res, error, `deleting product ${id}`);
     }
   } else if (req.method === 'PATCH') {
-    const { quantityStock } = req.body;
-    if (quantityStock === undefined || isNaN(parseInt(quantityStock))) {
-      return res.status(400).json({ message: 'quantityStock es obligatorio y debe ser un número entero.' });
+    const { quantityStock, unitType } = req.body;
+    const dataToUpdate: Prisma.ProductUpdateInput = {};
+    if (quantityStock !== undefined) {
+      if (isNaN(parseFloat(quantityStock))) {
+        return res.status(400).json({ message: 'quantityStock inválido.' });
+      }
+      dataToUpdate.quantityStock = parseFloat(quantityStock);
+    }
+    if (unitType !== undefined) {
+      const validUnitTypes = [null, 'UNIT', 'WEIGHT', 'VOLUME'];
+      dataToUpdate.unitType = validUnitTypes.includes(unitType) ? (unitType || null) : null;
+    }
+    if (Object.keys(dataToUpdate).length === 0) {
+      return res.status(400).json({ message: 'No hay campos para actualizar.' });
     }
     try {
       const updated = await prisma.product.update({
         where: { id },
-        data: { quantityStock: parseInt(quantityStock) },
+        data: dataToUpdate,
       });
       res.status(200).json(updated);
     } catch (error: any) {

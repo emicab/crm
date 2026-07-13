@@ -19,6 +19,7 @@ interface CurrentItemState {
   quantity: number | "";
   priceAtSale: number | "";
   availableStock: number;
+  unitType?: string | null;
 }
 
 // Para los ítems que ya están en el carrito de la venta
@@ -29,6 +30,7 @@ interface SaleItemInCart
   priceAtSale: number;
   subtotal: number;
   comboBatchId?: number; // para rastrear items agregados por combo
+  unitType?: string | null;
 }
 
 // Para el estado principal del formulario
@@ -47,6 +49,7 @@ const initialCurrentItemState: CurrentItemState = {
   quantity: 1,
   priceAtSale: 0,
   availableStock: 0,
+  unitType: null,
 };
 
 const initialFormData: SaleFormData = {
@@ -91,6 +94,9 @@ const SaleForm = () => {
   const [cajaInitialBalance, setCajaInitialBalance] = useState('0');
   const [cajaSellerId, setCajaSellerId] = useState('');
   const [isOpeningCaja, setIsOpeningCaja] = useState(false);
+  const [showUnitTypeModal, setShowUnitTypeModal] = useState(false);
+  const [pendingUnitTypeProduct, setPendingUnitTypeProduct] = useState<Product | null>(null);
+  const [selectedUnitType, setSelectedUnitType] = useState<string>('');
 
   // --- Carga de Datos Inicial ---
   useEffect(() => {
@@ -169,7 +175,7 @@ const SaleForm = () => {
           setRecentProducts(data.map((p: any) => ({
             ...p,
             priceSale: parseFloat(p.priceSale),
-            quantityStock: parseInt(p.quantityStock),
+            quantityStock: parseFloat(p.quantityStock),
           })));
         }
       })
@@ -286,7 +292,7 @@ const SaleForm = () => {
             .map((p: any) => ({
               ...p,
               priceSale: parseFloat(p.priceSale),
-              quantityStock: parseInt(p.quantityStock),
+              quantityStock: parseFloat(String(p.quantityStock).replace(',', '.')),
             }));
           setSearchedProducts(filtered.slice(0, 5));
         }
@@ -331,7 +337,7 @@ const SaleForm = () => {
           handleSelectProduct({
             ...product,
             priceSale: parseFloat(product.priceSale),
-            quantityStock: parseInt(product.quantityStock),
+            quantityStock: parseFloat(String(product.quantityStock).replace(',', '.')),
           });
         } else {
           toast.error(`Producto con código "${code}" no encontrado.`);
@@ -357,6 +363,20 @@ const SaleForm = () => {
       productInputRef.current?.focus();
       return;
     }
+    // If product has no unitType set, show selector
+    if (!product.unitType) {
+      setPendingUnitTypeProduct(product);
+      setSelectedUnitType('');
+      setShowUnitTypeModal(true);
+      setProductSearchTerm("");
+      setSearchedProducts([]);
+      return;
+    }
+    addProductToCart(product, product.unitType);
+    setTimeout(() => productInputRef.current?.focus(), 50);
+  };
+
+  const addProductToCart = (product: Product, unitType: string) => {
     const newItem: SaleItemInCart = {
       productId: String(product.id),
       productName: product.name,
@@ -365,10 +385,26 @@ const SaleForm = () => {
       priceAtSale: product.priceSale,
       tempId: Date.now(),
       subtotal: product.priceSale,
+      unitType,
     };
     setFormData((prev) => ({ ...prev, items: [...prev.items, newItem] }));
     setProductSearchTerm("");
     setSearchedProducts([]);
+  };
+
+  const handleConfirmUnitType = () => {
+    if (!pendingUnitTypeProduct || !selectedUnitType) return;
+    const product = pendingUnitTypeProduct;
+    addProductToCart(product, selectedUnitType);
+    setShowUnitTypeModal(false);
+    setPendingUnitTypeProduct(null);
+    setSelectedUnitType('');
+    // Auto-save unitType to product
+    fetch(`/api/products/${product.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unitType: selectedUnitType }),
+    }).catch(() => {});
     setTimeout(() => productInputRef.current?.focus(), 50);
   };
 
@@ -376,13 +412,12 @@ const SaleForm = () => {
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { name, value } = e.target;
+    const normalizedValue = value.replace(',', '.');
     setCurrentItem((prev) => {
       let processedValue: number | "" =
-        value === ""
+        normalizedValue === ""
           ? ""
-          : name === "quantity"
-          ? parseInt(value, 10)
-          : parseFloat(value);
+          : parseFloat(normalizedValue);
       if (isNaN(Number(processedValue)))
         processedValue = prev[name as keyof CurrentItemState] as number | "";
       if (
@@ -443,12 +478,13 @@ const SaleForm = () => {
     field: "quantity" | "priceAtSale",
     value: string
   ) => {
+    const normalizedValue = value.replace(',', '.');
     const numericValue =
-      value === ""
+      normalizedValue === ""
         ? 0
         : field === "quantity"
-        ? parseInt(value)
-        : parseFloat(value);
+        ? parseFloat(normalizedValue)
+        : parseFloat(normalizedValue);
     if (isNaN(numericValue)) return;
 
     setFormData((prev) => ({
@@ -1058,8 +1094,8 @@ const SaleForm = () => {
               <tbody>
                 {formData.items.map((item) => (
                   <tr key={item.tempId} className="border-b border-border last:border-b-0">
-                    <td className="p-2 text-sm text-foreground font-medium align-middle">{item.productName}<p className="text-xs text-foreground-muted">Stock: {item.availableStock}</p></td>
-                    <td className="p-2 align-middle"><Input type="number" value={String(item.quantity)} onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)} min="0" max={String(item.availableStock)} className="w-20 text-center h-9 py-1 mx-auto" aria-label={`Cantidad para ${item.productName}`} /></td>
+                    <td className="p-2 text-sm text-foreground font-medium align-middle">{item.productName}<p className="text-xs text-foreground-muted">Stock: {item.availableStock}{item.unitType === 'WEIGHT' ? ' kg' : item.unitType === 'VOLUME' ? ' L' : ''}</p></td>
+                    <td className="p-2 align-middle"><Input type="number" value={String(item.quantity)} onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)} min="0" max={String(item.availableStock)} step="any" className="w-20 text-center h-9 py-1 mx-auto" aria-label={`Cantidad para ${item.productName}`} /></td>
                     <td className="p-2 align-middle"><Input type="number" value={String(item.priceAtSale)} onChange={(e) => handleItemDetailChange(item.tempId, 'priceAtSale', e.target.value)} step="0.01" min="0" className="w-28 text-right h-9 py-1 ml-auto" aria-label={`Precio para ${item.productName}`} /></td>
                     <td className="p-2 text-sm text-foreground text-right align-middle">{formatCurrency(item.subtotal)}</td>
                     <td className="p-2 text-center align-middle"><Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(item.tempId)} title="Eliminar item"><Trash2 size={16} className="text-destructive" /></Button></td>
@@ -1084,11 +1120,12 @@ const SaleForm = () => {
                     </div>
                     <div className="mt-3 pt-3 border-t border-border/60 grid grid-cols-2 gap-3 items-end">
                         <Input 
-                            label="Cantidad"
+                            label={`Cantidad${item.unitType === 'WEIGHT' ? ' (kg)' : item.unitType === 'VOLUME' ? ' (L)' : ''}`}
                             type="number"
                             value={String(item.quantity)}
                             onChange={(e) => handleItemDetailChange(item.tempId, 'quantity', e.target.value)}
                             min="0" max={String(item.availableStock)}
+                            step="any"
                             className="h-9 py-1"
                         />
                          <Input 
@@ -1179,6 +1216,46 @@ const SaleForm = () => {
               <Button type="button" variant="outline" onClick={() => setShowCajaModal(false)} disabled={isOpeningCaja}>Cancelar</Button>
               <Button type="button" variant="primary" onClick={handleOpenCajaFromSale} disabled={isOpeningCaja || !cajaSellerId}>
                 {isOpeningCaja ? 'Abriendo...' : 'Abrir Caja'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUnitTypeModal && pendingUnitTypeProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { setShowUnitTypeModal(false); setPendingUnitTypeProduct(null); setSelectedUnitType(''); }}>
+          <div className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-sm m-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-1">Tipo de unidad</h3>
+            <p className="text-sm text-foreground-muted mb-4">
+              ¿Cómo se vende <strong>{pendingUnitTypeProduct.name}</strong>?
+            </p>
+            <div className="space-y-3">
+              {[
+                { value: 'UNIT', label: 'Unidad', desc: 'Se vende pieza por pieza' },
+                { value: 'WEIGHT', label: 'Peso (kg)', desc: 'Se vende por kilogramo' },
+                { value: 'VOLUME', label: 'Volumen (L)', desc: 'Se vende por litro' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setSelectedUnitType(opt.value)}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    selectedUnitType === opt.value
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background text-foreground-muted hover:border-primary/50'
+                  }`}
+                >
+                  <p className="font-medium text-sm">{opt.label}</p>
+                  <p className="text-xs mt-0.5 opacity-70">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button type="button" variant="outline" onClick={() => { setShowUnitTypeModal(false); setPendingUnitTypeProduct(null); setSelectedUnitType(''); }}>
+                Cancelar
+              </Button>
+              <Button type="button" variant="primary" onClick={handleConfirmUnitType} disabled={!selectedUnitType}>
+                Agregar
               </Button>
             </div>
           </div>

@@ -93,7 +93,7 @@ export default function HomePage() {
       <div className="w-full max-w-6xl mx-auto p-4 md:p-8">
         <header className="text-center pt-10 pb-6 md:pt-16 md:pb-10">
           <h1 className="text-4xl font-bold tracking-tight text-foreground uppercase sm:text-5xl">
-            Bienvenido a <strong className="text-primary">Ignite CRM</strong>
+            Bienvenido a <strong className="text-primary">ClinPOS</strong>
           </h1>
           <p className="mt-3 text-lg text-foreground-muted max-w-2xl mx-auto">
             Selecciona un módulo para empezar a gestionar tu negocio.

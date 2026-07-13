@@ -21,14 +21,15 @@ export default async function handler(
       const sale = await prisma.sale.findUnique({
         where: { id: id },
         include: {
-          client: true, // Incluir datos del cliente
-          seller: true, // Incluir datos del vendedor
-          items: {      // Incluir los ítems de la venta
+          client: true,
+          seller: true,
+          cashRegister: true,
+          items: {
             include: {
-              product: true, // Incluir datos del producto de cada ítem
+              product: true,
             },
             orderBy: {
-                id: 'asc' // Ordenar items por ID o nombre de producto
+                id: 'asc'
             }
           },
         },
@@ -42,6 +43,13 @@ export default async function handler(
       const saleForJson = {
         ...sale,
         totalAmount: sale.totalAmount.toString(),
+        cashRegister: sale.cashRegister ? {
+          ...sale.cashRegister,
+          initialBalance: sale.cashRegister.initialBalance.toString(),
+          expectedBalance: sale.cashRegister.expectedBalance?.toString() || null,
+          actualBalance: sale.cashRegister.actualBalance?.toString() || null,
+          difference: sale.cashRegister.difference?.toString() || null,
+        } : null,
         items: sale.items.map(item => ({
           ...item,
           priceAtSale: item.priceAtSale.toString(),
@@ -68,6 +76,7 @@ export default async function handler(
         include: {
           client: true,
           seller: true,
+          cashRegister: true,
           items: {
             include: {
               product: true,
@@ -82,6 +91,13 @@ export default async function handler(
       const saleForJson = {
         ...updatedSale,
         totalAmount: updatedSale.totalAmount.toString(),
+        cashRegister: updatedSale.cashRegister ? {
+          ...updatedSale.cashRegister,
+          initialBalance: updatedSale.cashRegister.initialBalance.toString(),
+          expectedBalance: updatedSale.cashRegister.expectedBalance?.toString() || null,
+          actualBalance: updatedSale.cashRegister.actualBalance?.toString() || null,
+          difference: updatedSale.cashRegister.difference?.toString() || null,
+        } : null,
         items: updatedSale.items.map(item => ({
           ...item,
           priceAtSale: item.priceAtSale.toString(),
