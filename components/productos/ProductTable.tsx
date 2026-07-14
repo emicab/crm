@@ -233,6 +233,9 @@ const ProductTable = () => {
         isSaving={isSavingBatch}
         onSave={handleBatchUpdate}
         onClose={() => setIsBatchSupplierModalOpen(false)}
+        onBrandCreated={(newBrand) => setBrands(prev => [...prev, newBrand].sort((a, b) => a.name.localeCompare(b.name)))}
+        onCategoryCreated={(newCategory) => setCategories(prev => [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)))}
+        onSupplierCreated={(newSupplier) => setSuppliers(prev => [...prev, newSupplier].sort((a, b) => a.name.localeCompare(b.name)))}
       />
 
       <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
