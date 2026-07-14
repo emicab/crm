@@ -138,8 +138,8 @@ const AddProductToOrderModal: React.FC<AddProductToOrderModalProps> = ({
                     <Input
                       label={`Cantidad a Pedir * ${product.unitType === 'WEIGHT' ? '(kg)' : product.unitType === 'VOLUME' ? '(L)' : ''}`}
                       type="number"
-                      step={product.unitType && product.unitType !== 'UNIT' ? '0.001' : '1'}
-                      min="0.001"
+                      step={product.unitType === 'WEIGHT' || product.unitType === 'VOLUME' ? '0.001' : '1'}
+                      min={product.unitType === 'WEIGHT' || product.unitType === 'VOLUME' ? '0.001' : '1'}
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       required

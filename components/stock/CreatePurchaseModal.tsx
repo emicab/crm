@@ -195,8 +195,8 @@ const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                           <td className="p-2 text-center">
                             <input
                               type="number"
-                              min="0"
-                              step={product?.unitType && product.unitType !== 'UNIT' ? '0.001' : '1'}
+                              step={product?.unitType === 'WEIGHT' || product?.unitType === 'VOLUME' ? '0.001' : '1'}
+                              min={product?.unitType === 'WEIGHT' || product?.unitType === 'VOLUME' ? '0.001' : '1'}
                               value={item.quantity}
                               onChange={(e) => handleQuantityChange(item.productId, e.target.value)}
                               className="w-20 text-center rounded-md border border-border bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
