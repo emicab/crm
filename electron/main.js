@@ -393,10 +393,56 @@ function mainApp() {
         }
     });
 
-    // Este manejador revisa si la app ya está activada
+    // Este manejador revisa si la app ya está activada y revalida con el servidor
     ipcMain.handle('license:check', async () => {
-        const isActivated = store.get('isActivated', false);
-        console.log(`[License] Verificando estado: ${isActivated ? 'Activada' : 'No activada'}`);
+        let isActivated = store.get('isActivated', false);
+        console.log(`[License] Verificando estado local: ${isActivated ? 'Activada' : 'No activada'}`);
+
+        if (isActivated) {
+            try {
+                let licenseKey = store.get('licenseKey');
+                if (licenseKey) {
+                    if (safeStorage && safeStorage.isEncryptionAvailable()) {
+                        try {
+                            licenseKey = safeStorage.decryptString(Buffer.from(licenseKey, 'base64'));
+                        } catch (e) {
+                            console.error('[License Check] Error al desencriptar la clave de licencia:', e);
+                        }
+                    }
+                    
+                    const key = licenseKey.toUpperCase().trim();
+                    const hardwareId = machineIdSync(true);
+
+                    // Consultar Supabase en tiempo real
+                    const { data: license, error } = await supabase
+                        .from('licenses')
+                        .select('*')
+                        .eq('key', key)
+                        .single();
+
+                    if (error || !license) {
+                        console.warn('[License Check] La clave de licencia no existe o hubo un error en Supabase.');
+                        store.set('isActivated', false);
+                        isActivated = false;
+                    } else if (!license.is_active) {
+                        console.warn('[License Check] La clave de licencia ha sido desactivada en el servidor.');
+                        store.set('isActivated', false);
+                        isActivated = false;
+                    } else if (license.expires_at && new Date(license.expires_at) < new Date()) {
+                        console.warn('[License Check] La clave de licencia ha expirado.');
+                        store.set('isActivated', false);
+                        isActivated = false;
+                    } else if (license.hardware_id && license.hardware_id !== hardwareId) {
+                        console.warn('[License Check] La clave de licencia está asignada a otro hardware.');
+                        store.set('isActivated', false);
+                        isActivated = false;
+                    }
+                }
+            } catch (err) {
+                // Si falla la red, permitimos el acceso local (modo offline)
+                console.warn('[License Check] Error al conectar con el servidor de licencias (modo offline permitido):', err.message || err);
+            }
+        }
         return { isActivated };
     });
 
