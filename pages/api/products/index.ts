@@ -16,16 +16,6 @@ export default async function handler(
 
     const whereClause: Prisma.ProductWhereInput = {};
 
-    // Filtro de búsqueda por texto (en nombre o SKU)
-    if (search && typeof search === 'string' && search.trim() !== '') {
-        whereClause.OR = [
-            { name: { contains: search } }, // Nota: La búsqueda será sensible a mayúsculas/minúsculas
-            { sku: { contains: search } },
-        ];
-        // Anteriormente, `mode: 'insensitive'` nos dio problemas con la base de datos.
-        // Lo omitimos para asegurar compatibilidad. La búsqueda será case-sensitive.
-    }
-
     // Filtro por ID de Marca
     if (brandId && typeof brandId === 'string' && brandId !== '') {
         const parsedBrandId = parseInt(brandId);
@@ -52,26 +42,46 @@ export default async function handler(
 
     const page = req.query.page ? parseInt(req.query.page as string) : undefined;
     const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
-    const skip = page ? (page - 1) * limit : undefined;
 
     try {
-      const [products, total] = await Promise.all([
-        prisma.product.findMany({
-          where: whereClause, // Aplicar los filtros construidos
-          include: {
-            brand: true,
-            category: true,
-            supplier: true,
-          },
-          orderBy: {
-            name: 'asc',
-          },
-          ...(skip !== undefined && { skip, take: limit }),
-        }),
-        prisma.product.count({ where: whereClause }),
-      ]);
+      // 1. Obtener productos aplicando filtros base (marca, categoría, proveedor)
+      let products = await prisma.product.findMany({
+        where: whereClause,
+        include: {
+          brand: true,
+          category: true,
+          supplier: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
 
+      // Helper para normalizar texto (pasar a minúsculas y remover acentos/diacríticos)
+      const normalizeText = (text: string) => {
+        return text
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+      };
+
+      // 2. Filtrar en memoria por búsqueda de texto de forma totalmente insensible
+      if (search && typeof search === 'string' && search.trim() !== '') {
+        const queryNormalized = normalizeText(search);
+        products = products.filter(p => {
+          const nameNormalized = normalizeText(p.name);
+          const skuNormalized = normalizeText(p.sku || '');
+          return nameNormalized.includes(queryNormalized) || skuNormalized.includes(queryNormalized);
+        });
+      }
+
+      const total = products.length;
+
+      // 3. Paginación en memoria si corresponde
       if (page !== undefined) {
+        const skip = (page - 1) * limit;
+        products = products.slice(skip, skip + limit);
+        
         res.status(200).json({
           data: products,
           pagination: {
