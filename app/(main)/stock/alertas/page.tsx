@@ -25,7 +25,7 @@ interface AlertProduct {
 }
 
 export default function StockAlertasPage() {
-  const [products, setProducts] = useState<AlertProduct[]>([]);
+  const [allProducts, setAllProducts] = useState<AlertProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -33,6 +33,9 @@ export default function StockAlertasPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [productsToOrder, setProductsToOrder] = useState<AlertProduct[]>([]);
+
+  // Pestaña activa: 'alerts' (Productos en Alerta) o 'all' (Todos los Productos)
+  const [activeTab, setActiveTab] = useState<'alerts' | 'all'>('alerts');
 
   // Búsqueda, ordenamiento y paginación
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,7 +60,7 @@ export default function StockAlertasPage() {
     setIsRefreshing(true);
     try {
       const [productsRes, suppliersRes] = await Promise.all([
-        fetch('/api/products?limit=200'),
+        fetch('/api/products?limit=1000'), // Aumentamos límite para soportar ver todos los productos
         fetch('/api/proveedores'),
       ]);
       if (!productsRes.ok) throw new Error('Error al cargar productos');
@@ -65,13 +68,12 @@ export default function StockAlertasPage() {
 
       const data = await productsRes.json();
       const items: AlertProduct[] = (Array.isArray(data) ? data : data.data || [])
-        .filter((p: any) => p.stockMinAlert !== null && p.stockMinAlert !== undefined && p.quantityStock < p.stockMinAlert)
         .map((p: any) => ({
           ...p,
           pricePurchase: p.pricePurchase ? parseFloat(p.pricePurchase) : null,
           priceSale: parseFloat(p.priceSale),
         }));
-      setProducts(items);
+      setAllProducts(items);
     } catch (err) {
       console.error(err);
     } finally {
@@ -84,30 +86,39 @@ export default function StockAlertasPage() {
     fetchAlerts();
   }, []);
 
-  // Resetear paginación si cambian los filtros
+  // Resetear paginación y selección al cambiar de pestaña o filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterSupplierId, searchQuery]);
+    setSelectedIds(new Set());
+  }, [activeTab, filterSupplierId, searchQuery]);
+
+  // Filtrar productos según la pestaña activa
+  const tabProducts = useMemo(() => {
+    if (activeTab === 'alerts') {
+      return allProducts.filter(p => p.stockMinAlert !== null && p.stockMinAlert !== undefined && p.quantityStock < p.stockMinAlert);
+    }
+    return allProducts;
+  }, [allProducts, activeTab]);
 
   const supplierOptions = useMemo(() => {
-    const ids = new Set(products.map(p => p.supplier?.id).filter(Boolean) as number[]);
+    const ids = new Set(tabProducts.map(p => p.supplier?.id).filter(Boolean) as number[]);
     return suppliers.filter(s => ids.has(s.id));
-  }, [products, suppliers]);
+  }, [tabProducts, suppliers]);
 
   const filteredProducts = useMemo(() => {
-    let result = products;
+    let result = tabProducts;
 
     // 1. Filtrar por proveedor
     if (filterSupplierId) {
       result = result.filter(p => p.supplier?.id === parseInt(filterSupplierId));
     }
 
-    // 2. Filtrar por búsqueda de nombre o SKU
+    // 2. Filtrar por búsqueda de nombre o SKU (insensible a mayúsculas y acentos)
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       result = result.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        (p.sku && p.sku.toLowerCase().includes(q))
+        p.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
+        (p.sku && p.sku.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q))
       );
     }
 
@@ -145,7 +156,7 @@ export default function StockAlertasPage() {
     });
 
     return result;
-  }, [products, filterSupplierId, searchQuery, sortColumn, sortDirection]);
+  }, [tabProducts, filterSupplierId, searchQuery, sortColumn, sortDirection]);
 
   // Paginación
   const totalPages = Math.ceil(filteredProducts.length / pageSize);
@@ -184,7 +195,7 @@ export default function StockAlertasPage() {
 
   // Agregar a la orden activa (o abrir el modal de confirmación individual)
   const handleAddToOrder = (productId: number) => {
-    const prod = products.find(p => p.id === productId);
+    const prod = allProducts.find(p => p.id === productId);
     if (prod) {
       setProductToAdd(prod);
     }
@@ -292,7 +303,7 @@ export default function StockAlertasPage() {
 
   // Abrir modal masivo para los seleccionados en la tabla
   const handleOpenBatchOrder = () => {
-    const list = products.filter(p => selectedIds.has(p.id));
+    const list = allProducts.filter(p => selectedIds.has(p.id));
     setProductsToOrder(list);
     setShowCreateModal(true);
   };
@@ -349,10 +360,10 @@ export default function StockAlertasPage() {
 
   return (
     <div className="w-full font-sans pb-24">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <AlertTriangle size={28} className="text-red-500 animate-pulse" />
-          <h1 className="text-2xl font-bold text-foreground">Alertas de Stock</h1>
+          <h1 className="text-2xl font-bold text-foreground">Pedidos y Alertas de Stock</h1>
         </div>
         <div className="flex gap-2">
           <button
@@ -368,22 +379,45 @@ export default function StockAlertasPage() {
         </div>
       </div>
 
+      {/* Tabs superiores de unificación */}
+      <div className="flex border-b border-border mb-6">
+        <button
+          onClick={() => setActiveTab('alerts')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'alerts'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-foreground-muted hover:text-foreground'
+          }`}
+        >
+          En Alerta de Stock ({allProducts.filter(p => p.stockMinAlert !== null && p.stockMinAlert !== undefined && p.quantityStock < p.stockMinAlert).length})
+        </button>
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'all'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-foreground-muted hover:text-foreground'
+          }`}
+        >
+          Todos los Productos ({allProducts.length})
+        </button>
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 size={32} className="animate-spin text-primary" />
         </div>
-      ) : products.length === 0 ? (
+      ) : tabProducts.length === 0 ? (
         <div className="text-center py-16 bg-muted rounded-2xl border border-border shadow-inner">
           <Package size={48} className="mx-auto text-success/60 mb-4" />
           <h2 className="text-xl font-semibold text-foreground">Todo en orden</h2>
-          <p className="text-foreground-muted mt-2 text-sm">No hay productos por debajo del stock mínimo.</p>
+          <p className="text-foreground-muted mt-2 text-sm">No hay productos en esta sección.</p>
         </div>
       ) : (
         <div className="bg-muted rounded-2xl border border-border overflow-hidden shadow-md">
           <div className="p-4 sm:p-5 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-3 bg-background/40">
             <p className="text-sm text-foreground-muted font-medium whitespace-nowrap">
-              {products.length} producto{products.length !== 1 ? 's' : ''} por debajo del stock mínimo
-              {(filterSupplierId || searchQuery) && ` (${filteredProducts.length} filtrados)`}
+              {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''} encontrado{filteredProducts.length !== 1 ? 's' : ''}
             </p>
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
               <input
@@ -398,7 +432,7 @@ export default function StockAlertasPage() {
                 value={filterSupplierId}
                 onChange={(e) => { setFilterSupplierId(e.target.value); setSelectedIds(new Set()); }}
                 aria-label="Filtrar por proveedor"
-                className="text-sm rounded-xl w-full sm:w-64 animate-none"
+                className="text-sm rounded-xl w-full sm:w-64"
               >
                 <option value="">Todos los proveedores</option>
                 {supplierOptions.map(s => (
@@ -437,7 +471,7 @@ export default function StockAlertasPage() {
                     className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors text-center"
                     onClick={() => handleSort('stock')}
                   >
-                    Stock Alerta {renderSortIcon('stock')}
+                    Stock actual {renderSortIcon('stock')}
                   </th>
                   <th
                     className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors text-center"
@@ -451,6 +485,8 @@ export default function StockAlertasPage() {
               <tbody>
                 {paginatedProducts.map((product) => {
                   const stockRatio = Math.min(100, Math.max(0, (product.quantityStock / (product.stockMinAlert || 1)) * 100));
+                  const isBelowMin = product.stockMinAlert !== null && product.stockMinAlert !== undefined && product.quantityStock < product.stockMinAlert;
+
                   return (
                     <tr key={product.id} className="border-b border-border/40 last:border-b-0 hover:bg-background/40 transition-colors">
                       <td className="p-3 sm:p-4">
@@ -466,20 +502,31 @@ export default function StockAlertasPage() {
                       <td className="p-3 sm:p-4 text-sm text-foreground-muted hidden md:table-cell">{product.supplier?.name || '-'}</td>
                       <td className="p-3 sm:p-4 text-sm text-center">
                         <div className="flex flex-col items-center gap-1.5">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-500 text-xs font-bold">
-                            <AlertTriangle size={11} className="text-red-500 animate-pulse" />
-                            {product.quantityStock} {product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}
-                          </span>
-                          <div className="w-16 h-1.5 bg-border/80 rounded-full overflow-hidden mt-0.5">
-                            <div
-                              className="bg-red-500 h-full rounded-full"
-                              style={{ width: `${stockRatio}%` }}
-                            />
-                          </div>
+                          {isBelowMin ? (
+                            <>
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-500 text-xs font-bold">
+                                <AlertTriangle size={11} className="text-red-500 animate-pulse" />
+                                {product.quantityStock} {product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}
+                              </span>
+                              <div className="w-16 h-1.5 bg-border/80 rounded-full overflow-hidden mt-0.5">
+                                <div
+                                  className="bg-red-500 h-full rounded-full"
+                                  style={{ width: `${stockRatio}%` }}
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-success/15 text-success text-xs font-bold">
+                              {product.quantityStock} {product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="p-3 sm:p-4 text-sm text-center text-foreground-muted font-medium">
-                        {product.stockMinAlert} {product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}
+                        {product.stockMinAlert !== null && product.stockMinAlert !== undefined
+                          ? `${product.stockMinAlert} ${product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}`
+                          : '-'
+                        }
                       </td>
                       <td className="p-3 sm:p-4 text-sm text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -521,7 +568,7 @@ export default function StockAlertasPage() {
 
           {filteredProducts.length === 0 && (filterSupplierId || searchQuery) && (
             <div className="text-center py-8 text-foreground-muted text-sm bg-background/10">
-              No se encontraron alertas de stock con los filtros ingresados.
+              No se encontraron productos con los filtros ingresados.
             </div>
           )}
         </div>
