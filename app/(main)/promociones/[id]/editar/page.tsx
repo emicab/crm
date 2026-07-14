@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import type { Product, Promotion } from '@/types';
+import type { Promotion } from '@/types';
 import { Loader2, ArrowLeft, Search, X } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -68,31 +68,32 @@ const EditarPromocionPage = () => {
     fetchPromo();
   }, [promoId]);
 
-  const searchItems = useCallback(
-    debounce(async (term: string) => {
-      if (!term.trim()) { setSearchResults([]); return; }
-      setSearching(true);
-      try {
-        if (searchType === 'product') {
-          const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=10`);
-          if (res.ok) {
-            const data = await res.json();
-            setSearchResults(data.products || data);
+  const searchItems = useMemo(
+    () =>
+      debounce(async (term: string) => {
+        if (!term.trim()) { setSearchResults([]); return; }
+        setSearching(true);
+        try {
+          if (searchType === 'product') {
+            const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=10`);
+            if (res.ok) {
+              const data = await res.json();
+              setSearchResults(data.products || data);
+            }
+          } else {
+            const res = await fetch(`/api/categories?search=${encodeURIComponent(term)}&limit=10`);
+            if (res.ok) {
+              const data = await res.json();
+              setSearchResults(data.categories || data || []);
+            }
           }
-        } else {
-          const res = await fetch(`/api/categories?search=${encodeURIComponent(term)}&limit=10`);
-          if (res.ok) {
-            const data = await res.json();
-            setSearchResults(data.categories || data || []);
-          }
-        }
-      } catch { /* ignore */ }
-      finally { setSearching(false); }
-    }, 300),
+        } catch { /* ignore */ }
+        finally { setSearching(false); }
+      }, 300),
     [searchType]
   );
 
-  useEffect(() => { searchItems(searchTerm); }, [searchTerm, searchType]);
+  useEffect(() => { searchItems(searchTerm); }, [searchTerm, searchType, searchItems]);
 
   const addCondition = (item: any) => {
     const exists = conditions.some(c =>

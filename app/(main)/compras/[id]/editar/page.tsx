@@ -6,7 +6,7 @@ import { PaymentTypeEnum as PaymentTypeEnumType } from '@/types';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import Input from '@/components/ui/Input';
-import { Loader2, ArrowLeft, Save, ShoppingBag, Trash2, PlusCircle } from 'lucide-react';
+import { Loader2, ArrowLeft, Save, ShoppingBag, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { getPaymentTypeDisplay } from '@/lib/displayTexts';
 import toast from 'react-hot-toast';

@@ -23,13 +23,13 @@ export default async function handler(
     // Listar todos los gastos, podríamos añadir filtros por fecha, categoría, etc.
     const { category: queryCategory, startDate, endDate } = req.query;
 
-    let whereClause: Prisma.ExpenseWhereInput = {};
+    const whereClause: Prisma.ExpenseWhereInput = {};
 
     if (queryCategory && typeof queryCategory === 'string') {
       whereClause.category = { contains: queryCategory };
     }
 
-    let dateFilter: Prisma.DateTimeFilter = {};
+    const dateFilter: Prisma.DateTimeFilter = {};
     if (startDate && typeof startDate === 'string') {
       const parsedStartDate = new Date(startDate);
       if (!isNaN(parsedStartDate.valueOf())) {
@@ -85,7 +85,8 @@ export default async function handler(
       handleApiError(res, error, "fetching expenses");
     }
   } else if (req.method === 'POST') {
-    let { description, amount, category, paymentType, expenseDate: expenseDateString, notes } = req.body as CreateExpenseInput;
+    const { amount, paymentType, expenseDate: expenseDateString } = req.body as CreateExpenseInput;
+    let { description, category, notes } = req.body as CreateExpenseInput;
 
     let finalExpenseDate: Date;
     if (expenseDateString) {

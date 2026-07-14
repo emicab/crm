@@ -14,7 +14,7 @@ export default async function handler(
   if (req.method === 'GET') {
     const { search, brandId, categoryId, supplierId } = req.query;
 
-    let whereClause: Prisma.ProductWhereInput = {};
+    const whereClause: Prisma.ProductWhereInput = {};
 
     // Filtro de búsqueda por texto (en nombre o SKU)
     if (search && typeof search === 'string' && search.trim() !== '') {
@@ -88,10 +88,12 @@ export default async function handler(
       handleApiError(res, error, "fetching products");
     }
   } else if (req.method === 'POST') {
-    let {
-        name, sku, description,
+    const {
         pricePurchase, priceSale, quantityStock, stockMinAlert,
         brandId, categoryId, supplierId, unitType
+    } = req.body;
+    let {
+        name, sku, description
     } = req.body;
 
     // --- Validación más robusta de los datos de entrada ---

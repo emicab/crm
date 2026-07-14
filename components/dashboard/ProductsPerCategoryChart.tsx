@@ -10,17 +10,13 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
-  Cell // <-- implementar futuro
+  ResponsiveContainer
 } from 'recharts';
 import type { ProductsPerCategoryData } from '@/lib/data'; 
 
 interface ProductsPerCategoryChartProps {
   data: ProductsPerCategoryData[];
-}
-
-
-const COLORS = ['#60A5FA', '#3B82F6', '#2563EB', '#1D4ED8', '#1E3A8A']; 
+} 
 
 const ProductsPerCategoryChart: React.FC<ProductsPerCategoryChartProps> = ({ data }) => {
   if (!data || data.length === 0) {

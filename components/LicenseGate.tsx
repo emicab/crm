@@ -12,25 +12,20 @@ const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
     const checkLicense = async () => {
-        // --- ¡ESTA ES LA LÓGICA MEJORADA! ---
-        
-        // Primero, nos aseguramos de que la API del preload esté disponible.
         if (window.licenseAPI) {
             setIsLoading(true);
             const status = await window.licenseAPI.check();
             setIsLicensed(status.isActivated);
             setIsLoading(false);
         } else {
-            // Si la API aún no está lista, esperamos 100ms y reintentamos.
-            // Esto le da tiempo al script de preload para que termine su trabajo.
             console.warn('licenseAPI no está lista, reintentando en 100ms...');
             setTimeout(checkLicense, 100);
         }
     };
 
     useEffect(() => {
-        // La primera llamada a la verificación se hace aquí.
         checkLicense();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // El array vacío asegura que solo se llame una vez al montar el componente.
 
     if (isLoading) {

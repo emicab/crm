@@ -1,7 +1,7 @@
 // pages/api/gastos/[id].ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { Prisma, PaymentType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 const Decimal = Prisma.Decimal;
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
@@ -31,7 +31,8 @@ export default async function handler(
       handleApiError(res, error, `fetching expense ${id}`);
     }
   } else if (req.method === 'PUT') {
-    let { description, amount, category, paymentType, expenseDate, notes } = req.body;
+    const { amount, paymentType, expenseDate } = req.body;
+    let { description, category, notes } = req.body;
 
     if (!description || amount === undefined || !category || !paymentType) {
       return res.status(400).json({ message: 'Descripción, monto, categoría y tipo de pago son obligatorios.' });

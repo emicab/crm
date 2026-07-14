@@ -40,7 +40,7 @@ const ClientSalesHistoryPage = () => {
                 "Error al cargar el historial de compras del cliente.",
             );
           }
-          let salesData: any[] = await salesRes.json();
+          const salesData: any[] = await salesRes.json();
 
           const typedSales: Sale[] = salesData.map((sale) => ({
             ...sale,

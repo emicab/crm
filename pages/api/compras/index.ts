@@ -82,7 +82,8 @@ export default async function handler(
     }
   } else if (req.method === 'POST') {
     // --- Registrar una Nueva Compra ---
-    let { supplierId, status, paymentType, invoiceNumber, notes, items } = req.body as CreatePurchaseInput;
+    const { supplierId, status, paymentType, items } = req.body as CreatePurchaseInput;
+    let { invoiceNumber, notes } = req.body as CreatePurchaseInput;
 
     if (!supplierId || !items || items.length === 0) {
       return res.status(400).json({ message: 'Faltan datos obligatorios: proveedor o ítems.' });

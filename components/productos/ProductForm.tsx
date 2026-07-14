@@ -7,7 +7,6 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Loader2, AlertCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { useQuickCreate } from '@/hooks/useQuickCreate';
 import QuickCreateModal from './QuickCreateModal';
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Client, Seller, Product, PaymentTypeEnum, Combo, Promotion } from "@/types";
 import Button from "@/components/ui/Button";
@@ -78,8 +78,6 @@ const SaleForm = () => {
   const [hasOpenCaja, setHasOpenCaja] = useState(false);
 
   const [showCajaModal, setShowCajaModal] = useState(false);
-  const [cajaInitialBalance, setCajaInitialBalance] = useState('0');
-  const [cajaSellerId, setCajaSellerId] = useState('');
   const [isOpeningCaja, setIsOpeningCaja] = useState(false);
   const [showUnitTypeModal, setShowUnitTypeModal] = useState(false);
   const [pendingUnitTypeProduct, setPendingUnitTypeProduct] = useState<Product | null>(null);
@@ -169,7 +167,7 @@ const SaleForm = () => {
       try {
         const res = await fetch(`/api/clients?search=${encodeURIComponent(clientSearchTerm)}`);
         if (res.ok) setSearchedClients(await res.json());
-      } catch { console.error; }
+      } catch {}
     }, 300);
     return () => clearTimeout(timer);
   }, [clientSearchTerm]);
@@ -187,7 +185,7 @@ const SaleForm = () => {
             quantityStock: parseFloat(String(p.quantityStock).replace(',', '.')),
           })).slice(0, 5));
         }
-      } catch { console.error; }
+      } catch {}
     }, 300);
     return () => clearTimeout(timer);
   }, [productSearchTerm, formData.items]);

@@ -117,7 +117,7 @@ const ProductTable = () => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [filters]);
+  }, [filters, fetchProducts]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;

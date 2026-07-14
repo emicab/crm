@@ -1,7 +1,7 @@
 // pages/api/vendedores/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { Prisma } from '@prisma/client';
+
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
 
@@ -40,7 +40,8 @@ export default async function handler(
       handleApiError(res, error, "fetching sellers");
     }
   } else if (req.method === 'POST') {
-    let { name, email, phone, isActive } = req.body;
+    const { isActive } = req.body;
+    let { name, email, phone } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: 'El nombre del vendedor es obligatorio.' });

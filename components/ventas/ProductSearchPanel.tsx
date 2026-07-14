@@ -6,7 +6,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { XCircle, Package, ShoppingBag } from "lucide-react";
 import { formatCurrency } from "@/lib/formatCurrency";
-import type { Product, Combo, SaleItemInCart } from "@/types";
+import type { Product, Combo } from "@/types";
 
 interface ProductSearchPanelProps {
   productSearchTerm: string;

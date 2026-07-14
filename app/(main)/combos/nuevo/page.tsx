@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Product } from '@/types';
 import { Loader2, ArrowLeft, X, Search, Info } from 'lucide-react';
@@ -23,26 +23,27 @@ const NuevoComboPage = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const searchProducts = useCallback(
-    debounce(async (term: string) => {
-      if (!term.trim()) { setSearchResults([]); return; }
-      setSearching(true);
-      try {
-        const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=10`);
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults((data.products || data).map((p: any) => ({
-            ...p,
-            priceSale: parseFloat(p.priceSale),
-          })));
-        }
-      } catch { /* ignore */ }
-      finally { setSearching(false); }
-    }, 300),
+  const searchProducts = useMemo(
+    () =>
+      debounce(async (term: string) => {
+        if (!term.trim()) { setSearchResults([]); return; }
+        setSearching(true);
+        try {
+          const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=10`);
+          if (res.ok) {
+            const data = await res.json();
+            setSearchResults((data.products || data).map((p: any) => ({
+              ...p,
+              priceSale: parseFloat(p.priceSale),
+            })));
+          }
+        } catch { /* ignore */ }
+        finally { setSearching(false); }
+      }, 300),
     []
   );
 
-  useEffect(() => { searchProducts(searchTerm); }, [searchTerm]);
+  useEffect(() => { searchProducts(searchTerm); }, [searchTerm, searchProducts]);
 
   const addItem = (product: Product) => {
     if (items.some(i => i.productId === product.id)) return;

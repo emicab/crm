@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Combo } from '@/types';
-import { Loader2, AlertCircle, Plus, Trash2, Edit3, Tag } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit3, Tag } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/formatCurrency';

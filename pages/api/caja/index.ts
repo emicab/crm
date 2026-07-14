@@ -21,9 +21,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       handleApiError(res, error, 'fetching cash register');
     }
   } else if (req.method === 'POST') {
-    let { initialBalance, notes, sellerId } = req.body;
-
-    if (initialBalance === undefined) initialBalance = 0;
+    const { notes, sellerId } = req.body;
+    let initialBalance = req.body.initialBalance !== undefined ? req.body.initialBalance : 0;
 
     try {
       const existing = await prisma.cashRegister.findFirst({ where: { status: 'OPEN' } });

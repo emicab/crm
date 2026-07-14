@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import type { Brand } from "@/types";
 import Button from "@/components/ui/Button";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
-import { Edit3, Trash2, Loader2, ImageOff, AlertCircle } from "lucide-react";
+import { Edit3, Trash2, Loader2, ImageOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import Image from "next/image";
@@ -134,11 +134,12 @@ const BrandTable = () => {
                 >
                   <td className="p-3 sm:p-4 text-center">
                     {brand.logoUrl ? (
-                      <img
+                      <Image
                         src={brand.logoUrl}
                         alt={`Logo de ${brand.name}`}
                         width={40}
                         height={40}
+                        unoptimized
                         className="object-contain rounded-sm inline-block"
                       />
                     ) : (

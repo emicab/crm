@@ -1,7 +1,7 @@
 // pages/api/proveedores/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { Prisma } from '@prisma/client';
+
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
 

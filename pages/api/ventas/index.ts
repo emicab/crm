@@ -37,7 +37,7 @@ export default async function handler(
   if (req.method === 'GET') {
     const { clientId, sellerId } = req.query; // Nuevos query params para filtrar
 
-    let whereClause: Prisma.SaleWhereInput = {}; // Cláusula 'where' para Prisma
+    const whereClause: Prisma.SaleWhereInput = {}; // Cláusula 'where' para Prisma
 
     if (clientId && typeof clientId === 'string') {
       const parsedClientId = parseInt(clientId);
@@ -113,7 +113,8 @@ export default async function handler(
       handleApiError(res, error, "fetching sales");
     }
   } else if (req.method === 'POST') {
-    let { clientId, sellerId, paymentType, notes, items, discountCodeApplied, promotionsApplied, paymentMethodDiscount } = req.body as CreateSaleInput;
+    const { clientId, sellerId, paymentType, items, promotionsApplied, paymentMethodDiscount } = req.body as CreateSaleInput;
+    let { notes, discountCodeApplied } = req.body as CreateSaleInput;
 
     if (!sellerId || !paymentType || !items || items.length === 0) {
       return res.status(400).json({ message: 'Faltan datos obligatorios: vendedor, tipo de pago o ítems.' });
@@ -141,7 +142,7 @@ export default async function handler(
         discountCodeRecord = await prisma.discountCode.findUnique({
           where: { code: codeUpper }
         });
-      } catch (err) {
+      } catch {
         // Ignorar error si no está sincronizado
       }
       

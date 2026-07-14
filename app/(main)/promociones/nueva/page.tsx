@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Product, Category, PromotionCondition } from '@/types';
-import { Loader2, ArrowLeft, Plus, X, Search } from 'lucide-react';
+import { Loader2, ArrowLeft, X, Search } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { debounce } from '@/lib/utils';
@@ -29,31 +28,32 @@ const NuevaPromocionPage = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const searchItems = useCallback(
-    debounce(async (term: string) => {
-      if (!term.trim()) { setSearchResults([]); return; }
-      setSearching(true);
-      try {
-        if (searchType === 'product') {
-          const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=10`);
-          if (res.ok) {
-            const data = await res.json();
-            setSearchResults(data.products || data);
+  const searchItems = useMemo(
+    () =>
+      debounce(async (term: string) => {
+        if (!term.trim()) { setSearchResults([]); return; }
+        setSearching(true);
+        try {
+          if (searchType === 'product') {
+            const res = await fetch(`/api/products?search=${encodeURIComponent(term)}&limit=10`);
+            if (res.ok) {
+              const data = await res.json();
+              setSearchResults(data.products || data);
+            }
+          } else {
+            const res = await fetch(`/api/categories?search=${encodeURIComponent(term)}&limit=10`);
+            if (res.ok) {
+              const data = await res.json();
+              setSearchResults(data.categories || data || []);
+            }
           }
-        } else {
-          const res = await fetch(`/api/categories?search=${encodeURIComponent(term)}&limit=10`);
-          if (res.ok) {
-            const data = await res.json();
-            setSearchResults(data.categories || data || []);
-          }
-        }
-      } catch { /* ignore */ }
-      finally { setSearching(false); }
-    }, 300),
+        } catch { /* ignore */ }
+        finally { setSearching(false); }
+      }, 300),
     [searchType]
   );
 
-  useEffect(() => { searchItems(searchTerm); }, [searchTerm, searchType]);
+  useEffect(() => { searchItems(searchTerm); }, [searchTerm, searchType, searchItems]);
 
   const addCondition = (item: any) => {
     const exists = conditions.some(c =>

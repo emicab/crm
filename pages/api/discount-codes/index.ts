@@ -53,7 +53,8 @@ export default async function handler(
       handleApiError(res, error, "fetching discount codes");
     }
   } else if (req.method === 'POST') {
-    let { code, discountPercent, validFrom, validUntil, maxUses, isActive } = req.body;
+    const { discountPercent, validFrom, validUntil, maxUses, isActive } = req.body;
+    let { code } = req.body;
 
     if (!code || typeof code !== 'string' || code.trim() === '') {
       return res.status(400).json({ message: 'El código de descuento es obligatorio.' });

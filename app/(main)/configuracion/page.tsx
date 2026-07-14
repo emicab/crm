@@ -201,7 +201,12 @@ export default function ConfiguracionPage() {
           {qrError ? (
             <p className="text-destructive text-sm">{qrError}</p>
           ) : qrDataUrl ? (
-            <img src={qrDataUrl} alt="QR para carga de stock" className="rounded-lg border border-border" />
+            <img
+              // eslint-disable-next-line @next/next/no-img-element
+              src={qrDataUrl}
+              alt="QR para carga de stock"
+              className="rounded-lg border border-border"
+            />
           ) : (
             <p className="text-sm text-foreground-muted">Generando QR...</p>
           )}

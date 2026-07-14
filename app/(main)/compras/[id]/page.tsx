@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import type { Purchase, PurchaseItem, Product } from '@/types';
-import { Loader2, AlertCircle, ArrowLeft, Truck, ShoppingBag, FileText, CreditCard, Edit3, Trash2, MessageSquare, CheckCircle, PlusCircle, X } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft, Truck, ShoppingBag, FileText, CreditCard, Edit3, Trash2, MessageSquare, CheckCircle, X } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Link from 'next/link';
 import Input from '@/components/ui/Input';

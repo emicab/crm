@@ -36,10 +36,12 @@ export default async function handler(
       handleApiError(res, error, `fetching product ${id}`);
     }
   } else if (req.method === 'PUT') {
-    let {
-      name, sku, description,
+    const {
       pricePurchase, priceSale, quantityStock, stockMinAlert,
       brandId, categoryId, supplierId, unitType,
+    } = req.body;
+    let {
+      name, sku, description,
     } = req.body;
 
     // Validaciones básicas

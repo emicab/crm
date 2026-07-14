@@ -55,7 +55,8 @@ export default async function handler(
       handleApiError(res, error, `fetching purchase ${id}`);
     }
   } else if (req.method === 'PUT') {
-    let { status, paymentType, supplierId, invoiceNumber, notes, items } = req.body;
+    const { status, paymentType, supplierId, items } = req.body;
+    let { invoiceNumber, notes } = req.body;
     
     if (invoiceNumber) invoiceNumber = sanitizeString(invoiceNumber);
     if (notes) notes = sanitizeString(notes);

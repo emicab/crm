@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select'; // Reutilizamos Select para PaymentType
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Expense, PaymentTypeEnum } from '@/types'; // Reutilizamos el enum
 import { getPaymentTypeDisplay } from '@/lib/displayTexts'; // Reutilizamos el helper
 import toast from 'react-hot-toast';
@@ -51,14 +51,7 @@ interface ExpenseFormProps {
 
 const ExpenseForm : React.FC<ExpenseFormProps> = ({ initialExpenseData }) => {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    expenseDate: new Date().toISOString().split('T')[0],
-    description: '',
-    amount: '',
-    category: '',
-    paymentType: '' as PaymentTypeEnum | '',
-    notes: '',
-  });
+  const [formData, setFormData] = useState<ExpenseFormData>(initialFormData);
 
   const [isLoading, setIsLoading] = useState(false);
 
