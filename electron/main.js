@@ -28,6 +28,11 @@ function mainApp() {
     const PORT = 3001;
     const DEV_PORT = 3000;
 
+    // Generamos un token secreto aleatorio para asegurar la comunicación interna
+    const crypto = require('crypto');
+    const APP_SECRET = crypto.randomBytes(32).toString('hex');
+    process.env.APP_SECRET = APP_SECRET;
+
     const store = new Store();
 
     function createSplashWindow() {
@@ -98,6 +103,20 @@ function mainApp() {
     }
 
     function createWindow(urlOverride) {
+        // Intercepta todas las llamadas de red al servidor de ClinPOS e inyecta la cabecera secreta
+        const filter = {
+            urls: [
+                `http://127.0.0.1:${PORT}/*`,
+                `http://localhost:${PORT}/*`,
+                `http://127.0.0.1:${DEV_PORT}/*`,
+                `http://localhost:${DEV_PORT}/*`
+            ]
+        };
+        session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+            details.requestHeaders['X-App-Secret'] = APP_SECRET;
+            callback({ requestHeaders: details.requestHeaders });
+        });
+
         mainWindow = new BrowserWindow({
             width: 1366,
             height: 768,
@@ -219,6 +238,8 @@ function mainApp() {
                         ...process.env,
                         RUNNING_AS_SERVER: 'true',
                         PORT: PORT.toString(),
+                        HOSTNAME: '127.0.0.1',
+                        APP_SECRET: APP_SECRET,
                     },
                 }
             );
