@@ -114,11 +114,23 @@ export interface Brand {
   }
   
   export interface SaleItem {
-    id?: number; // Opcional si es un item nuevo en el form
+    id?: number;
     productId: number;
-    product?: Product; // Opcional, para mostrar info del producto
+    product?: Product;
     quantity: number;
-    priceAtSale: number; // Precio por unidad al momento de la venta
+    priceAtSale: number;
+  }
+
+  export interface SaleItemInCart {
+    productId: string;
+    productName: string;
+    availableStock: number;
+    quantity: number;
+    priceAtSale: number;
+    tempId: number;
+    subtotal: number;
+    comboBatchId?: number;
+    unitType?: string;
   }
   
   export interface CashRegister {
@@ -182,6 +194,7 @@ export interface Brand {
 
 export enum PurchaseStatusEnum {
   PENDING = 'PENDING',
+  ORDERED = 'ORDERED',
   RECEIVED = 'RECEIVED',
   CANCELLED = 'CANCELLED',
 }
@@ -191,6 +204,7 @@ export interface PurchaseItem {
   productId: number;
   product?: Product;
   quantity: number;
+  quantityReceived?: number | null; // Cantidad realmente recibida
   purchasePrice: number; // Costo por unidad
 }
 

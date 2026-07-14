@@ -80,21 +80,27 @@ export default async function handler(
           throw new Error('Estado de compra inválido.');
         }
 
-        // 2. Si se enviaron items, reemplazar
+        // 3. Preparar datos base de actualización
+        const updateData: any = { status: newStatus };
+        let calculatedTotal = existingPurchase.totalAmount;
+
+        // 2. Manejo de items y stock según transición de estados
         if (items) {
-          // Revertir stock de items viejos si estaban recibidos
+          // Se recibieron items modificados (ORDERED → RECEIVED o edición directa)
+          // Revertir stock si la compra estaba recibida
           if (oldStatus === PurchaseStatus.RECEIVED) {
             for (const item of existingPurchase.items) {
+              const revertedQty = item.quantityReceived ?? item.quantity;
               const product = await tx.product.findUnique({
                 where: { id: item.productId },
                 select: { quantityStock: true, name: true },
               });
-              if (product && product.quantityStock < item.quantity) {
-                throw new Error(`Stock insuficiente para revertir "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${item.quantity}.`);
+              if (product && product.quantityStock < revertedQty) {
+                throw new Error(`Stock insuficiente para revertir "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${revertedQty}.`);
               }
               await tx.product.update({
                 where: { id: item.productId },
-                data: { quantityStock: { decrement: item.quantity } },
+                data: { quantityStock: { decrement: revertedQty } },
               });
             }
           }
@@ -102,59 +108,63 @@ export default async function handler(
           // Eliminar items viejos
           await tx.purchaseItem.deleteMany({ where: { purchaseId: id } });
 
-          // Crear items nuevos y aplicar stock si RECEIVED
+          calculatedTotal = new Decimal(0);
+
           for (const item of items) {
+            const receivedQty = newStatus === PurchaseStatus.RECEIVED ? (item.quantityReceived ?? item.quantity) : null;
+            const stockQty = receivedQty ?? 0;
+
             await tx.purchaseItem.create({
               data: {
                 purchaseId: id,
                 productId: item.productId,
                 quantity: item.quantity,
+                quantityReceived: receivedQty,
                 purchasePrice: new Decimal(item.purchasePrice),
               },
             });
 
-            if (newStatus === PurchaseStatus.RECEIVED) {
+            calculatedTotal = calculatedTotal.plus(new Decimal(item.purchasePrice).times(item.quantity));
+
+            if (newStatus === PurchaseStatus.RECEIVED && stockQty > 0) {
               await tx.product.update({
                 where: { id: item.productId },
-                data: { quantityStock: { increment: item.quantity } },
+                data: { quantityStock: { increment: stockQty } },
               });
             }
           }
+
+          updateData.totalAmount = calculatedTotal;
+
         } else if (oldStatus !== newStatus) {
           // Sin cambio de items, solo ajustar stock por cambio de estado
-          for (const item of existingPurchase.items) {
+          const existingItems = await tx.purchaseItem.findMany({ where: { purchaseId: id } });
+          for (const item of existingItems) {
             if (oldStatus !== PurchaseStatus.RECEIVED && newStatus === PurchaseStatus.RECEIVED) {
+              const receivedQty = item.quantityReceived ?? item.quantity;
               await tx.product.update({
                 where: { id: item.productId },
-                data: { quantityStock: { increment: item.quantity } },
+                data: { quantityStock: { increment: receivedQty } },
               });
             } else if (oldStatus === PurchaseStatus.RECEIVED && newStatus !== PurchaseStatus.RECEIVED) {
+              const revertedQty = item.quantityReceived ?? item.quantity;
               const product = await tx.product.findUnique({
                 where: { id: item.productId },
                 select: { quantityStock: true, name: true },
               });
-              if (product && product.quantityStock < item.quantity) {
-                throw new Error(`Stock insuficiente para revertir "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${item.quantity}.`);
+              if (product && product.quantityStock < revertedQty) {
+                throw new Error(`Stock insuficiente para revertir "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${revertedQty}.`);
               }
               await tx.product.update({
                 where: { id: item.productId },
-                data: { quantityStock: { decrement: item.quantity } },
+                data: { quantityStock: { decrement: revertedQty } },
               });
             }
           }
+          updateData.totalAmount = existingPurchase.totalAmount;
+        } else {
+          updateData.totalAmount = existingPurchase.totalAmount;
         }
-
-        // 3. Calcular total (recalcular si hay items nuevos, sino mantener)
-        let calculatedTotal: any = existingPurchase.totalAmount;
-        if (items) {
-          calculatedTotal = new Decimal(0);
-          for (const item of items) {
-            calculatedTotal = calculatedTotal.plus(new Decimal(item.purchasePrice).times(item.quantity));
-          }
-        }
-
-        // 4. Preparar datos de actualización
-        const updateData: any = { status: newStatus, totalAmount: calculatedTotal };
         if (paymentType !== undefined) updateData.paymentType = paymentType || null;
         if (invoiceNumber !== undefined) updateData.invoiceNumber = invoiceNumber;
         if (notes !== undefined) updateData.notes = notes;
@@ -262,16 +272,17 @@ export default async function handler(
         // Si la compra estaba RECEIVED, revertir stock
         if (purchaseToDelete.status === PurchaseStatus.RECEIVED) {
           for (const item of purchaseToDelete.items) {
+            const revertedQty = item.quantityReceived ?? item.quantity;
             const product = await tx.product.findUnique({
               where: { id: item.productId },
               select: { quantityStock: true, name: true },
             });
-            if (product && product.quantityStock < item.quantity) {
-              throw new Error(`Stock insuficiente para eliminar la compra del producto "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${item.quantity}.`);
+            if (product && product.quantityStock < revertedQty) {
+              throw new Error(`Stock insuficiente para eliminar la compra del producto "${product.name}". Disponible: ${product.quantityStock}, Requerido: ${revertedQty}.`);
             }
             await tx.product.update({
               where: { id: item.productId },
-              data: { quantityStock: { decrement: item.quantity } },
+              data: { quantityStock: { decrement: revertedQty } },
             });
           }
         }

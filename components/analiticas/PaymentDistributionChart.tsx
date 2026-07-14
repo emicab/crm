@@ -10,6 +10,7 @@ import {
   Legend,
 } from 'recharts';
 import type { PaymentTypeDistribution } from '@/lib/data';
+import { formatCurrency } from '@/lib/formatCurrency';
 import { getPaymentTypeDisplay } from '@/lib/displayTexts';
 
 interface PaymentDistributionChartProps {
@@ -17,9 +18,6 @@ interface PaymentDistributionChartProps {
 }
 
 const COLORS = ['#22C55E', '#3B82F6', '#F59E0B', '#A855F7', '#6B7280'];
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
 
 const PaymentDistributionChart: React.FC<PaymentDistributionChartProps> = ({ data }) => {
   if (!data || data.length === 0) {

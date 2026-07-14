@@ -6,6 +6,8 @@ import type { Sale, Seller as SellerType } from "@/types";
 import { Loader2, AlertCircle, ArrowLeft, UserPlus, Eye } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import { formatCurrency } from "@/lib/formatCurrency";
+import { formatDate } from "@/lib/formatDate";
 
 const SellerSalesHistoryPage = () => {
   const router = useRouter();
@@ -98,26 +100,6 @@ const SellerSalesHistoryPage = () => {
       setLoading(false);
     }
   }, [sellerId]);
-
-  const formatCurrency = (amount: number | string) => {
-    const numAmount = typeof amount === "string" ? parseFloat(amount) : amount;
-    if (isNaN(numAmount)) return "-";
-    return new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    }).format(numAmount);
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "Fecha no disponible";
-    return new Date(dateString).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   if (loading) {
     return (

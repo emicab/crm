@@ -10,14 +10,12 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { formatCurrency } from '@/lib/formatCurrency';
 import type { DailySalesData } from '@/lib/data';
 
 interface DailyRevenueChartProps {
   data: DailySalesData[];
 }
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
 
 const formatDate = (dateStr: string) => {
   const d = new Date(dateStr + 'T12:00:00');

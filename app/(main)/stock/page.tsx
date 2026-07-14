@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, Barcode, Search, Save, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 export default function StockPage() {
   const [barcode, setBarcode] = useState('');
@@ -16,10 +17,6 @@ export default function StockPage() {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-  };
 
   const handleSearch = async (code: string) => {
     const trimmed = code.trim();

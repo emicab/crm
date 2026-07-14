@@ -205,9 +205,10 @@ model Purchase {
 }
 
 model PurchaseItem {
-  id            Int     @id @default(autoincrement())
-  quantity      Float
-  purchasePrice Decimal // Costo por unidad en esta compra específica
+  id                Int     @id @default(autoincrement())
+  quantity          Float   // Cantidad pedida
+  quantityReceived  Float?  // Cantidad realmente recibida (null si aún no recibido)
+  purchasePrice     Decimal // Costo por unidad en esta compra específica
 
   purchaseId Int
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
@@ -226,6 +227,7 @@ enum PaymentType {
 
 enum PurchaseStatus {
   PENDING
+  ORDERED
   RECEIVED
   CANCELLED
 }

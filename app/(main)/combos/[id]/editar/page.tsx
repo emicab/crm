@@ -7,9 +7,7 @@ import { Loader2, ArrowLeft, Search, X, Info } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { debounce } from '@/lib/utils';
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+import { formatCurrency } from '@/lib/formatCurrency';
 
 const EditarComboPage = () => {
   const router = useRouter();

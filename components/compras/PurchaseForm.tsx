@@ -1,9 +1,8 @@
-// components/compras/PurchaseForm.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Supplier, Product } from "@/types";
+import type { Supplier, Product, Purchase } from "@/types";
 import { PaymentTypeEnum as PaymentTypeEnumType } from "@/types";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
@@ -12,545 +11,345 @@ import { toast } from "react-hot-toast";
 import { Loader2, PlusCircle, ShoppingCart, Trash2 } from "lucide-react";
 import ProductFormModal from "../productos/ProductFormModal";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
+import { formatCurrency } from "@/lib/formatCurrency";
+import PurchaseSuccessModal from "@/components/compras/PurchaseSuccessModal";
 
-// --- Interfaces para el estado del formulario ---
 interface CurrentPurchaseItemState {
-    productId: string;
-    productName: string;
-    quantity: number | "";
-    purchasePrice: number | ""; // Costo por unidad
+  productId: string;
+  productName: string;
+  quantity: number | "";
+  purchasePrice: number | "";
+  unitType: string;
 }
 
 const initialCurrentItemState: CurrentPurchaseItemState = {
-    productId: "",
-    productName: "",
-    quantity: 1,
-    purchasePrice: 0,
+  productId: "", productName: "", quantity: 1, purchasePrice: 0, unitType: '',
 };
 
 interface PurchaseItemInCart extends CurrentPurchaseItemState {
-    tempId: number;
-    subtotal: number;
+  tempId: number;
+  subtotal: number;
 }
 
 interface PurchaseFormData {
-    supplierId: string;
-    paymentType: string;
-    invoiceNumber: string;
-    notes: string;
-    items: PurchaseItemInCart[];
+  supplierId: string;
+  paymentType: string;
+  invoiceNumber: string;
+  notes: string;
+  items: PurchaseItemInCart[];
 }
 
 const initialFormData: PurchaseFormData = {
-    supplierId: "",
-    paymentType: "",
-    invoiceNumber: "",
-    notes: "",
-    items: [],
+  supplierId: "", paymentType: "", invoiceNumber: "", notes: "", items: [],
 };
 
-// --- Componente Principal ---
 const PurchaseForm = () => {
-    const router = useRouter();
-    const searchParams = useSearchParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-    // --- Estados ---
-    const [formData, setFormData] = useState<PurchaseFormData>(initialFormData);
-    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isFetchingInitialData, setIsFetchingInitialData] = useState(true);
-    const [productSearchTerm, setProductSearchTerm] = useState("");
-    const [searchedProducts, setSearchedProducts] = useState<Product[]>([]);
-    const [currentItem, setCurrentItem] = useState<CurrentPurchaseItemState>(
-        initialCurrentItemState
-    );
-     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [formData, setFormData] = useState<PurchaseFormData>(initialFormData);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingInitialData, setIsFetchingInitialData] = useState(true);
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [searchedProducts, setSearchedProducts] = useState<Product[]>([]);
+  const [currentItem, setCurrentItem] = useState<CurrentPurchaseItemState>(initialCurrentItemState);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [createdPurchase, setCreatedPurchase] = useState<Purchase | null>(null);
+  const [selectedSupplierPhone, setSelectedSupplierPhone] = useState<string>('');
 
-    // --- Carga de Datos Inicial ---
-    useEffect(() => {
-        const fetchData = async () => {
-            setIsFetchingInitialData(true);
-            try {
-                const suppliersRes = await fetch("/api/proveedores");
-                if (!suppliersRes.ok)
-                    throw new Error("Error al cargar datos iniciales.");
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsFetchingInitialData(true);
+      try {
+        const suppliersRes = await fetch("/api/proveedores");
+        if (!suppliersRes.ok) throw new Error("Error al cargar datos iniciales.");
+        const suppliersData = await suppliersRes.json();
+        setSuppliers(suppliersData);
 
-                const suppliersData = await suppliersRes.json();
-                setSuppliers(suppliersData);
-
-                // Si hay productId en query params, precargar producto
-                const productId = searchParams ? searchParams.get("productId") : null;
-                if (productId) {
-                    const prodRes = await fetch(`/api/products/${productId}`);
-                    if (prodRes.ok) {
-                        const product = await prodRes.json();
-                        const parsed = {
-                            ...product,
-                            pricePurchase: product.pricePurchase ? parseFloat(product.pricePurchase) : 0,
-                            priceSale: parseFloat(product.priceSale),
-                        };
-                        setCurrentItem({
-                            productId: String(parsed.id),
-                            productName: parsed.name,
-                            quantity: 1,
-                            purchasePrice: parsed.pricePurchase || 0,
-                        });
-                        setProductSearchTerm(parsed.name);
-                        // Pre-seleccionar proveedor si el producto tiene uno
-                        if (parsed.supplierId) {
-                            const supplierExists = suppliersData.some((s: Supplier) => s.id === parsed.supplierId);
-                            if (supplierExists) {
-                                setFormData(prev => ({ ...prev, supplierId: String(parsed.supplierId) }));
-                            }
-                        }
-                    }
-                }
-            } catch (err: unknown) {
-                toast.error(
-                    err instanceof Error ? err.message : "Error cargando datos."
-                );
-            } finally {
-                setIsFetchingInitialData(false);
-            }
-        };
-        fetchData();
-    }, [searchParams]);
-
-    // --- Handlers de Producto/Ítems ---
-    useEffect(() => {
-        if (!productSearchTerm.trim()) {
-            setSearchedProducts([]);
-            return;
-        }
-        const delayDebounceFn = setTimeout(async () => {
-            try {
-                const res = await fetch(`/api/products?search=${encodeURIComponent(productSearchTerm)}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    const itemsInCartIds = formData.items.map((item) => parseInt(item.productId));
-                    const filtered = data
-                        .filter((p: any) => !itemsInCartIds.includes(p.id))
-                        .map((p: any) => ({
-                            ...p,
-                            priceSale: parseFloat(p.priceSale),
-                        }));
-                    setSearchedProducts(filtered.slice(0, 5));
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        }, 300);
-
-        return () => clearTimeout(delayDebounceFn);
-    }, [productSearchTerm, formData.items]);
-
-    const handleProductSearchChange = (
-        e: React.ChangeEvent<HTMLInputElement>
-    ) => {
-        setProductSearchTerm(e.target.value);
-    };
-
-    const handleSelectProduct = (product: Product) => {
-        setCurrentItem({
-            productId: String(product.id),
-            productName: product.name,
-            quantity: 1,
-            purchasePrice: product.pricePurchase || 0, // Usar el último precio de compra como sugerencia
-        });
-        setProductSearchTerm(product.name);
-        setSearchedProducts([]);
-    };
-
-    const handleCurrentItemFieldChange = (
-        e: React.ChangeEvent<HTMLInputElement>
-    ) => {
-        const { name, value } = e.target;
-        setCurrentItem((prev) => ({
-            ...prev,
-            [name]:
-                value === ""
-                    ? ""
-                    : name === "quantity"
-                    ? parseInt(value, 10)
-                    : parseFloat(value),
-        }));
-    };
-
-    const handleNewProductCreated = (newProduct: Product) => {
-        // Seleccionar automáticamente el producto recién creado para añadirlo a la compra
-        handleSelectProduct(newProduct);
-    };
-
-    const handleAddItemToPurchaseList = () => {
-        const quantity = Number(currentItem.quantity);
-        const purchasePrice = Number(currentItem.purchasePrice);
-        if (!currentItem.productId) {
-            toast.error("Selecciona un producto.");
-            return;
-        }
-        if (quantity <= 0) {
-            toast.error("La cantidad debe ser mayor a cero.");
-            return;
-        }
-        if (purchasePrice < 0) {
-            toast.error("El costo no puede ser negativo.");
-            return;
-        }
-
-        const newItem: PurchaseItemInCart = {
-            productId: currentItem.productId,
-            productName: currentItem.productName,
-            quantity,
-            purchasePrice,
-            tempId: Date.now(),
-            subtotal: quantity * purchasePrice,
-        };
-        setFormData((prev) => ({ ...prev, items: [...prev.items, newItem] }));
-        setCurrentItem(initialCurrentItemState);
-        setProductSearchTerm("");
-    };
-
-    const handleRemoveItem = (tempIdToRemove: number) => {
-        setFormData((prev) => ({
-            ...prev,
-            items: prev.items.filter((item) => item.tempId !== tempIdToRemove),
-        }));
-    };
-
-    const calculateTotal = useCallback(
-        () => formData.items.reduce((sum, item) => sum + item.subtotal, 0),
-        [formData.items]
-    );
-
-    // --- Handler Principal de Envío ---
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setIsLoading(true);
-        if (!formData.supplierId || formData.items.length === 0) {
-            toast.error("Completa Proveedor y añade al menos un producto.");
-            setIsLoading(false);
-            return;
-        }
-        const dataToSend = {
-            supplierId: parseInt(formData.supplierId),
-            paymentType: formData.paymentType || null,
-            invoiceNumber: formData.invoiceNumber.trim() || null,
-            notes: formData.notes.trim() || null,
-            items: formData.items.map((item) => ({
-                productId: parseInt(item.productId),
-                quantity: item.quantity,
-                purchasePrice: item.purchasePrice,
-            })),
-        };
-        try {
-            const response = await fetch("/api/compras", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(dataToSend),
+        const productId = searchParams ? searchParams.get("productId") : null;
+        if (productId) {
+          const prodRes = await fetch(`/api/products/${productId}`);
+          if (prodRes.ok) {
+            const product = await prodRes.json();
+            const parsed = {
+              ...product,
+              pricePurchase: product.pricePurchase ? parseFloat(product.pricePurchase) : 0,
+              priceSale: parseFloat(product.priceSale),
+            };
+            setCurrentItem({
+              productId: String(parsed.id), productName: parsed.name, quantity: 1,
+              purchasePrice: parsed.pricePurchase || 0, unitType: parsed.unitType || '',
             });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(
-                    errorData.message || `Error HTTP: ${response.status}`
-                );
+            setProductSearchTerm(parsed.name);
+            if (parsed.supplierId) {
+              const supplierExists = suppliersData.some((s: Supplier) => s.id === parsed.supplierId);
+              if (supplierExists) setFormData(prev => ({ ...prev, supplierId: String(parsed.supplierId) }));
             }
-            toast.success("¡Compra registrada y stock actualizado!");
-            setFormData(initialFormData);
-            setTimeout(() => {
-                router.push("/compras");
-                router.refresh();
-            }, 1500);
-        } catch (err: unknown) {
-            toast.error(
-                err instanceof Error
-                    ? err.message
-                    : "Ocurrió un error al registrar la compra."
-            );
-        } finally {
-            setIsLoading(false);
+          }
         }
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Error cargando datos.");
+      } finally { setIsFetchingInitialData(false); }
     };
+    fetchData();
+  }, [searchParams]);
 
-    const formatCurrency = (amount: number) =>
-        new Intl.NumberFormat("es-AR", {
-            style: "currency",
-            currency: "ARS",
-        }).format(amount);
+  useEffect(() => {
+    if (!productSearchTerm.trim()) { setSearchedProducts([]); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/products?search=${encodeURIComponent(productSearchTerm)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const itemsInCartIds = formData.items.map(item => parseInt(item.productId));
+          setSearchedProducts(data.filter((p: any) => !itemsInCartIds.includes(p.id)).map((p: any) => ({
+            ...p, priceSale: parseFloat(p.priceSale),
+          })).slice(0, 5));
+        }
+      } catch {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [productSearchTerm, formData.items]);
 
-    if (isFetchingInitialData) {
-        return (
-            <div className='flex justify-center p-8'>
-                <Loader2 className='animate-spin text-primary' />
-            </div>
-        );
+  const handleProductSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setProductSearchTerm(e.target.value);
+  };
+
+  const handleSelectProduct = (product: Product) => {
+    setCurrentItem({
+      productId: String(product.id), productName: product.name, quantity: 1,
+      purchasePrice: product.pricePurchase || 0, unitType: product.unitType || '',
+    });
+    setProductSearchTerm(product.name);
+    setSearchedProducts([]);
+  };
+
+  const handleCurrentItemFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const normalizedValue = value.replace(',', '.');
+    setCurrentItem(prev => ({
+      ...prev,
+      [name]: normalizedValue === "" ? "" : parseFloat(normalizedValue),
+    }));
+  };
+
+  const handleNewProductCreated = (newProduct: Product) => handleSelectProduct(newProduct);
+
+  const handleAddItemToPurchaseList = () => {
+    const quantity = Number(currentItem.quantity);
+    const purchasePrice = Number(currentItem.purchasePrice);
+    if (!currentItem.productId) { toast.error("Selecciona un producto."); return; }
+    if (quantity <= 0) { toast.error("La cantidad debe ser mayor a cero."); return; }
+    if (purchasePrice < 0) { toast.error("El costo no puede ser negativo."); return; }
+    const newItem: PurchaseItemInCart = {
+      productId: currentItem.productId, productName: currentItem.productName, quantity, purchasePrice,
+      unitType: currentItem.unitType, tempId: Date.now(), subtotal: quantity * purchasePrice,
+    };
+    setFormData(prev => ({ ...prev, items: [...prev.items, newItem] }));
+    setCurrentItem(initialCurrentItemState);
+    setProductSearchTerm("");
+  };
+
+  const handleRemoveItem = (tempIdToRemove: number) => {
+    setFormData(prev => ({ ...prev, items: prev.items.filter(item => item.tempId !== tempIdToRemove) }));
+  };
+
+  const calculateTotal = useCallback(() => formData.items.reduce((sum, item) => sum + item.subtotal, 0), [formData.items]);
+
+  const sendWhatsApp = (purchase: Purchase, phone: string) => {
+    const message = [
+      `Hola ${purchase.supplier?.name || ''}, te hago el pedido:`,
+      ...purchase.items.map(item => `- ${item.product?.name || `#${item.productId}`}: ${item.quantity} x $${Number(item.purchasePrice).toFixed(2)}`),
+      `\nTotal: ${formatCurrency(purchase.totalAmount)}`,
+      '\nSaludos!',
+    ].join('\n');
+    window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const markAsOrdered = async () => {
+    if (!createdPurchase) return;
+    try {
+      await fetch(`/api/compras/${createdPurchase.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ORDERED' }),
+      });
+    } catch {}
+    router.push('/compras');
+    router.refresh();
+  };
+
+  const handleSendWhatsApp = () => {
+    if (!createdPurchase || !selectedSupplierPhone) return;
+    sendWhatsApp(createdPurchase, selectedSupplierPhone);
+    markAsOrdered();
+  };
+
+  const handleGoToPurchases = () => { router.push('/compras'); router.refresh(); };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    if (!formData.supplierId || formData.items.length === 0) {
+      toast.error("Completa Proveedor y añade al menos un producto.");
+      setIsLoading(false); return;
     }
+    const supplier = suppliers.find(s => String(s.id) === formData.supplierId);
+    const dataToSend = {
+      supplierId: parseInt(formData.supplierId),
+      paymentType: formData.paymentType || null,
+      invoiceNumber: formData.invoiceNumber.trim() || null,
+      notes: formData.notes.trim() || null,
+      items: formData.items.map(item => ({ productId: parseInt(item.productId), quantity: item.quantity, purchasePrice: item.purchasePrice })),
+    };
+    try {
+      const response = await fetch("/api/compras", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dataToSend),
+      });
+      if (!response.ok) throw new Error(((await response.json().catch(() => ({}))).message) || `Error HTTP: ${response.status}`);
+      const result = await response.json();
+      setCreatedPurchase(result);
+      setSelectedSupplierPhone(supplier?.phone || '');
+      toast.success("¡Compra registrada! Podés enviar el pedido al proveedor.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Ocurrió un error al registrar la compra.");
+    } finally { setIsLoading(false); }
+  };
 
-    // --- JSX del Componente ---
-    return (
-        <>
-            <ProductFormModal
-                isOpen={isProductModalOpen}
-                onClose={() => setIsProductModalOpen(false)}
-                onProductCreated={handleNewProductCreated}
-            />
-            <form
-                onSubmit={handleSubmit}
-                className='bg-muted p-6 sm:p-8 rounded-lg shadow space-y-8'
-            >
-                {/* Datos Generales de la Compra */}
-                <fieldset className='border border-border p-4 rounded-md'>
-                  
-                    <legend className='text-lg font-medium text-primary px-2'>
-                        Datos de la Compra
-                    </legend>
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mt-4'>
-                        <Select
-                            label='Proveedor *'
-                            name='supplierId'
-                            value={formData.supplierId}
-                            onChange={(e) =>
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    supplierId: e.target.value,
-                                }))
-                            }
-                            required
-                        >
-                            <option value=''>Selecciona un proveedor</option>
-                            {suppliers.map((s) => (
-                                <option key={s.id} value={String(s.id)}>
-                                    {s.name}
-                                </option>
-                            ))}
-                        </Select>
-                        <Select
-                            label='Medio de Pago'
-                            name='paymentType'
-                            value={formData.paymentType}
-                            onChange={(e) =>
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    paymentType: e.target.value,
-                                }))
-                            }
-                        >
-                            <option value=''>Seleccionar...</option>
-                            {Object.values(PaymentTypeEnumType).map((type) => (
-                                <option key={type} value={type}>
-                                    {getPaymentTypeDisplay(type)}
-                                </option>
-                            ))}
-                        </Select>
-                        <Input
-                            label='Nº de Factura (Opcional)'
-                            name='invoiceNumber'
-                            value={formData.invoiceNumber}
-                            onChange={(e) =>
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    invoiceNumber: e.target.value,
-                                }))
-                            }
-                        />
-                    </div>
-                    <div className='mt-6'>
-                        <label
-                            htmlFor='notes'
-                            className='block text-sm font-medium text-foreground-muted mb-1.5'
-                        >
-                            Notas
-                        </label>
-                        <textarea
-                            id='notes'
-                            name='notes'
-                            rows={2}
-                            value={formData.notes}
-                            onChange={(e) =>
-                                setFormData((prev) => ({
-                                    ...prev,
-                                    notes: e.target.value,
-                                }))
-                            }
-                            className='block w-full rounded-md border border-border bg-background'
-                        />
-                    </div>
-                </fieldset>
-                {/* Agregar Productos */}
-                <fieldset className='border border-border p-4 rounded-md'>
-                    <legend className='text-lg font-medium text-primary px-2'>
-                        Agregar Productos a la Compra
-                    </legend>
-                    <div className='relative mb-2'>
-                        <Input
-                            type='text'
-                            placeholder='Buscar producto...'
-                            value={productSearchTerm}
-                            onChange={handleProductSearchChange}
-                            autoComplete='off'
-                        />
-                        
-                        {searchedProducts.length > 0 && (
-                            <ul className='absolute z-10 w-full bg-background border rounded-md shadow-lg max-h-60 overflow-auto mt-1'>
-                                {searchedProducts.map((p) => (
-                                    <li
-                                        key={p.id}
-                                        onClick={() => handleSelectProduct(p)}
-                                        className='px-3 py-2 hover:bg-muted cursor-pointer text-sm'
-                                    >
-                                        {p.name}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                    <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => setIsProductModalOpen(true)}
-                        >
-                            <PlusCircle size={16} className="mr-2" />
-                            Nuevo Producto
-                        </Button>
-                    {currentItem.productId && (
-                        <div className='mt-4 p-4 border border-primary/50 rounded-md bg-primary/5 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end'>
-                            <div className='sm:col-span-3'>
-                                <h3 className='font-medium'>
-                                    {currentItem.productName}
-                                </h3>
-                            </div>
-                            <Input
-                                label='Cantidad *'
-                                type='number'
-                                name='quantity'
-                                value={String(currentItem.quantity)}
-                                onChange={handleCurrentItemFieldChange}
-                                min='1'
-                                required
-                            />
-                            <Input
-                                label='Costo Unit. *'
-                                type='number'
-                                name='purchasePrice'
-                                value={String(currentItem.purchasePrice)}
-                                onChange={handleCurrentItemFieldChange}
-                                step='0.01'
-                                min='0'
-                                required
-                            />
-                            <Button
-                                type='button'
-                                variant='secondary'
-                                onClick={handleAddItemToPurchaseList}
-                            >
-                                <ShoppingCart size={16} className='mr-2' />{" "}
-                                Añadir
-                            </Button>
-                        </div>
-                    )}
-                </fieldset>
+  if (isFetchingInitialData) {
+    return <div className='flex justify-center p-8'><Loader2 className='animate-spin text-primary' /></div>;
+  }
 
-                {/* Ítems en la Compra */}
-                {formData.items.length > 0 && (
-                    <fieldset className='border border-border p-4 rounded-md'>
-                        <legend className='text-lg font-medium text-primary px-2'>
-                            Ítems en la Compra
-                        </legend>
-                        <div className='mt-4 overflow-x-auto'>
-                            <table className='w-full'>
-                                <thead className='border-b'>
-                                    <tr>
-                                        <th className='p-2 text-left'>
-                                            Producto
-                                        </th>
-                                        <th className='p-2 text-center'>
-                                            Cantidad
-                                        </th>
-                                        <th className='p-2 text-right'>
-                                            Costo Unit.
-                                        </th>
-                                        <th className='p-2 text-right'>
-                                            Subtotal
-                                        </th>
-                                        <th className='p-2 text-center'>
-                                            Acción
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {formData.items.map((item) => (
-                                        <tr
-                                            key={item.tempId}
-                                            className='border-b last:border-b-0'
-                                        >
-                                            <td className='p-2 font-medium'>
-                                                {item.productName}
-                                            </td>
-                                            <td className='p-2 text-center'>
-                                                {item.quantity}
-                                            </td>
-                                            <td className='p-2 text-right'>
-                                                {formatCurrency(
-                                                    Number(item.purchasePrice)
-                                                )}
-                                            </td>
-                                            <td className='p-2 text-right font-semibold'>
-                                                {formatCurrency(item.subtotal)}
-                                            </td>
-                                            <td className='p-2 text-center'>
-                                                <Button
-                                                    type='button'
-                                                    variant='ghost'
-                                                    size='icon'
-                                                    onClick={() =>
-                                                        handleRemoveItem(
-                                                            item.tempId
-                                                        )
-                                                    }
-                                                >
-                                                    <Trash2
-                                                        size={16}
-                                                        className='text-destructive'
-                                                    />
-                                                </Button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </fieldset>
+  return (
+    <>
+      <ProductFormModal isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} onProductCreated={handleNewProductCreated} />
+      <form onSubmit={handleSubmit} className='bg-muted p-6 sm:p-8 rounded-lg shadow space-y-8'>
+        <fieldset className='border border-border p-4 rounded-md'>
+          <legend className='text-lg font-medium text-primary px-2'>Datos de la Compra</legend>
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mt-4'>
+            <Select label='Proveedor *' name='supplierId' value={formData.supplierId}
+              onChange={e => setFormData(prev => ({ ...prev, supplierId: e.target.value }))} required>
+              <option value=''>Selecciona un proveedor</option>
+              {suppliers.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+            </Select>
+            <Select label='Medio de Pago' name='paymentType' value={formData.paymentType}
+              onChange={e => setFormData(prev => ({ ...prev, paymentType: e.target.value }))}>
+              <option value=''>Seleccionar...</option>
+              {Object.values(PaymentTypeEnumType).map(type => <option key={type} value={type}>{getPaymentTypeDisplay(type)}</option>)}
+            </Select>
+            <Input label='Nº de Factura (Opcional)' name='invoiceNumber' value={formData.invoiceNumber}
+              onChange={e => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))} />
+          </div>
+          <div className='mt-6'>
+            <label htmlFor='notes' className='block text-sm font-medium text-foreground-muted mb-1.5'>Notas</label>
+            <textarea id='notes' name='notes' rows={2} value={formData.notes}
+              onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              className='block w-full rounded-md border border-border bg-background' />
+          </div>
+        </fieldset>
+
+        <fieldset className='border border-border p-4 rounded-md'>
+          <legend className='text-lg font-medium text-primary px-2'>Agregar Productos a la Compra</legend>
+          <div className='relative mb-2'>
+            <Input type='text' placeholder='Buscar producto...' value={productSearchTerm}
+              onChange={handleProductSearchChange} autoComplete='off' />
+            {searchedProducts.length > 0 && (
+              <ul className='absolute z-10 w-full bg-background border rounded-md shadow-lg max-h-60 overflow-auto mt-1'>
+                {searchedProducts.map(p => (
+                  <li key={p.id} onClick={() => handleSelectProduct(p)}
+                    className='px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center justify-between'>
+                    <span>{p.name}</span>
+                    {p.unitType && <span className='text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium'>
+                      [{p.unitType === 'WEIGHT' ? 'kg' : p.unitType === 'VOLUME' ? 'L' : 'unidad'}]
+                    </span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setIsProductModalOpen(true)}>
+            <PlusCircle size={16} className="mr-2" /> Nuevo Producto
+          </Button>
+          {currentItem.productId && (
+            <div className='mt-4 p-4 border border-primary/50 rounded-md bg-primary/5 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end'>
+              <div className='sm:col-span-3 flex items-center gap-2'>
+                <h3 className='font-medium'>{currentItem.productName}</h3>
+                {currentItem.unitType && (
+                  <span className='text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium'>
+                    [{currentItem.unitType === 'WEIGHT' ? 'kg' : currentItem.unitType === 'VOLUME' ? 'L' : 'unidad'}]
+                  </span>
                 )}
-                {/* Total y Botones de Envío */}
-                <div className='flex flex-col items-end mt-6'>
-                    <p className='text-2xl font-bold mb-4'>
-                        TOTAL COMPRA: {formatCurrency(calculateTotal())}
-                    </p>
-                    <div className='flex justify-end space-x-3 w-full'>
-                        <Button
-                            type='button'
-                            variant='outline'
-                            onClick={() => router.push("/compras")}
-                            disabled={isLoading}
-                        >
-                            Cancelar
+              </div>
+              <Input label={`Cantidad${currentItem.unitType === 'WEIGHT' ? ' (kg)' : currentItem.unitType === 'VOLUME' ? ' (L)' : ''} *`}
+                type='number' name='quantity' value={String(currentItem.quantity)} onChange={handleCurrentItemFieldChange}
+                min='0' step={currentItem.unitType && currentItem.unitType !== 'UNIT' ? '0.001' : '1'} required />
+              <Input label={`Costo por ${currentItem.unitType === 'WEIGHT' ? 'kg' : currentItem.unitType === 'VOLUME' ? 'L' : 'unidad'} *`}
+                type='number' name='purchasePrice' value={String(currentItem.purchasePrice)} onChange={handleCurrentItemFieldChange}
+                step='0.01' min='0' required />
+              <Button type='button' variant='secondary' onClick={handleAddItemToPurchaseList}>
+                <ShoppingCart size={16} className='mr-2' /> Añadir
+              </Button>
+            </div>
+          )}
+        </fieldset>
+
+        {formData.items.length > 0 && (
+          <fieldset className='border border-border p-4 rounded-md'>
+            <legend className='text-lg font-medium text-primary px-2'>Ítems en la Compra</legend>
+            <div className='mt-4 overflow-x-auto'>
+              <table className='w-full'>
+                <thead className='border-b'>
+                  <tr>
+                    <th className='p-2 text-left'>Producto</th>
+                    <th className='p-2 text-center'>Cantidad{formData.items.some(i => i.unitType === 'WEIGHT' || i.unitType === 'VOLUME') ? ' (kg/L)' : ''}</th>
+                    <th className='p-2 text-right'>Costo{formData.items.some(i => i.unitType === 'WEIGHT') ? '/kg' : formData.items.some(i => i.unitType === 'VOLUME') ? '/L' : ' Unit.'}</th>
+                    <th className='p-2 text-right'>Subtotal</th>
+                    <th className='p-2 text-center'>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formData.items.map(item => (
+                    <tr key={item.tempId} className='border-b last:border-b-0'>
+                      <td className='p-2 font-medium'>
+                        {item.productName}
+                        {item.unitType && <span className='ml-1 text-[10px] text-foreground-muted'> ({item.unitType === 'WEIGHT' ? 'kg' : item.unitType === 'VOLUME' ? 'L' : 'unidad'})</span>}
+                      </td>
+                      <td className='p-2 text-center'>{item.quantity}</td>
+                      <td className='p-2 text-right'>{formatCurrency(Number(item.purchasePrice))}</td>
+                      <td className='p-2 text-right font-semibold'>{formatCurrency(item.subtotal)}</td>
+                      <td className='p-2 text-center'>
+                        <Button type='button' variant='ghost' size='icon' onClick={() => handleRemoveItem(item.tempId)}>
+                          <Trash2 size={16} className='text-destructive' />
                         </Button>
-                        <Button
-                            type='submit'
-                            variant='primary'
-                            disabled={isLoading || formData.items.length === 0}
-                        >
-                            {isLoading ? (
-                                <Loader2 className='animate-spin mr-2' />
-                            ) : (
-                                "Registrar Compra"
-                            )}
-                        </Button>
-                    </div>
-                </div>
-            </form>
-        </>
-    );
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </fieldset>
+        )}
+
+        <div className='flex flex-col items-end mt-6'>
+          <p className='text-2xl font-bold mb-4'>TOTAL COMPRA: {formatCurrency(calculateTotal())}</p>
+          <div className='flex justify-end space-x-3 w-full'>
+            <Button type='button' variant='outline' onClick={() => router.push("/compras")} disabled={isLoading}>Cancelar</Button>
+            <Button type='submit' variant='primary' disabled={isLoading || formData.items.length === 0}>
+              {isLoading ? <Loader2 className='animate-spin mr-2' /> : "Registrar Compra"}
+            </Button>
+          </div>
+        </div>
+      </form>
+
+      <PurchaseSuccessModal
+        purchase={createdPurchase}
+        supplierPhone={selectedSupplierPhone}
+        onGoToPurchases={handleGoToPurchases}
+        onMarkAsOrdered={markAsOrdered}
+        onSendWhatsApp={handleSendWhatsApp}
+      />
+    </>
+  );
 };
 
 export default PurchaseForm;

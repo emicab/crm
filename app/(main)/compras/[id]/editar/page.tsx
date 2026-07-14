@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import Input from '@/components/ui/Input';
 import { Loader2, ArrowLeft, Save, ShoppingBag, Trash2, PlusCircle } from 'lucide-react';
+import { formatCurrency } from '@/lib/formatCurrency';
 import { getPaymentTypeDisplay } from '@/lib/displayTexts';
 import toast from 'react-hot-toast';
 
@@ -36,9 +37,6 @@ export default function EditarCompraPage() {
     notes: '',
     status: '',
   });
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
 
   useEffect(() => {
     if (!id) return;

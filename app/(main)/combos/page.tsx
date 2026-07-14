@@ -6,11 +6,7 @@ import type { Combo } from '@/types';
 import { Loader2, AlertCircle, Plus, Trash2, Edit3, Tag } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Link from 'next/link';
-
-const formatCurrency = (amount: number | string) => {
-  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(num);
-};
+import { formatCurrency } from '@/lib/formatCurrency';
 
 const CombosPage = () => {
   const router = useRouter();

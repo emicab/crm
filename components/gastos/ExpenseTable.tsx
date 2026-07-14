@@ -10,6 +10,8 @@ import { getPaymentTypeDisplay } from '@/lib/displayTexts'; // Reutilizamos esto
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import ConfirmationModal from '../ui/ConfirmationModal';
+import { formatCurrency } from '@/lib/formatCurrency';
+import { formatDate } from '@/lib/formatDate';
 
 const ExpenseTable = () => {
   const router = useRouter();
@@ -116,16 +118,7 @@ const handleConfirmDelete = async () => {
 
 
    
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-AR', {
-      day: '2-digit', month: '2-digit', year: 'numeric'
-    });
-  };
-
+  
 
   if (loading && expenses.length === 0) { // Mostrar loading solo si no hay datos previos
     return (

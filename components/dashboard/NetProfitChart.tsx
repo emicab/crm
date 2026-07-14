@@ -13,6 +13,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { formatCurrency } from '@/lib/formatCurrency';
 import type { MonthlyFinancialSummary } from '@/lib/data';
 
 interface NetProfitChartProps {
@@ -23,10 +24,6 @@ const NetProfitChart: React.FC<NetProfitChartProps> = ({ data }) => {
   if (!data || data.length === 0) {
     return <div className="text-center text-foreground-muted py-8">No hay datos de rentabilidad para mostrar.</div>;
   }
-  
-  const formatCurrencyForTooltip = (value: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
-  };
   
   const formatMonth = (monthString: string) => {
       const [year, month] = monthString.split('-');
@@ -53,7 +50,7 @@ const NetProfitChart: React.FC<NetProfitChartProps> = ({ data }) => {
             stroke="var(--color-border)"
         />
         <Tooltip
-            formatter={(value: number) => formatCurrencyForTooltip(value)}
+            formatter={(value: number) => formatCurrency(value)}
             contentStyle={{ 
                 backgroundColor: 'var(--color-background)', 
                 borderColor: 'var(--color-border)',

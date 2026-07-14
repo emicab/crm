@@ -28,13 +28,9 @@ import {
   TrendingUp,
   PieChart,
 } from 'lucide-react';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 export const dynamic = 'force-dynamic';
-
-const formatCurrency = (amount: number) => {
-  if (isNaN(amount)) return '$0,00';
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-};
 
 export default async function AnaliticasPage() {
   // Obtenemos todos los datos necesarios en paralelo

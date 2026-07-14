@@ -11,6 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { formatCurrency } from '@/lib/formatCurrency';
 import type { DailySalesData } from '@/lib/data'; // Importamos el tipo
 
 interface SalesOverTimeChartProps {
@@ -28,11 +29,6 @@ const SalesOverTimeChart: React.FC<SalesOverTimeChartProps> = ({ data }) => {
     return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
   };
   
-  const formatCurrencyForTooltip = (value: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
-  };
-
-
   return (
     <ResponsiveContainer width="100%" height={300}>
       <LineChart
@@ -58,7 +54,7 @@ const SalesOverTimeChart: React.FC<SalesOverTimeChartProps> = ({ data }) => {
             allowDecimals={false}
         />
         <Tooltip
-            formatter={formatCurrencyForTooltip}
+            formatter={formatCurrency}
             contentStyle={{ 
                 backgroundColor: 'var(--color-background)', 
                 borderColor: 'var(--color-border)',

@@ -24,6 +24,7 @@ export default async function handler(
                 sku: true,
                 priceSale: true,
                 quantityStock: true,
+                unitType: true,
                 brand: { select: { name: true } },
                 category: { select: { name: true } },
               },
@@ -46,6 +47,7 @@ export default async function handler(
             sku: item.product.sku,
             priceSale: parseFloat(item.product.priceSale.toString()),
             quantityStock: item.product.quantityStock,
+            unitType: item.product.unitType,
             brandName: item.product.brand.name,
             categoryName: item.product.category.name,
           });

@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 import { exportToCSV } from "@/lib/csv";
+import { formatCurrency } from "@/lib/formatCurrency";
+import { formatDate } from "@/lib/formatDate";
 
 const SalesHistoryTable = () => {
   const router = useRouter();
@@ -127,22 +129,7 @@ const SalesHistoryTable = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    }).format(amount);
-  };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   if (loading) {
     return (

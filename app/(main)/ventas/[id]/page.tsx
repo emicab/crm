@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import { formatCurrency } from "@/lib/formatCurrency";
+import { formatDate } from "@/lib/formatDate";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "motion/react";
@@ -112,24 +114,6 @@ const SaleDetailPage = () => {
             setLoading(false);
         }
     }, [saleId]);
-
-    const formatCurrency = (amount: number | string) => {
-        const numAmount =
-            typeof amount === "string" ? parseFloat(amount) : amount;
-        if (isNaN(numAmount)) return "-";
-        return new Intl.NumberFormat("es-AR", {
-            style: "currency",
-            currency: "ARS",
-        }).format(numAmount);
-    };
-
-    const formatDate = (dateString: string) => {
-        if (!dateString) return "Fecha no disponible";
-        return new Date(dateString).toLocaleString("es-AR", {
-            dateStyle: "medium",
-            timeStyle: "short",
-        });
-    };
 
     const handlePrintOrSavePDF = async () => {
         // Llama a la función expuesta por el preload script

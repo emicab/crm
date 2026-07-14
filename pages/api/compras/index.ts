@@ -10,12 +10,13 @@ import { sanitizeString } from '../../../lib/sanitize';
 interface PurchaseItemInput {
   productId: number;
   quantity: number;
+  quantityReceived?: number; // Cantidad realmente recibida
   purchasePrice: number; // Costo por unidad en esta compra
 }
 
 interface CreatePurchaseInput {
   supplierId: number;
-  status?: PurchaseStatus; // Opcional, por defecto será RECEIVED para actualizar stock
+  status?: PurchaseStatus; // Opcional, por defecto PENDING
   paymentType?: PaymentType;
   invoiceNumber?: string;
   notes?: string;
@@ -101,7 +102,7 @@ export default async function handler(
 
     try {
       const result = await prisma.$transaction(async (tx) => {
-        const purchaseStatus = status || PurchaseStatus.RECEIVED;
+        const purchaseStatus = status || PurchaseStatus.PENDING;
 
         const newPurchase = await tx.purchase.create({
           data: {
@@ -116,11 +117,14 @@ export default async function handler(
         });
 
         for (const item of items) {
+          const receivedQty = purchaseStatus === PurchaseStatus.RECEIVED ? (item.quantityReceived ?? item.quantity) : undefined;
+
           await tx.purchaseItem.create({
             data: {
               purchaseId: newPurchase.id,
               productId: item.productId,
               quantity: item.quantity,
+              quantityReceived: receivedQty ?? null,
               purchasePrice: new Decimal(item.purchasePrice),
             },
           });
@@ -131,12 +135,12 @@ export default async function handler(
               select: { pricePurchase: true },
             });
 
-            // Actualizar (incrementar) el stock del producto
+            const stockQty = item.quantityReceived ?? item.quantity;
             await tx.product.update({
               where: { id: item.productId },
               data: {
                 quantityStock: {
-                  increment: item.quantity,
+                  increment: stockQty,
                 },
                 // F2: Solo actualizar el precio de compra del producto si no tiene uno
                 ...(!product?.pricePurchase ? { pricePurchase: new Decimal(item.purchasePrice) } : {})

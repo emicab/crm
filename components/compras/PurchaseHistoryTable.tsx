@@ -6,6 +6,8 @@ import type { Purchase } from '@/types';
 import { Loader2, AlertCircle, Eye, Trash2 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { useRouter } from 'next/navigation';
+import { formatCurrency } from '@/lib/formatCurrency';
+import { formatDate } from '@/lib/formatDate';
 import { getPaymentTypeDisplay } from '@/lib/displayTexts';
 
 const PurchaseHistoryTable = () => {
@@ -66,15 +68,7 @@ const PurchaseHistoryTable = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
-  };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-AR', {
-      day: '2-digit', month: '2-digit', year: 'numeric'
-    });
-  };
 
   if (loading) {
     return (

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -7,9 +6,10 @@ import type { Brand, Category, Supplier, Product } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Loader2, AlertCircle, X } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { motion, AnimatePresence } from 'motion/react';
+import { useQuickCreate } from '@/hooks/useQuickCreate';
+import QuickCreateModal from './QuickCreateModal';
 
 interface ProductFormData {
   name: string;
@@ -25,7 +25,6 @@ interface ProductFormData {
   unitType: string;
 }
 
-
 interface ProductFormProps {
   initialProductData?: Product | null;
 }
@@ -40,76 +39,26 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  
+
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetchingDropdowns, setIsFetchingDropdowns] = useState(true); 
+  const [isFetchingDropdowns, setIsFetchingDropdowns] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Estados para creación rápida de Marca y Categoría
-  const [showNewBrandModal, setShowNewBrandModal] = useState(false);
-  const [newBrandName, setNewBrandName] = useState('');
-  const [isCreatingBrand, setIsCreatingBrand] = useState(false);
+  const brandQuickCreate = useQuickCreate({
+    apiEndpoint: '/api/brands',
+    label: 'marca',
+    onCreated: (created) => setBrands(prev => [...prev, created as Brand].sort((a, b) => a.name.localeCompare(b.name))),
+    onFieldSelect: (id) => setFormData(prev => ({ ...prev, brandId: id })),
+  });
 
-  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const categoryQuickCreate = useQuickCreate({
+    apiEndpoint: '/api/categories',
+    label: 'categoría',
+    onCreated: (created) => setCategories(prev => [...prev, created as Category].sort((a, b) => a.name.localeCompare(b.name))),
+    onFieldSelect: (id) => setFormData(prev => ({ ...prev, categoryId: id })),
+  });
 
-  const handleCreateBrand = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newBrandName.trim()) return;
-    setIsCreatingBrand(true);
-    try {
-      const res = await fetch('/api/brands', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newBrandName.trim() }),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Error al crear la marca.');
-      }
-      const createdBrand = await res.json();
-      setBrands(prev => [...prev, createdBrand].sort((a, b) => a.name.localeCompare(b.name)));
-      setFormData(prev => ({ ...prev, brandId: String(createdBrand.id) }));
-      toast.success('¡Marca creada exitosamente!');
-      setShowNewBrandModal(false);
-      setNewBrandName('');
-    } catch (err: any) {
-      toast.error(err.message || 'Error al crear la marca.');
-    } finally {
-      setIsCreatingBrand(false);
-    }
-  };
-
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCategoryName.trim()) return;
-    setIsCreatingCategory(true);
-    try {
-      const res = await fetch('/api/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCategoryName.trim() }),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Error al crear la categoría.');
-      }
-      const createdCategory = await res.json();
-      setCategories(prev => [...prev, createdCategory].sort((a, b) => a.name.localeCompare(b.name)));
-      setFormData(prev => ({ ...prev, categoryId: String(createdCategory.id) }));
-      toast.success('¡Categoría creada exitosamente!');
-      setShowNewCategoryModal(false);
-      setNewCategoryName('');
-    } catch (err: any) {
-      toast.error(err.message || 'Error al crear la categoría.');
-    } finally {
-      setIsCreatingCategory(false);
-    }
-  };
-
-  
   useEffect(() => {
     const fetchData = async () => {
       setIsFetchingDropdowns(true);
@@ -137,7 +86,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
     fetchData();
   }, []);
 
-  
   useEffect(() => {
     if (initialProductData) {
       setFormData({
@@ -176,8 +124,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
     }
 
     const method = initialProductData ? 'PUT' : 'POST';
-    const apiUrl = initialProductData 
-      ? `/api/products/${initialProductData.id}` 
+    const apiUrl = initialProductData
+      ? `/api/products/${initialProductData.id}`
       : '/api/products';
 
     const dataToSend = {
@@ -206,7 +154,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       }
 
       setSuccessMessage(initialProductData ? '¡Producto actualizado exitosamente!' : '¡Producto creado exitosamente!');
-      
+
       if (!initialProductData) {
         setFormData({
             name: '', sku: '', description: '', pricePurchase: '', priceSale: '',
@@ -216,7 +164,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       }
 
       setTimeout(() => {
-        router.push('/productos'); 
+        router.push('/productos');
         router.refresh();
       }, 1500);
 
@@ -226,7 +174,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       setIsLoading(false);
     }
   };
-  
+
   if (isFetchingDropdowns && !initialProductData) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -235,7 +183,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       </div>
     );
   }
-  
+
   const submitButtonText = initialProductData ? 'Actualizar Producto' : 'Guardar Producto';
   const loadingButtonText = initialProductData ? 'Actualizando...' : 'Guardando...';
 
@@ -261,11 +209,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       <div>
         <label htmlFor="description" className="block text-sm font-medium text-foreground-muted mb-1.5">Descripción (Opcional)</label>
         <textarea
-          id="description"
-          name="description"
-          rows={3}
-          value={formData.description}
-          onChange={handleChange}
+          id="description" name="description" rows={3} value={formData.description} onChange={handleChange}
           className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
@@ -276,11 +220,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
             <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Selecciona una marca'}</option>
             {brands.map(brand => <option key={brand.id} value={String(brand.id)}>{brand.name}</option>)}
           </Select>
-          <button
-            type="button"
-            onClick={() => setShowNewBrandModal(true)}
-            className="mt-1 text-xs text-primary hover:underline flex items-center"
-          >
+          <button type="button" onClick={() => brandQuickCreate.setIsOpen(true)} className="mt-1 text-xs text-primary hover:underline flex items-center">
             + Nueva Marca
           </button>
         </div>
@@ -289,11 +229,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
             <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Selecciona una categoría'}</option>
             {categories.map(category => <option key={category.id} value={String(category.id)}>{category.name}</option>)}
           </Select>
-          <button
-            type="button"
-            onClick={() => setShowNewCategoryModal(true)}
-            className="mt-1 text-xs text-primary hover:underline flex items-center"
-          >
+          <button type="button" onClick={() => categoryQuickCreate.setIsOpen(true)} className="mt-1 text-xs text-primary hover:underline flex items-center">
             + Nueva Categoría
           </button>
         </div>
@@ -308,7 +244,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         <Input label="Precio de Compra" name="pricePurchase" type="number" step="0.01" value={formData.pricePurchase} onChange={handleChange} />
         <Input label="Precio de Venta *" name="priceSale" type="number" step="0.01" value={formData.priceSale} onChange={handleChange} required />
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Select label="Tipo de Unidad *" name="unitType" value={formData.unitType} onChange={handleChange} required>
           <option value="">Seleccionar...</option>
@@ -334,145 +270,25 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       </div>
     </form>
 
-      {/* Modal para crear marca rápida */}
-      <AnimatePresence>
-        {showNewBrandModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowNewBrandModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.9, y: 20, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <form onSubmit={handleCreateBrand}>
-                <div className="p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-foreground">
-                      Nueva Marca
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setShowNewBrandModal(false)}
-                      className="p-1 rounded-full hover:bg-border transition-colors text-foreground-muted hover:text-foreground"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <Input
-                      label="Nombre de la Marca *"
-                      type="text"
-                      value={newBrandName}
-                      onChange={(e) => setNewBrandName(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                  </div>
-                </div>
-                <div className="bg-background px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 rounded-b-lg gap-2">
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={isCreatingBrand}
-                    className="w-full sm:w-auto"
-                  >
-                    {isCreatingBrand ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
-                    Guardar
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowNewBrandModal(false)}
-                    disabled={isCreatingBrand}
-                    className="w-full sm:w-auto"
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <QuickCreateModal
+        isOpen={brandQuickCreate.isOpen}
+        title="Nueva Marca"
+        value={brandQuickCreate.name}
+        isLoading={brandQuickCreate.isCreating}
+        onChange={brandQuickCreate.setName}
+        onSubmit={brandQuickCreate.handleCreate}
+        onClose={() => brandQuickCreate.setIsOpen(false)}
+      />
 
-      {/* Modal para crear categoría rápida */}
-      <AnimatePresence>
-        {showNewCategoryModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowNewCategoryModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.9, y: 20, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-md m-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <form onSubmit={handleCreateCategory}>
-                <div className="p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-foreground">
-                      Nueva Categoría
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setShowNewCategoryModal(false)}
-                      className="p-1 rounded-full hover:bg-border transition-colors text-foreground-muted hover:text-foreground"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <Input
-                      label="Nombre de la Categoría *"
-                      type="text"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                  </div>
-                </div>
-                <div className="bg-background px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 rounded-b-lg gap-2">
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={isCreatingCategory}
-                    className="w-full sm:w-auto"
-                  >
-                    {isCreatingCategory ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
-                    Guardar
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowNewCategoryModal(false)}
-                    disabled={isCreatingCategory}
-                    className="w-full sm:w-auto"
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <QuickCreateModal
+        isOpen={categoryQuickCreate.isOpen}
+        title="Nueva Categoría"
+        value={categoryQuickCreate.name}
+        isLoading={categoryQuickCreate.isCreating}
+        onChange={categoryQuickCreate.setName}
+        onSubmit={categoryQuickCreate.handleCreate}
+        onClose={() => categoryQuickCreate.setIsOpen(false)}
+      />
     </>
   );
 };
