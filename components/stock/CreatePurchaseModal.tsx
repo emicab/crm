@@ -33,10 +33,11 @@ interface CreatePurchaseModalProps {
   suppliers: Supplier[];
   onClose: () => void;
   onSuccess: () => void;
+  activePurchaseId?: number | null;
 }
 
 const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
-  isOpen, products, suppliers, onClose, onSuccess,
+  isOpen, products, suppliers, onClose, onSuccess, activePurchaseId,
 }) => {
   const [supplierId, setSupplierId] = useState("");
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -95,8 +96,11 @@ const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/compras", {
-        method: "POST",
+      const url = activePurchaseId ? `/api/compras/${activePurchaseId}` : "/api/compras";
+      const method = activePurchaseId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           supplierId: parseInt(supplierId),
@@ -111,9 +115,9 @@ const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || "Error al crear la orden de compra.");
+        throw new Error(errData.message || `Error al ${activePurchaseId ? 'actualizar' : 'crear'} la orden de compra.`);
       }
-      toast.success("¡Orden de compra creada exitosamente!");
+      toast.success(activePurchaseId ? "¡Orden de compra actualizada con éxito!" : "¡Orden de compra creada exitosamente!");
       onSuccess();
       onClose();
     } catch (err: unknown) {

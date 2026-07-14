@@ -6,8 +6,11 @@ import { AlertTriangle, Loader2, Package, Edit3, PlusCircle, RefreshCw, X, Shopp
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import CreatePurchaseModal from '@/components/stock/CreatePurchaseModal';
+import AddProductToOrderModal from '@/components/stock/AddProductToOrderModal';
+import Pagination from '@/components/ui/Pagination';
 import type { Supplier } from '@/types';
 import { motion, AnimatePresence } from 'motion/react';
+import toast from 'react-hot-toast';
 
 interface AlertProduct {
   id: number;
@@ -30,6 +33,24 @@ export default function StockAlertasPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [productsToOrder, setProductsToOrder] = useState<AlertProduct[]>([]);
+
+  // Búsqueda, ordenamiento y paginación
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortColumn, setSortColumn] = useState<'name' | 'sku' | 'supplier' | 'stock' | 'minStock'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
+
+  // Lógica del carrito de pedido activo
+  const [productToAdd, setProductToAdd] = useState<AlertProduct | null>(null);
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [activeOrder, setActiveOrder] = useState<{
+    id: number;
+    supplierId: number;
+    supplierName: string;
+    itemsCount: number;
+    totalAmount: number;
+  } | null>(null);
 
   const fetchAlerts = async () => {
     setLoading(true);
@@ -63,23 +84,92 @@ export default function StockAlertasPage() {
     fetchAlerts();
   }, []);
 
-  const filteredProducts = useMemo(() => {
-    if (!filterSupplierId) return products;
-    return products.filter(p => p.supplier?.id === parseInt(filterSupplierId));
-  }, [products, filterSupplierId]);
+  // Resetear paginación si cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterSupplierId, searchQuery]);
 
   const supplierOptions = useMemo(() => {
     const ids = new Set(products.map(p => p.supplier?.id).filter(Boolean) as number[]);
     return suppliers.filter(s => ids.has(s.id));
   }, [products, suppliers]);
 
-  const allSelected = filteredProducts.length > 0 && selectedIds.size === filteredProducts.length;
+  const filteredProducts = useMemo(() => {
+    let result = products;
+
+    // 1. Filtrar por proveedor
+    if (filterSupplierId) {
+      result = result.filter(p => p.supplier?.id === parseInt(filterSupplierId));
+    }
+
+    // 2. Filtrar por búsqueda de nombre o SKU
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.sku && p.sku.toLowerCase().includes(q))
+      );
+    }
+
+    // 3. Ordenar
+    result = [...result].sort((a, b) => {
+      let valA: any = '';
+      let valB: any = '';
+
+      switch (sortColumn) {
+        case 'name':
+          valA = a.name.toLowerCase();
+          valB = b.name.toLowerCase();
+          break;
+        case 'sku':
+          valA = (a.sku || '').toLowerCase();
+          valB = (b.sku || '').toLowerCase();
+          break;
+        case 'supplier':
+          valA = (a.supplier?.name || '').toLowerCase();
+          valB = (b.supplier?.name || '').toLowerCase();
+          break;
+        case 'stock':
+          valA = a.quantityStock;
+          valB = b.quantityStock;
+          break;
+        case 'minStock':
+          valA = a.stockMinAlert ?? 0;
+          valB = b.stockMinAlert ?? 0;
+          break;
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [products, filterSupplierId, searchQuery, sortColumn, sortDirection]);
+
+  // Paginación
+  const totalPages = Math.ceil(filteredProducts.length / pageSize);
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(startIndex, startIndex + pageSize);
+  }, [filteredProducts, currentPage]);
+
+  const allSelected = paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.has(p.id));
 
   const handleSelectAll = () => {
     if (allSelected) {
-      setSelectedIds(new Set());
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        paginatedProducts.forEach(p => next.delete(p.id));
+        return next;
+      });
     } else {
-      setSelectedIds(new Set(filteredProducts.map(p => p.id)));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        paginatedProducts.forEach(p => next.add(p.id));
+        return next;
+      });
     }
   };
 
@@ -92,35 +182,181 @@ export default function StockAlertasPage() {
     });
   };
 
+  // Agregar a la orden activa (o abrir el modal de confirmación individual)
   const handleAddToOrder = (productId: number) => {
     const prod = products.find(p => p.id === productId);
     if (prod) {
-      setProductsToOrder([prod]);
-      setShowCreateModal(true);
+      setProductToAdd(prod);
     }
   };
 
+  const handleConfirmAddProduct = async (data: { supplierId: number; quantity: number; purchasePrice: number }) => {
+    if (!productToAdd) return;
+    setIsAddingProduct(true);
+    try {
+      if (!activeOrder || activeOrder.supplierId !== data.supplierId) {
+        // --- 1. Crear nueva orden de compra (pedido) ---
+        const res = await fetch('/api/compras', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            supplierId: data.supplierId,
+            status: 'ORDERED',
+            items: [
+              {
+                productId: productToAdd.id,
+                quantity: data.quantity,
+                purchasePrice: data.purchasePrice
+              }
+            ]
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || 'Error al crear la orden de compra.');
+        }
+
+        const newPurchase = await res.json();
+        setActiveOrder({
+          id: newPurchase.id,
+          supplierId: newPurchase.supplierId,
+          supplierName: newPurchase.supplier?.name || suppliers.find(s => s.id === newPurchase.supplierId)?.name || 'Proveedor',
+          itemsCount: 1,
+          totalAmount: data.quantity * data.purchasePrice
+        });
+
+        toast.success(`Pedido creado con éxito para ${newPurchase.supplier?.name || 'el proveedor'}.`);
+      } else {
+        // --- 2. Agregar a orden de compra existente ---
+        const getRes = await fetch(`/api/compras/${activeOrder.id}`);
+        if (!getRes.ok) throw new Error('No se pudo obtener el pedido activo.');
+        const currentPurchase = await getRes.json();
+
+        const existingItems = (currentPurchase.items || []).map((item: any) => ({
+          productId: item.productId,
+          quantity: parseFloat(item.quantity),
+          purchasePrice: parseFloat(item.purchasePrice)
+        }));
+
+        const itemIndex = existingItems.findIndex((item: any) => item.productId === productToAdd.id);
+        if (itemIndex > -1) {
+          existingItems[itemIndex].quantity += data.quantity;
+          existingItems[itemIndex].purchasePrice = data.purchasePrice;
+        } else {
+          existingItems.push({
+            productId: productToAdd.id,
+            quantity: data.quantity,
+            purchasePrice: data.purchasePrice
+          });
+        }
+
+        const putRes = await fetch(`/api/compras/${activeOrder.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            supplierId: activeOrder.supplierId,
+            status: 'ORDERED',
+            items: existingItems
+          })
+        });
+
+        if (!putRes.ok) {
+          const errData = await putRes.json().catch(() => ({}));
+          throw new Error(errData.message || 'Error al actualizar el pedido.');
+        }
+
+        const updatedTotal = existingItems.reduce((sum: number, item: any) => sum + (item.quantity * item.purchasePrice), 0);
+        setActiveOrder({
+          ...activeOrder,
+          itemsCount: existingItems.length,
+          totalAmount: updatedTotal
+        });
+
+        toast.success(`¡"${productToAdd.name}" agregado al pedido activo!`);
+      }
+
+      setProductToAdd(null);
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(productToAdd.id);
+        return next;
+      });
+      fetchAlerts();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error inesperado.');
+    } finally {
+      setIsAddingProduct(false);
+    }
+  };
+
+  // Abrir modal masivo para los seleccionados en la tabla
   const handleOpenBatchOrder = () => {
     const list = products.filter(p => selectedIds.has(p.id));
     setProductsToOrder(list);
     setShowCreateModal(true);
   };
 
+  // Abrir modal del pedido activo para ver/editar todos los ítems cargados
+  const handleOpenActiveOrderCart = async () => {
+    if (!activeOrder) return;
+    setLoading(true);
+    try {
+      const getRes = await fetch(`/api/compras/${activeOrder.id}`);
+      if (!getRes.ok) throw new Error('No se pudo obtener el pedido activo.');
+      const currentPurchase = await getRes.json();
+
+      const itemsList = (currentPurchase.items || []).map((item: any) => ({
+        id: item.product.id,
+        name: item.product.name,
+        sku: item.product.sku,
+        quantityStock: parseFloat(item.product.quantityStock),
+        stockMinAlert: item.product.stockMinAlert ? parseFloat(item.product.stockMinAlert) : null,
+        pricePurchase: parseFloat(item.purchasePrice),
+        priceSale: parseFloat(item.product.priceSale),
+        unitType: item.product.unitType,
+        supplier: currentPurchase.supplier
+      }));
+
+      setProductsToOrder(itemsList);
+      setShowCreateModal(true);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error inesperado.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSuccess = () => {
     setSelectedIds(new Set());
+    setActiveOrder(null);
     fetchAlerts();
   };
 
+  const handleSort = (column: 'name' | 'sku' | 'supplier' | 'stock' | 'minStock') => {
+    if (sortColumn === column) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortIcon = (column: 'name' | 'sku' | 'supplier' | 'stock' | 'minStock') => {
+    if (sortColumn !== column) return <span className="text-foreground-muted/40 text-xs ml-1 select-none">⇅</span>;
+    return sortDirection === 'asc' ? <span className="text-primary text-xs ml-1 select-none">▲</span> : <span className="text-primary text-xs ml-1 select-none">▼</span>;
+  };
+
   return (
-    <div className="w-full font-sans">
+    <div className="w-full font-sans pb-24">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <AlertTriangle size={28} className="text-red-500 animate-pulse" />
           <h1 className="text-2xl font-bold text-foreground">Alertas de Stock</h1>
         </div>
         <div className="flex gap-2">
-          <button 
-            onClick={fetchAlerts} 
+          <button
+            onClick={fetchAlerts}
             className="flex items-center gap-2 px-3.5 py-2 text-sm bg-muted hover:bg-background border border-border rounded-xl transition-all shadow-sm duration-200"
             disabled={isRefreshing}
           >
@@ -144,18 +380,25 @@ export default function StockAlertasPage() {
         </div>
       ) : (
         <div className="bg-muted rounded-2xl border border-border overflow-hidden shadow-md">
-          <div className="p-4 sm:p-5 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-background/40">
+          <div className="p-4 sm:p-5 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-3 bg-background/40">
             <p className="text-sm text-foreground-muted font-medium whitespace-nowrap">
               {products.length} producto{products.length !== 1 ? 's' : ''} por debajo del stock mínimo
-              {filterSupplierId && ` (${filteredProducts.length} filtrados)`}
+              {(filterSupplierId || searchQuery) && ` (${filteredProducts.length} filtrados)`}
             </p>
-            <div className="w-full sm:w-64">
+            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+              <input
+                type="text"
+                placeholder="Buscar por nombre o SKU..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="text-sm px-3.5 py-2 border border-border rounded-xl bg-background text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring w-full sm:w-64"
+              />
               <Select
                 name="supplierFilter"
                 value={filterSupplierId}
                 onChange={(e) => { setFilterSupplierId(e.target.value); setSelectedIds(new Set()); }}
                 aria-label="Filtrar por proveedor"
-                className="text-sm rounded-xl"
+                className="text-sm rounded-xl w-full sm:w-64 animate-none"
               >
                 <option value="">Todos los proveedores</option>
                 {supplierOptions.map(s => (
@@ -172,16 +415,41 @@ export default function StockAlertasPage() {
                   <th className="p-3 sm:p-4 w-10">
                     <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className="rounded border-border bg-background" />
                   </th>
-                  <th className="p-3 sm:p-4 text-sm font-bold text-foreground">Producto</th>
-                  <th className="p-3 sm:p-4 text-sm font-bold text-foreground hidden sm:table-cell">SKU</th>
-                  <th className="p-3 sm:p-4 text-sm font-bold text-foreground hidden md:table-cell">Proveedor</th>
-                  <th className="p-3 sm:p-4 text-sm font-bold text-foreground text-center">Stock Alerta</th>
-                  <th className="p-3 sm:p-4 text-sm font-bold text-foreground text-center">Mínimo</th>
+                  <th
+                    className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors"
+                    onClick={() => handleSort('name')}
+                  >
+                    Producto {renderSortIcon('name')}
+                  </th>
+                  <th
+                    className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors hidden sm:table-cell"
+                    onClick={() => handleSort('sku')}
+                  >
+                    SKU {renderSortIcon('sku')}
+                  </th>
+                  <th
+                    className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors hidden md:table-cell"
+                    onClick={() => handleSort('supplier')}
+                  >
+                    Proveedor {renderSortIcon('supplier')}
+                  </th>
+                  <th
+                    className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors text-center"
+                    onClick={() => handleSort('stock')}
+                  >
+                    Stock Alerta {renderSortIcon('stock')}
+                  </th>
+                  <th
+                    className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors text-center"
+                    onClick={() => handleSort('minStock')}
+                  >
+                    Mínimo {renderSortIcon('minStock')}
+                  </th>
                   <th className="p-3 sm:p-4 text-sm font-bold text-foreground text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((product) => {
+                {paginatedProducts.map((product) => {
                   const stockRatio = Math.min(100, Math.max(0, (product.quantityStock / (product.stockMinAlert || 1)) * 100));
                   return (
                     <tr key={product.id} className="border-b border-border/40 last:border-b-0 hover:bg-background/40 transition-colors">
@@ -203,8 +471,8 @@ export default function StockAlertasPage() {
                             {product.quantityStock} {product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}
                           </span>
                           <div className="w-16 h-1.5 bg-border/80 rounded-full overflow-hidden mt-0.5">
-                            <div 
-                              className="bg-red-500 h-full rounded-full" 
+                            <div
+                              className="bg-red-500 h-full rounded-full"
                               style={{ width: `${stockRatio}%` }}
                             />
                           </div>
@@ -239,16 +507,29 @@ export default function StockAlertasPage() {
             </table>
           </div>
 
-          {filteredProducts.length === 0 && filterSupplierId && (
-            <div className="text-center py-8 text-foreground-muted text-sm">
-              No hay alertas de stock para este proveedor.
+          {totalPages > 1 && (
+            <div className="p-4 border-t border-border bg-background/10">
+              <Pagination
+                page={currentPage}
+                totalPages={totalPages}
+                totalItems={filteredProducts.length}
+                itemLabel="productos"
+                onPageChange={(p) => setCurrentPage(p)}
+              />
+            </div>
+          )}
+
+          {filteredProducts.length === 0 && (filterSupplierId || searchQuery) && (
+            <div className="text-center py-8 text-foreground-muted text-sm bg-background/10">
+              No se encontraron alertas de stock con los filtros ingresados.
             </div>
           )}
         </div>
       )}
 
+      {/* Barra de Selección Masiva (para seleccionar varios y crear una orden nueva) */}
       <AnimatePresence>
-        {selectedIds.size > 0 && (
+        {selectedIds.size > 0 && !activeOrder && (
           <motion.div
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -258,7 +539,7 @@ export default function StockAlertasPage() {
           >
             <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <CheckSquare size={20} className="text-primary animate-bounce" />
+                <CheckSquare size={20} className="text-primary" />
                 <span className="text-sm font-semibold text-foreground">
                   {selectedIds.size} producto{selectedIds.size !== 1 ? 's' : ''} seleccionado{selectedIds.size !== 1 ? 's' : ''}
                 </span>
@@ -278,12 +559,54 @@ export default function StockAlertasPage() {
         )}
       </AnimatePresence>
 
+      {/* Barra de Pedido Activo (Carrito de Pedidos) */}
+      <AnimatePresence>
+        {activeOrder && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 20 }}
+            className="fixed bottom-[20px] left-4 md:left-[272px] right-4 z-40 p-4 bg-muted/95 border border-border shadow-2xl rounded-2xl backdrop-blur-md"
+          >
+            <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <ShoppingCart size={20} className="text-primary animate-bounce" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">Pedido Activo: {activeOrder.supplierName}</p>
+                  <p className="text-xs text-foreground-muted">{activeOrder.itemsCount} producto(s) cargado(s)</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setActiveOrder(null)}>
+                  <X size={14} className="mr-1" /> Cancelar Pedido
+                </Button>
+                <Button variant="primary" size="sm" onClick={handleOpenActiveOrderCart} className="shadow-md">
+                  <ShoppingCart size={14} className="mr-1" /> Ver Carrito de Pedido
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AddProductToOrderModal
+        isOpen={!!productToAdd}
+        product={productToAdd}
+        suppliers={suppliers}
+        isSaving={isAddingProduct}
+        onConfirm={handleConfirmAddProduct}
+        onClose={() => setProductToAdd(null)}
+        activeOrderSupplierId={activeOrder?.supplierId}
+      />
+
       <CreatePurchaseModal
         isOpen={showCreateModal}
         products={productsToOrder}
         suppliers={suppliers}
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleSuccess}
+        activePurchaseId={activeOrder?.id}
       />
     </div>
   );
