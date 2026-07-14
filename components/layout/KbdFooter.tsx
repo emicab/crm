@@ -40,6 +40,7 @@ const KbdFooter = () => {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (!e.key) return;
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
       const shift = e.shiftKey;
