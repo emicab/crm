@@ -384,6 +384,7 @@ function mainApp() {
                 store.set('licenseKey', licenseKey);
             }
             store.set('isActivated', true);
+            store.set('lastOnlineCheck', Date.now());
             console.log('[License] Activación exitosa.');
             return { success: true, message: '¡Activación exitosa!' };
 
@@ -436,11 +437,31 @@ function mainApp() {
                         console.warn('[License Check] La clave de licencia está asignada a otro hardware.');
                         store.set('isActivated', false);
                         isActivated = false;
+                    } else {
+                        // Licencia válida, actualizamos la fecha del último chequeo exitoso
+                        store.set('lastOnlineCheck', Date.now());
                     }
                 }
             } catch (err) {
-                // Si falla la red, permitimos el acceso local (modo offline)
-                console.warn('[License Check] Error al conectar con el servidor de licencias (modo offline permitido):', err.message || err);
+                // Si falla la red, permitimos el acceso local (modo offline) sólo si no se superó el límite de días
+                console.warn('[License Check] Error al conectar con el servidor de licencias (modo offline):', err.message || err);
+                const lastOnlineCheck = store.get('lastOnlineCheck', 0);
+                if (lastOnlineCheck === 0) {
+                    // Si nunca hubo un chequeo registrado, por seguridad bloqueamos
+                    console.warn('[License Check] No hay registro de chequeo online previo. Bloqueando.');
+                    isActivated = false;
+                } else {
+                    const diffTime = Date.now() - lastOnlineCheck;
+                    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                    const MAX_OFFLINE_DAYS = 15; // Límite de 15 días offline
+                    if (diffDays > MAX_OFFLINE_DAYS) {
+                        console.warn(`[License Check] Límite de días offline excedido (${diffDays.toFixed(1)} días). Reinstalando verificación obligatoria.`);
+                        store.set('isActivated', false);
+                        isActivated = false;
+                    } else {
+                        console.info(`[License Check] Permitiendo acceso offline. Días transcurridos desde el último chequeo online: ${diffDays.toFixed(1)}/${MAX_OFFLINE_DAYS}`);
+                    }
+                }
             }
         }
         return { isActivated };
