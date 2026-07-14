@@ -10,28 +10,66 @@ export default async function handler(
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const { productIds, supplierId } = req.body;
+  const { productIds, supplierId, brandId, categoryId } = req.body;
 
   if (!Array.isArray(productIds) || productIds.length === 0) {
     return res.status(400).json({ message: 'productIds debe ser un array no vacío.' });
   }
 
   try {
-    if (supplierId) {
-      const supplierExists = await prisma.supplier.findUnique({ where: { id: parseInt(supplierId) } });
-      if (!supplierExists) {
-        return res.status(400).json({ message: 'Proveedor no encontrado.' });
+    const updateData: any = {};
+
+    // Solo actualizamos los campos que el usuario especificó
+    if (supplierId !== undefined) {
+      if (supplierId === null || supplierId === '' || supplierId === 'null') {
+        updateData.supplierId = null;
+      } else {
+        const parsedSupplierId = parseInt(supplierId);
+        if (!isNaN(parsedSupplierId)) {
+          const supplierExists = await prisma.supplier.findUnique({ where: { id: parsedSupplierId } });
+          if (!supplierExists) {
+            return res.status(400).json({ message: 'Proveedor no encontrado.' });
+          }
+          updateData.supplierId = parsedSupplierId;
+        }
       }
+    }
+
+    if (brandId !== undefined && brandId !== null && brandId !== '' && brandId !== 'null') {
+      const parsedBrandId = parseInt(brandId);
+      if (!isNaN(parsedBrandId)) {
+        const brandExists = await prisma.brand.findUnique({ where: { id: parsedBrandId } });
+        if (!brandExists) {
+          return res.status(400).json({ message: 'Marca no encontrada.' });
+        }
+        updateData.brandId = parsedBrandId;
+      }
+    }
+
+    if (categoryId !== undefined && categoryId !== null && categoryId !== '' && categoryId !== 'null') {
+      const parsedCategoryId = parseInt(categoryId);
+      if (!isNaN(parsedCategoryId)) {
+        const categoryExists = await prisma.category.findUnique({ where: { id: parsedCategoryId } });
+        if (!categoryExists) {
+          return res.status(400).json({ message: 'Categoría no encontrada.' });
+        }
+        updateData.categoryId = parsedCategoryId;
+      }
+    }
+
+    // Si no hay datos para actualizar
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: 'No se especificaron cambios válidos para actualizar.' });
     }
 
     await prisma.product.updateMany({
       where: { id: { in: productIds.map((id: any) => parseInt(id)) } },
-      data: { supplierId: supplierId ? parseInt(supplierId) : null },
+      data: updateData,
     });
 
-    res.status(200).json({ message: `Proveedor actualizado en ${productIds.length} producto(s).` });
+    res.status(200).json({ message: 'Productos actualizados con éxito de forma masiva.' });
   } catch (error) {
-    console.error('Error updating batch supplier:', error);
-    res.status(500).json({ message: 'Error al actualizar proveedor.' });
+    console.error('Error updating batch products:', error);
+    res.status(500).json({ message: 'Error al realizar la actualización masiva.' });
   }
 }

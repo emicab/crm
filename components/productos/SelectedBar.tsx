@@ -2,19 +2,19 @@
 
 import React from 'react';
 import Button from '@/components/ui/Button';
-import { X, Users } from 'lucide-react';
+import { X, Edit } from 'lucide-react';
 
 interface SelectedBarProps {
   count: number;
   onClear: () => void;
-  onAssignSupplier: () => void;
+  onBatchUpdate: () => void;
 }
 
-const SelectedBar: React.FC<SelectedBarProps> = ({ count, onClear, onAssignSupplier }) => {
+const SelectedBar: React.FC<SelectedBarProps> = ({ count, onClear, onBatchUpdate }) => {
   if (count === 0) return null;
 
   return (
-    <div className="mb-4 p-3 bg-primary/5 border border-primary/30 rounded-lg flex items-center justify-between">
+    <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-between shadow-sm">
       <span className="text-sm font-medium text-foreground">
         {count} producto{count !== 1 ? 's' : ''} seleccionado{count !== 1 ? 's' : ''}
       </span>
@@ -22,8 +22,8 @@ const SelectedBar: React.FC<SelectedBarProps> = ({ count, onClear, onAssignSuppl
         <Button variant="outline" size="sm" onClick={onClear}>
           <X size={14} className="mr-1" /> Limpiar
         </Button>
-        <Button variant="primary" size="sm" onClick={onAssignSupplier}>
-          <Users size={14} className="mr-1" /> Asignar Proveedor
+        <Button variant="primary" size="sm" onClick={onBatchUpdate}>
+          <Edit size={14} className="mr-1" /> Edición Masiva
         </Button>
       </div>
     </div>

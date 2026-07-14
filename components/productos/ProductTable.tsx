@@ -27,7 +27,6 @@ const ProductTable = () => {
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBatchSupplierModalOpen, setIsBatchSupplierModalOpen] = useState(false);
-  const [batchSupplierId, setBatchSupplierId] = useState('');
   const [isSavingBatch, setIsSavingBatch] = useState(false);
 
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -156,11 +155,7 @@ const ProductTable = () => {
     }
   };
 
-  const handleBatchSupplier = async () => {
-    if (!batchSupplierId) {
-      toast.error('Seleccioná un proveedor.');
-      return;
-    }
+  const handleBatchUpdate = async (data: { brandId?: string; categoryId?: string; supplierId?: string }) => {
     setIsSavingBatch(true);
     try {
       const res = await fetch('/api/products/batch-supplier', {
@@ -168,17 +163,16 @@ const ProductTable = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productIds: Array.from(selectedIds),
-          supplierId: parseInt(batchSupplierId),
+          ...data,
         }),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Error al actualizar proveedor.');
+        throw new Error(errorData.message || 'Error al actualizar productos.');
       }
-      toast.success(`Proveedor asignado a ${selectedIds.size} producto(s).`);
+      toast.success(`Productos actualizados con éxito (${selectedIds.size} producto(s)).`);
       setSelectedIds(new Set());
       setIsBatchSupplierModalOpen(false);
-      setBatchSupplierId('');
       fetchProducts(page);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Error inesperado.');
@@ -233,15 +227,12 @@ const ProductTable = () => {
       <BatchSupplierModal
         isOpen={isBatchSupplierModalOpen}
         selectedCount={selectedIds.size}
-        supplierId={batchSupplierId}
+        brands={brands}
+        categories={categories}
         suppliers={suppliers}
         isSaving={isSavingBatch}
-        onSupplierChange={setBatchSupplierId}
-        onSave={handleBatchSupplier}
-        onClose={() => {
-          setIsBatchSupplierModalOpen(false);
-          setBatchSupplierId('');
-        }}
+        onSave={handleBatchUpdate}
+        onClose={() => setIsBatchSupplierModalOpen(false)}
       />
 
       <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
@@ -269,7 +260,7 @@ const ProductTable = () => {
         <SelectedBar
           count={selectedIds.size}
           onClear={() => setSelectedIds(new Set())}
-          onAssignSupplier={() => setIsBatchSupplierModalOpen(true)}
+          onBatchUpdate={() => setIsBatchSupplierModalOpen(true)}
         />
         <div className="overflow-x-auto">
           <table className="hidden md:table w-full text-left">
