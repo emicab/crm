@@ -15,6 +15,15 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   discount_TRANSFER: '10',
   discount_CARD: '0',
   discount_OTHER: '0',
+  arcaEnabled: 'false',
+  arcaCuit: '',
+  arcaPointOfSale: '1',
+  arcaEnv: 'homologacion',
+  arcaCert: '',
+  arcaKey: '',
+  arcaIibb: '',
+  arcaBusinessStartDate: '',
+  arcaIvaCondition: 'RI',
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

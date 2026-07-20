@@ -30,7 +30,7 @@ export default async function handler(
       handleApiError(res, error, `fetching client ${id}`);
     }
   } else if (req.method === 'PUT') {
-    let { firstName, lastName, email, phone, address, notes } = req.body;
+    let { firstName, lastName, email, phone, address, notes, cuit, businessName } = req.body;
 
     if (!firstName || typeof firstName !== 'string' || firstName.trim() === '') {
       return res.status(400).json({ message: 'El nombre es obligatorio.' });
@@ -42,6 +42,8 @@ export default async function handler(
     if (phone) phone = sanitizeString(phone);
     if (address) address = sanitizeString(address);
     if (notes) notes = sanitizeString(notes);
+    if (cuit) cuit = sanitizeString(cuit);
+    if (businessName) businessName = sanitizeString(businessName);
 
     try {
       const dataToUpdate: Prisma.ClientUpdateInput = {
@@ -62,6 +64,12 @@ export default async function handler(
       }
       if (notes !== undefined) {
         dataToUpdate.notes = typeof notes === 'string' ? (notes.trim() || null) : notes;
+      }
+      if (cuit !== undefined) {
+        dataToUpdate.cuit = typeof cuit === 'string' ? (cuit.trim() || null) : cuit;
+      }
+      if (businessName !== undefined) {
+        dataToUpdate.businessName = typeof businessName === 'string' ? (businessName.trim() || null) : businessName;
       }
 
       const updatedClient = await prisma.client.update({

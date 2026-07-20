@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import type { Supplier, Brand, Category } from '@/types';
 import { useQuickCreate } from '@/hooks/useQuickCreate';
 import QuickCreateModal from './QuickCreateModal';
+import { useModules } from '@/hooks/useModules';
 
 interface BatchSupplierModalProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ const BatchSupplierModal: React.FC<BatchSupplierModalProps> = ({
   onCategoryCreated,
   onSupplierCreated,
 }) => {
+  const { isModuleEnabled } = useModules();
   const [supplierId, setSupplierId] = useState('');
   const [brandId, setBrandId] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -133,26 +135,28 @@ const BatchSupplierModal: React.FC<BatchSupplierModalProps> = ({
               </button>
             </div>
 
-            <div>
-              <Select
-                label="Proveedor"
-                name="batchSupplierId"
-                value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-              >
-                <option value="">No modificar (mantener actual)</option>
-                {suppliers.map(s => (
-                  <option key={s.id} value={String(s.id)}>{s.name}</option>
-                ))}
-              </Select>
-              <button
-                type="button"
-                onClick={() => supplierQuickCreate.setIsOpen(true)}
-                className="mt-1 text-xs text-primary hover:underline flex items-center"
-              >
-                + Nuevo Proveedor
-              </button>
-            </div>
+            {isModuleEnabled('compras') && (
+              <div>
+                <Select
+                  label="Proveedor"
+                  name="batchSupplierId"
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                >
+                  <option value="">No modificar (mantener actual)</option>
+                  {suppliers.map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </Select>
+                <button
+                  type="button"
+                  onClick={() => supplierQuickCreate.setIsOpen(true)}
+                  className="mt-1 text-xs text-primary hover:underline flex items-center"
+                >
+                  + Nuevo Proveedor
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 mt-6">

@@ -6,6 +6,7 @@ import type { Sale, Client as ClientType } from "@/types";
 import { Loader2, AlertCircle, ArrowLeft, UserCircle, Eye } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 
 const ClientSalesHistoryPage = () => {
   const router = useRouter();
@@ -219,7 +220,7 @@ const ClientSalesHistoryPage = () => {
                       }).format(sale.totalAmount)}
                     </td>
                     <td className="p-3 text-sm text-foreground-muted">
-                      {sale.paymentType}
+                      {getPaymentTypeDisplay(sale.paymentType)}
                     </td>
                     <td className="p-3 text-sm text-foreground-muted text-center">
                       {sale.items.length}

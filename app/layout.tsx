@@ -1,10 +1,10 @@
-// app/layout.tsx (Versión Simplificada)
 import type { Metadata } from 'next';
 import { Outfit } from 'next/font/google'; // O la fuente que uses
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import LicenseGate from '@/components/LicenseGate';
-
+import { ModuleProvider } from '@/hooks/useModules';
+import GlobalGateways from '@/components/auth/GlobalGateways';
 
 const outfit = Outfit({ 
   variable: "--font-outfit",
@@ -28,12 +28,15 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${outfit.variable} antialiased bg-background text-foreground`}>
-        <Toaster position="top-right" />
-        {isDev ? (
-          children // En desarrollo, muestra la app directamente
-        ) : (
-          <LicenseGate>{children}</LicenseGate> // En producción, el "guardia" vigila
-        )}
+        <ModuleProvider>
+          <Toaster position="top-right" />
+          {isDev ? (
+            children // En desarrollo, muestra la app directamente
+          ) : (
+            <LicenseGate>{children}</LicenseGate> // En producción, el "guardia" vigila
+          )}
+          <GlobalGateways />
+        </ModuleProvider>
       </body>
     </html>
   );

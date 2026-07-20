@@ -59,7 +59,7 @@ export default async function handler(
       handleApiError(res, error, "fetching clients");
     }
   } else if (req.method === 'POST') {
-    let { firstName, lastName, email, phone, address, notes } = req.body;
+    let { firstName, lastName, email, phone, address, notes, cuit, businessName } = req.body;
 
     if (!firstName) {
       return res.status(400).json({ message: 'El nombre es obligatorio.' });
@@ -71,6 +71,8 @@ export default async function handler(
     if (phone) phone = sanitizeString(phone);
     if (address) address = sanitizeString(address);
     if (notes) notes = sanitizeString(notes);
+    if (cuit) cuit = sanitizeString(cuit);
+    if (businessName) businessName = sanitizeString(businessName);
 
     try {
       const newClient = await prisma.client.create({
@@ -81,6 +83,8 @@ export default async function handler(
           phone: phone || null,
           address: address || null,
           notes: notes || null,
+          cuit: cuit || null,
+          businessName: businessName || null,
         },
       });
       res.status(201).json(newClient);

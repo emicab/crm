@@ -1,5 +1,5 @@
 // lib/displayTexts.ts
-import { PaymentTypeEnum } from '@/types'; // Asegúrate que la ruta a tus tipos sea correcta
+import { PaymentTypeEnum } from '@/types'; 
 
 // Este es el mapeo de los valores del enum a sus representaciones en español
 export const paymentTypeDisplayMap: Record<PaymentTypeEnum, string> = {
@@ -8,6 +8,7 @@ export const paymentTypeDisplayMap: Record<PaymentTypeEnum, string> = {
   [PaymentTypeEnum.CARD]: 'Tarjeta',
   [PaymentTypeEnum.QR]: 'QR',
   [PaymentTypeEnum.OTHER]: 'Otro',
+  [PaymentTypeEnum.ON_ACCOUNT]: 'En cuenta',
 };
 
 // Esta función tomará el valor del enum (o un string) y devolverá el texto en español
