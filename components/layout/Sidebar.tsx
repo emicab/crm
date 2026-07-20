@@ -1,8 +1,7 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import pkg from "../../package.json";
+import { useModules } from "@/hooks/useModules";
 import {
   Package,
   Tag,
@@ -34,6 +33,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  moduleId?: string;
+  allowedRoles?: string[];
 }
 
 interface NavGroup {
@@ -53,36 +54,37 @@ const navGroups: NavGroup[] = [
   {
     title: "Productos y Stock",
     items: [
-      { href: "/productos", label: "Productos", icon: <Package size={20} /> },
-      { href: "/stock", label: "Carga de Stock", icon: <Barcode size={20} /> },
-      { href: "/stock/alertas", label: "Alertas de Stock", icon: <AlertTriangle size={20} /> },
-      { href: "/combos", label: "Combos", icon: <ShoppingBag size={20} /> },
-      { href: "/promociones", label: "Promociones", icon: <Percent size={20} /> },
-      { href: "/categorias", label: "Categorías", icon: <Tag size={20} /> },
-      { href: "/marcas", label: "Marcas", icon: <Tag size={20} /> },
+      { href: "/productos", label: "Productos", icon: <Package size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/stock", label: "Carga de Stock", icon: <Barcode size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/stock/alertas", label: "Alertas de Stock", icon: <AlertTriangle size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/combos", label: "Combos", icon: <ShoppingBag size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/promociones", label: "Promociones", icon: <Percent size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/categorias", label: "Categorías", icon: <Tag size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/marcas", label: "Marcas", icon: <Tag size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
     ],
   },
   {
     title: "Compras y Gastos",
     items: [
-      { href: "/compras/nueva", label: "Nueva Compra", icon: <ArrowUpRightSquare size={20} /> },
-      { href: "/compras", label: "Historial Compras", icon: <History size={20} /> },
-      { href: "/gastos", label: "Gastos", icon: <TrendingDown size={20} /> },
+      { href: "/compras/nueva", label: "Nueva Compra", icon: <ArrowUpRightSquare size={20} />, moduleId: "compras", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/compras", label: "Historial Compras", icon: <History size={20} />, moduleId: "compras", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/gastos", label: "Gastos", icon: <TrendingDown size={20} />, moduleId: "gastos", allowedRoles: ["ADMIN", "SUPERVISOR"] },
     ],
   },
   {
     title: "Contactos",
     items: [
-      { href: "/clientes", label: "Clientes", icon: <Users size={20} /> },
-      { href: "/proveedores", label: "Proveedores", icon: <Truck size={20} /> },
-      { href: "/vendedores", label: "Vendedores", icon: <UserPlus size={20} /> },
+      { href: "/clientes", label: "Clientes", icon: <Users size={20} />, moduleId: "clientes", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/cuenta-corriente", label: "Cuenta Corriente", icon: <Users size={20} />, moduleId: "cuenta_corriente", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/proveedores", label: "Proveedores", icon: <Truck size={20} />, moduleId: "compras", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/vendedores", label: "Vendedores", icon: <UserPlus size={20} />, moduleId: "vendedores", allowedRoles: ["ADMIN", "SUPERVISOR"] },
     ],
   },
   {
     title: "General",
     items: [
-      { href: "/analiticas", label: "Analíticas", icon: <LayoutDashboard size={20} /> },
-      { href: "/configuracion", label: "Configuración", icon: <Settings size={20} /> },
+      { href: "/analiticas", label: "Analíticas", icon: <LayoutDashboard size={20} />, moduleId: "analiticas", allowedRoles: ["ADMIN"] },
+      { href: "/configuracion", label: "Configuración", icon: <Settings size={20} />, allowedRoles: ["ADMIN"] },
     ],
   },
 ];
@@ -103,6 +105,7 @@ function saveCollapsed(groups: Set<string>) {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+  const { isModuleEnabled, currentUser, logout, supabaseLastSync, hasSupabaseConfig, storageMode } = useModules();
   const [alertCount, setAlertCount] = useState(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(loadCollapsed);
 
@@ -152,6 +155,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}
   `;
 
+  // Filtrar grupos y links según los módulos habilitados y roles del usuario
+  const filteredGroups = navGroups.map((group) => {
+    const filteredItems = group.items.filter((item) => {
+      // 1. Validar estado del módulo
+      if (item.moduleId && !isModuleEnabled(item.moduleId)) return false;
+      // 2. Validar permisos de rol si el módulo de roles está activo
+      if (isModuleEnabled("roles") && currentUser && item.allowedRoles) {
+        return item.allowedRoles.includes(currentUser.role);
+      }
+      return true;
+    });
+    return { ...group, items: filteredItems };
+  }).filter((group) => group.items.length > 0);
+
   return (
     <>
       <div className={overlayClasses} onClick={onClose} />
@@ -171,7 +188,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         <nav className="flex-grow overflow-y-auto p-4 space-y-3">
-          {navGroups.map((group) => {
+          {filteredGroups.map((group) => {
             const isCollapsed = collapsedGroups.has(group.title);
             return (
               <div key={group.title}>
@@ -213,6 +230,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             );
           })}
         </nav>
+
+        {isModuleEnabled("roles") && currentUser && (
+          <div className="px-4 py-2.5 border-t border-border flex items-center justify-between text-xs">
+            <div className="min-w-0">
+              <p className="font-bold text-foreground truncate">{currentUser.name}</p>
+              <p className="text-[9px] uppercase font-bold text-foreground-muted/75 tracking-wider mt-0.5">
+                {currentUser.role === "ADMIN" ? "Administrador" : currentUser.role === "SUPERVISOR" ? "Supervisor" : "Cajero"}
+              </p>
+            </div>
+            <button
+              onClick={logout}
+              className="px-2 py-1 text-[10px] font-semibold bg-destructive/15 text-destructive rounded hover:bg-destructive/25 transition-colors cursor-pointer"
+            >
+              Bloquear
+            </button>
+          </div>
+        )}
 
         <div className="p-4 border-t border-border space-y-2">
           <div className="flex space-x-2 justify-center">
@@ -277,9 +311,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               Importar BD
             </button>
           </div>
-          <p className="text-xs text-center">
-            &copy; {new Date().getFullYear()} ClinPOS | v{pkg.version}
-          </p>
+          {storageMode === "safe" && (
+            <div className="flex items-center justify-center gap-1.5 text-[9px] text-foreground-muted/70 font-semibold mb-1">
+              <span className={`h-1.5 w-1.5 rounded-full ${
+                !hasSupabaseConfig ? "bg-amber-400 animate-pulse" :
+                !supabaseLastSync ? "bg-amber-400 animate-pulse" :
+                (Date.now() - new Date(supabaseLastSync).getTime() < 24 * 60 * 60 * 1000) ? "bg-emerald-500" : "bg-amber-400"
+              }`} />
+              <span className="truncate max-w-[160px]" title={
+                !hasSupabaseConfig ? "Nube sin configurar" :
+                !supabaseLastSync ? "Sincronización pendiente" :
+                `Último backup: ${new Date(supabaseLastSync).toLocaleString("es-AR")}`
+              }>
+                {!hasSupabaseConfig ? "Nube sin configurar" :
+                 !supabaseLastSync ? "Sincronización pendiente" :
+                 `Nube: ${new Date(supabaseLastSync).toLocaleDateString("es-AR")} ${new Date(supabaseLastSync).toLocaleTimeString("es-AR", { hour: '2-digit', minute: '2-digit' })}`}
+              </span>
+            </div>
+          )}
+          <div className="text-center text-[10px] text-foreground-muted/50 font-medium">
+            ClinPOS v{pkg.version}
+          </div>
         </div>
       </aside>
     </>

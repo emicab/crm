@@ -1,16 +1,26 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import Link from 'next/link';
-import { AlertTriangle, Loader2, Package, Edit3, PlusCircle, RefreshCw, X, ShoppingCart, CheckSquare } from 'lucide-react';
-import Button from '@/components/ui/Button';
-import Select from '@/components/ui/Select';
-import CreatePurchaseModal from '@/components/stock/CreatePurchaseModal';
-import AddProductToOrderModal from '@/components/stock/AddProductToOrderModal';
-import Pagination from '@/components/ui/Pagination';
-import type { Supplier } from '@/types';
-import { motion, AnimatePresence } from 'motion/react';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+import {
+  AlertTriangle,
+  Loader2,
+  Package,
+  Edit3,
+  PlusCircle,
+  RefreshCw,
+  X,
+  ShoppingCart,
+  CheckSquare,
+} from "lucide-react";
+import Button from "@/components/ui/Button";
+import Select from "@/components/ui/Select";
+import CreatePurchaseModal from "@/components/stock/CreatePurchaseModal";
+import AddProductToOrderModal from "@/components/stock/AddProductToOrderModal";
+import Pagination from "@/components/ui/Pagination";
+import type { Supplier } from "@/types";
+import { motion, AnimatePresence } from "motion/react";
+import toast from "react-hot-toast";
 
 interface AlertProduct {
   id: number;
@@ -29,18 +39,20 @@ export default function StockAlertasPage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [filterSupplierId, setFilterSupplierId] = useState('');
+  const [filterSupplierId, setFilterSupplierId] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [productsToOrder, setProductsToOrder] = useState<AlertProduct[]>([]);
 
   // Pestaña activa: 'alerts' (Productos en Alerta) o 'all' (Todos los Productos)
-  const [activeTab, setActiveTab] = useState<'alerts' | 'all'>('alerts');
+  const [activeTab, setActiveTab] = useState<"alerts" | "all">("alerts");
 
   // Búsqueda, ordenamiento y paginación
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortColumn, setSortColumn] = useState<'name' | 'sku' | 'supplier' | 'stock' | 'minStock'>('name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortColumn, setSortColumn] = useState<
+    "name" | "sku" | "supplier" | "stock" | "minStock"
+  >("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 15;
 
@@ -60,19 +72,20 @@ export default function StockAlertasPage() {
     setIsRefreshing(true);
     try {
       const [productsRes, suppliersRes] = await Promise.all([
-        fetch('/api/products?limit=1000'), // Aumentamos límite para soportar ver todos los productos
-        fetch('/api/proveedores'),
+        fetch("/api/products?limit=1000"), // Aumentamos límite para soportar ver todos los productos
+        fetch("/api/proveedores"),
       ]);
-      if (!productsRes.ok) throw new Error('Error al cargar productos');
+      if (!productsRes.ok) throw new Error("Error al cargar productos");
       if (suppliersRes.ok) setSuppliers(await suppliersRes.json());
 
       const data = await productsRes.json();
-      const items: AlertProduct[] = (Array.isArray(data) ? data : data.data || [])
-        .map((p: any) => ({
-          ...p,
-          pricePurchase: p.pricePurchase ? parseFloat(p.pricePurchase) : null,
-          priceSale: parseFloat(p.priceSale),
-        }));
+      const items: AlertProduct[] = (
+        Array.isArray(data) ? data : data.data || []
+      ).map((p: any) => ({
+        ...p,
+        pricePurchase: p.pricePurchase ? parseFloat(p.pricePurchase) : null,
+        priceSale: parseFloat(p.priceSale),
+      }));
       setAllProducts(items);
     } catch (err) {
       console.error(err);
@@ -94,15 +107,22 @@ export default function StockAlertasPage() {
 
   // Filtrar productos según la pestaña activa
   const tabProducts = useMemo(() => {
-    if (activeTab === 'alerts') {
-      return allProducts.filter(p => p.stockMinAlert !== null && p.stockMinAlert !== undefined && p.quantityStock < p.stockMinAlert);
+    if (activeTab === "alerts") {
+      return allProducts.filter(
+        (p) =>
+          p.stockMinAlert !== null &&
+          p.stockMinAlert !== undefined &&
+          p.quantityStock < p.stockMinAlert,
+      );
     }
     return allProducts;
   }, [allProducts, activeTab]);
 
   const supplierOptions = useMemo(() => {
-    const ids = new Set(tabProducts.map(p => p.supplier?.id).filter(Boolean) as number[]);
-    return suppliers.filter(s => ids.has(s.id));
+    const ids = new Set(
+      tabProducts.map((p) => p.supplier?.id).filter(Boolean) as number[],
+    );
+    return suppliers.filter((s) => ids.has(s.id));
   }, [tabProducts, suppliers]);
 
   const filteredProducts = useMemo(() => {
@@ -110,48 +130,63 @@ export default function StockAlertasPage() {
 
     // 1. Filtrar por proveedor
     if (filterSupplierId) {
-      result = result.filter(p => p.supplier?.id === parseInt(filterSupplierId));
+      result = result.filter(
+        (p) => p.supplier?.id === parseInt(filterSupplierId),
+      );
     }
 
     // 2. Filtrar por búsqueda de nombre o SKU (insensible a mayúsculas y acentos)
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      result = result.filter(p =>
-        p.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q) ||
-        (p.sku && p.sku.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(q))
+      const q = searchQuery
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      result = result.filter(
+        (p) =>
+          p.name
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .includes(q) ||
+          (p.sku &&
+            p.sku
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .includes(q)),
       );
     }
 
     // 3. Ordenar
     result = [...result].sort((a, b) => {
-      let valA: any = '';
-      let valB: any = '';
+      let valA: any = "";
+      let valB: any = "";
 
       switch (sortColumn) {
-        case 'name':
+        case "name":
           valA = a.name.toLowerCase();
           valB = b.name.toLowerCase();
           break;
-        case 'sku':
-          valA = (a.sku || '').toLowerCase();
-          valB = (b.sku || '').toLowerCase();
+        case "sku":
+          valA = (a.sku || "").toLowerCase();
+          valB = (b.sku || "").toLowerCase();
           break;
-        case 'supplier':
-          valA = (a.supplier?.name || '').toLowerCase();
-          valB = (b.supplier?.name || '').toLowerCase();
+        case "supplier":
+          valA = (a.supplier?.name || "").toLowerCase();
+          valB = (b.supplier?.name || "").toLowerCase();
           break;
-        case 'stock':
+        case "stock":
           valA = a.quantityStock;
           valB = b.quantityStock;
           break;
-        case 'minStock':
+        case "minStock":
           valA = a.stockMinAlert ?? 0;
           valB = b.stockMinAlert ?? 0;
           break;
       }
 
-      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
 
@@ -166,26 +201,28 @@ export default function StockAlertasPage() {
     return filteredProducts.slice(startIndex, startIndex + pageSize);
   }, [filteredProducts, currentPage]);
 
-  const allSelected = paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.has(p.id));
+  const allSelected =
+    paginatedProducts.length > 0 &&
+    paginatedProducts.every((p) => selectedIds.has(p.id));
 
   const handleSelectAll = () => {
     if (allSelected) {
-      setSelectedIds(prev => {
+      setSelectedIds((prev) => {
         const next = new Set(prev);
-        paginatedProducts.forEach(p => next.delete(p.id));
+        paginatedProducts.forEach((p) => next.delete(p.id));
         return next;
       });
     } else {
-      setSelectedIds(prev => {
+      setSelectedIds((prev) => {
         const next = new Set(prev);
-        paginatedProducts.forEach(p => next.add(p.id));
+        paginatedProducts.forEach((p) => next.add(p.id));
         return next;
       });
     }
   };
 
   const handleToggle = (id: number) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -195,62 +232,77 @@ export default function StockAlertasPage() {
 
   // Agregar a la orden activa (o abrir el modal de confirmación individual)
   const handleAddToOrder = (productId: number) => {
-    const prod = allProducts.find(p => p.id === productId);
+    const prod = allProducts.find((p) => p.id === productId);
     if (prod) {
       setProductToAdd(prod);
     }
   };
 
-  const handleConfirmAddProduct = async (data: { supplierId: number; quantity: number; purchasePrice: number }) => {
+  const handleConfirmAddProduct = async (data: {
+    supplierId: number;
+    quantity: number;
+    purchasePrice: number;
+  }) => {
     if (!productToAdd) return;
     setIsAddingProduct(true);
     try {
       if (!activeOrder || activeOrder.supplierId !== data.supplierId) {
         // --- 1. Crear nueva orden de compra (pedido) ---
-        const res = await fetch('/api/compras', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await fetch("/api/compras", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             supplierId: data.supplierId,
-            status: 'ORDERED',
+            status: "ORDERED",
             items: [
               {
                 productId: productToAdd.id,
                 quantity: data.quantity,
-                purchasePrice: data.purchasePrice
-              }
-            ]
-          })
+                purchasePrice: data.purchasePrice,
+              },
+            ],
+          }),
         });
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.message || 'Error al crear la orden de compra.');
+          throw new Error(
+            errData.message || "Error al crear la orden de compra.",
+          );
         }
 
         const newPurchase = await res.json();
         setActiveOrder({
           id: newPurchase.id,
           supplierId: newPurchase.supplierId,
-          supplierName: newPurchase.supplier?.name || suppliers.find(s => s.id === newPurchase.supplierId)?.name || 'Proveedor',
+          supplierName:
+            newPurchase.supplier?.name ||
+            suppliers.find((s) => s.id === newPurchase.supplierId)?.name ||
+            "Proveedor",
           itemsCount: 1,
-          totalAmount: data.quantity * data.purchasePrice
+          totalAmount: data.quantity * data.purchasePrice,
         });
 
-        toast.success(`Pedido creado con éxito para ${newPurchase.supplier?.name || 'el proveedor'}.`);
+        toast.success(
+          `Pedido creado con éxito para ${newPurchase.supplier?.name || "el proveedor"}.`,
+        );
       } else {
         // --- 2. Agregar a orden de compra existente ---
         const getRes = await fetch(`/api/compras/${activeOrder.id}`);
-        if (!getRes.ok) throw new Error('No se pudo obtener el pedido activo.');
+        if (!getRes.ok) throw new Error("No se pudo obtener el pedido activo.");
         const currentPurchase = await getRes.json();
 
-        const existingItems = (currentPurchase.items || []).map((item: any) => ({
-          productId: item.productId,
-          quantity: parseFloat(item.quantity),
-          purchasePrice: parseFloat(item.purchasePrice)
-        }));
+        const existingItems = (currentPurchase.items || []).map(
+          (item: any) => ({
+            productId: item.productId,
+            quantity: parseFloat(item.quantity),
+            purchasePrice: parseFloat(item.purchasePrice),
+          }),
+        );
 
-        const itemIndex = existingItems.findIndex((item: any) => item.productId === productToAdd.id);
+        const itemIndex = existingItems.findIndex(
+          (item: any) => item.productId === productToAdd.id,
+        );
         if (itemIndex > -1) {
           existingItems[itemIndex].quantity += data.quantity;
           existingItems[itemIndex].purchasePrice = data.purchasePrice;
@@ -258,44 +310,47 @@ export default function StockAlertasPage() {
           existingItems.push({
             productId: productToAdd.id,
             quantity: data.quantity,
-            purchasePrice: data.purchasePrice
+            purchasePrice: data.purchasePrice,
           });
         }
 
         const putRes = await fetch(`/api/compras/${activeOrder.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             supplierId: activeOrder.supplierId,
-            status: 'ORDERED',
-            items: existingItems
-          })
+            status: "ORDERED",
+            items: existingItems,
+          }),
         });
 
         if (!putRes.ok) {
           const errData = await putRes.json().catch(() => ({}));
-          throw new Error(errData.message || 'Error al actualizar el pedido.');
+          throw new Error(errData.message || "Error al actualizar el pedido.");
         }
 
-        const updatedTotal = existingItems.reduce((sum: number, item: any) => sum + (item.quantity * item.purchasePrice), 0);
+        const updatedTotal = existingItems.reduce(
+          (sum: number, item: any) => sum + item.quantity * item.purchasePrice,
+          0,
+        );
         setActiveOrder({
           ...activeOrder,
           itemsCount: existingItems.length,
-          totalAmount: updatedTotal
+          totalAmount: updatedTotal,
         });
 
         toast.success(`¡"${productToAdd.name}" agregado al pedido activo!`);
       }
 
       setProductToAdd(null);
-      setSelectedIds(prev => {
+      setSelectedIds((prev) => {
         const next = new Set(prev);
         next.delete(productToAdd.id);
         return next;
       });
       fetchAlerts();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error inesperado.');
+      toast.error(err instanceof Error ? err.message : "Error inesperado.");
     } finally {
       setIsAddingProduct(false);
     }
@@ -303,7 +358,7 @@ export default function StockAlertasPage() {
 
   // Abrir modal masivo para los seleccionados en la tabla
   const handleOpenBatchOrder = () => {
-    const list = allProducts.filter(p => selectedIds.has(p.id));
+    const list = allProducts.filter((p) => selectedIds.has(p.id));
     setProductsToOrder(list);
     setShowCreateModal(true);
   };
@@ -314,7 +369,7 @@ export default function StockAlertasPage() {
     setLoading(true);
     try {
       const getRes = await fetch(`/api/compras/${activeOrder.id}`);
-      if (!getRes.ok) throw new Error('No se pudo obtener el pedido activo.');
+      if (!getRes.ok) throw new Error("No se pudo obtener el pedido activo.");
       const currentPurchase = await getRes.json();
 
       const itemsList = (currentPurchase.items || []).map((item: any) => ({
@@ -322,17 +377,19 @@ export default function StockAlertasPage() {
         name: item.product.name,
         sku: item.product.sku,
         quantityStock: parseFloat(item.product.quantityStock),
-        stockMinAlert: item.product.stockMinAlert ? parseFloat(item.product.stockMinAlert) : null,
+        stockMinAlert: item.product.stockMinAlert
+          ? parseFloat(item.product.stockMinAlert)
+          : null,
         pricePurchase: parseFloat(item.purchasePrice),
         priceSale: parseFloat(item.product.priceSale),
         unitType: item.product.unitType,
-        supplier: currentPurchase.supplier
+        supplier: currentPurchase.supplier,
       }));
 
       setProductsToOrder(itemsList);
       setShowCreateModal(true);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error inesperado.');
+      toast.error(err instanceof Error ? err.message : "Error inesperado.");
     } finally {
       setLoading(false);
     }
@@ -344,18 +401,31 @@ export default function StockAlertasPage() {
     fetchAlerts();
   };
 
-  const handleSort = (column: 'name' | 'sku' | 'supplier' | 'stock' | 'minStock') => {
+  const handleSort = (
+    column: "name" | "sku" | "supplier" | "stock" | "minStock",
+  ) => {
     if (sortColumn === column) {
-      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortColumn(column);
-      setSortDirection('asc');
+      setSortDirection("asc");
     }
   };
 
-  const renderSortIcon = (column: 'name' | 'sku' | 'supplier' | 'stock' | 'minStock') => {
-    if (sortColumn !== column) return <span className="text-foreground-muted/40 text-xs ml-1 select-none">⇅</span>;
-    return sortDirection === 'asc' ? <span className="text-primary text-xs ml-1 select-none">▲</span> : <span className="text-primary text-xs ml-1 select-none">▼</span>;
+  const renderSortIcon = (
+    column: "name" | "sku" | "supplier" | "stock" | "minStock",
+  ) => {
+    if (sortColumn !== column)
+      return (
+        <span className="text-foreground-muted/40 text-xs ml-1 select-none">
+          ⇅
+        </span>
+      );
+    return sortDirection === "asc" ? (
+      <span className="text-primary text-xs ml-1 select-none">▲</span>
+    ) : (
+      <span className="text-primary text-xs ml-1 select-none">▼</span>
+    );
   };
 
   return (
@@ -363,7 +433,9 @@ export default function StockAlertasPage() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <AlertTriangle size={28} className="text-red-500 animate-pulse" />
-          <h1 className="text-2xl font-bold text-foreground">Pedidos y Alertas de Stock</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            Pedidos y Alertas de Stock
+          </h1>
         </div>
         <div className="flex gap-2">
           <button
@@ -371,9 +443,16 @@ export default function StockAlertasPage() {
             className="flex items-center gap-2 px-3.5 py-2 text-sm bg-muted hover:bg-background border border-border rounded-xl transition-all shadow-sm duration-200"
             disabled={isRefreshing}
           >
-            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} /> Actualizar
+            <RefreshCw
+              size={16}
+              className={isRefreshing ? "animate-spin" : ""}
+            />{" "}
+            Actualizar
           </button>
-          <Link href="/compras/nueva" className="flex items-center gap-2 px-3.5 py-2 text-sm bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-md font-medium">
+          <Link
+            href="/compras/nueva"
+            className="flex items-center gap-2 px-3.5 py-2 text-sm bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all shadow-md font-medium"
+          >
             <PlusCircle size={16} /> Nueva Compra
           </Link>
         </div>
@@ -382,21 +461,30 @@ export default function StockAlertasPage() {
       {/* Tabs superiores de unificación */}
       <div className="flex border-b border-border mb-6">
         <button
-          onClick={() => setActiveTab('alerts')}
+          onClick={() => setActiveTab("alerts")}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'alerts'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-foreground-muted hover:text-foreground'
+            activeTab === "alerts"
+              ? "border-primary text-primary"
+              : "border-transparent text-foreground-muted hover:text-foreground"
           }`}
         >
-          En Alerta de Stock ({allProducts.filter(p => p.stockMinAlert !== null && p.stockMinAlert !== undefined && p.quantityStock < p.stockMinAlert).length})
+          En Alerta de Stock (
+          {
+            allProducts.filter(
+              (p) =>
+                p.stockMinAlert !== null &&
+                p.stockMinAlert !== undefined &&
+                p.quantityStock < p.stockMinAlert,
+            ).length
+          }
+          )
         </button>
         <button
-          onClick={() => setActiveTab('all')}
+          onClick={() => setActiveTab("all")}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === 'all'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-foreground-muted hover:text-foreground'
+            activeTab === "all"
+              ? "border-primary text-primary"
+              : "border-transparent text-foreground-muted hover:text-foreground"
           }`}
         >
           Todos los Productos ({allProducts.length})
@@ -410,14 +498,20 @@ export default function StockAlertasPage() {
       ) : tabProducts.length === 0 ? (
         <div className="text-center py-16 bg-muted rounded-2xl border border-border shadow-inner">
           <Package size={48} className="mx-auto text-success/60 mb-4" />
-          <h2 className="text-xl font-semibold text-foreground">Todo en orden</h2>
-          <p className="text-foreground-muted mt-2 text-sm">No hay productos en esta sección.</p>
+          <h2 className="text-xl font-semibold text-foreground">
+            Todo en orden
+          </h2>
+          <p className="text-foreground-muted mt-2 text-sm">
+            No hay productos en esta sección.
+          </p>
         </div>
       ) : (
         <div className="bg-muted rounded-2xl border border-border overflow-hidden shadow-md">
           <div className="p-4 sm:p-5 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-3 bg-background/40">
             <p className="text-sm text-foreground-muted font-medium whitespace-nowrap">
-              {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''} encontrado{filteredProducts.length !== 1 ? 's' : ''}
+              {filteredProducts.length} producto
+              {filteredProducts.length !== 1 ? "s" : ""} encontrado
+              {filteredProducts.length !== 1 ? "s" : ""}
             </p>
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
               <input
@@ -430,13 +524,18 @@ export default function StockAlertasPage() {
               <Select
                 name="supplierFilter"
                 value={filterSupplierId}
-                onChange={(e) => { setFilterSupplierId(e.target.value); setSelectedIds(new Set()); }}
+                onChange={(e) => {
+                  setFilterSupplierId(e.target.value);
+                  setSelectedIds(new Set());
+                }}
                 aria-label="Filtrar por proveedor"
                 className="text-sm rounded-xl w-full sm:w-64"
               >
                 <option value="">Todos los proveedores</option>
-                {supplierOptions.map(s => (
-                  <option key={s.id} value={String(s.id)}>{s.name}</option>
+                {supplierOptions.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.name}
+                  </option>
                 ))}
               </Select>
             </div>
@@ -447,48 +546,68 @@ export default function StockAlertasPage() {
               <thead className="border-b border-border bg-background/10">
                 <tr>
                   <th className="p-3 sm:p-4 w-10">
-                    <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className="rounded border-border bg-background" />
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={handleSelectAll}
+                      className="rounded border-border bg-background"
+                    />
                   </th>
                   <th
                     className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors"
-                    onClick={() => handleSort('name')}
+                    onClick={() => handleSort("name")}
                   >
-                    Producto {renderSortIcon('name')}
+                    Producto {renderSortIcon("name")}
                   </th>
                   <th
                     className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors hidden sm:table-cell"
-                    onClick={() => handleSort('sku')}
+                    onClick={() => handleSort("sku")}
                   >
-                    SKU {renderSortIcon('sku')}
+                    SKU {renderSortIcon("sku")}
                   </th>
                   <th
                     className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors hidden md:table-cell"
-                    onClick={() => handleSort('supplier')}
+                    onClick={() => handleSort("supplier")}
                   >
-                    Proveedor {renderSortIcon('supplier')}
+                    Proveedor {renderSortIcon("supplier")}
                   </th>
                   <th
                     className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors text-center"
-                    onClick={() => handleSort('stock')}
+                    onClick={() => handleSort("stock")}
                   >
-                    Stock actual {renderSortIcon('stock')}
+                    Stock actual {renderSortIcon("stock")}
                   </th>
                   <th
                     className="p-3 sm:p-4 text-sm font-bold text-foreground cursor-pointer select-none hover:bg-background/25 transition-colors text-center"
-                    onClick={() => handleSort('minStock')}
+                    onClick={() => handleSort("minStock")}
                   >
-                    Mínimo {renderSortIcon('minStock')}
+                    Mínimo {renderSortIcon("minStock")}
                   </th>
-                  <th className="p-3 sm:p-4 text-sm font-bold text-foreground text-right">Acciones</th>
+                  <th className="p-3 sm:p-4 text-sm font-bold text-foreground text-right">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedProducts.map((product) => {
-                  const stockRatio = Math.min(100, Math.max(0, (product.quantityStock / (product.stockMinAlert || 1)) * 100));
-                  const isBelowMin = product.stockMinAlert !== null && product.stockMinAlert !== undefined && product.quantityStock < product.stockMinAlert;
+                  const stockRatio = Math.min(
+                    100,
+                    Math.max(
+                      0,
+                      (product.quantityStock / (product.stockMinAlert || 1)) *
+                        100,
+                    ),
+                  );
+                  const isBelowMin =
+                    product.stockMinAlert !== null &&
+                    product.stockMinAlert !== undefined &&
+                    product.quantityStock < product.stockMinAlert;
 
                   return (
-                    <tr key={product.id} className="border-b border-border/40 last:border-b-0 hover:bg-background/40 transition-colors">
+                    <tr
+                      key={product.id}
+                      className="border-b border-border/40 last:border-b-0 hover:bg-background/40 transition-colors"
+                    >
                       <td className="p-3 sm:p-4">
                         <input
                           type="checkbox"
@@ -497,16 +616,30 @@ export default function StockAlertasPage() {
                           className="rounded border-border bg-background"
                         />
                       </td>
-                      <td className="p-3 sm:p-4 text-sm font-semibold text-foreground">{product.name}</td>
-                      <td className="p-3 sm:p-4 text-sm text-foreground-muted hidden sm:table-cell font-mono text-xs">{product.sku || '-'}</td>
-                      <td className="p-3 sm:p-4 text-sm text-foreground-muted hidden md:table-cell">{product.supplier?.name || '-'}</td>
+                      <td className="p-3 sm:p-4 text-sm font-semibold text-foreground">
+                        {product.name}
+                      </td>
+                      <td className="p-3 sm:p-4 text-sm text-foreground-muted hidden sm:table-cell font-mono">
+                        {product.sku || "-"}
+                      </td>
+                      <td className="p-3 sm:p-4 text-sm text-foreground-muted hidden md:table-cell">
+                        {product.supplier?.name || "-"}
+                      </td>
                       <td className="p-3 sm:p-4 text-sm text-center">
                         <div className="flex flex-col items-center gap-1.5">
                           {isBelowMin ? (
                             <>
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-500 text-xs font-bold">
-                                <AlertTriangle size={11} className="text-red-500 animate-pulse" />
-                                {product.quantityStock} {product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}
+                                <AlertTriangle
+                                  size={11}
+                                  className="text-red-500 animate-pulse"
+                                />
+                                {product.quantityStock}{" "}
+                                {product.unitType === "WEIGHT"
+                                  ? "kg"
+                                  : product.unitType === "VOLUME"
+                                    ? "L"
+                                    : "u"}
                               </span>
                               <div className="w-16 h-1.5 bg-border/80 rounded-full overflow-hidden mt-0.5">
                                 <div
@@ -517,16 +650,21 @@ export default function StockAlertasPage() {
                             </>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-success/15 text-success text-xs font-bold">
-                              {product.quantityStock} {product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}
+                              {product.quantityStock}{" "}
+                              {product.unitType === "WEIGHT"
+                                ? "kg"
+                                : product.unitType === "VOLUME"
+                                  ? "L"
+                                  : "u"}
                             </span>
                           )}
                         </div>
                       </td>
                       <td className="p-3 sm:p-4 text-sm text-center text-foreground-muted font-medium">
-                        {product.stockMinAlert !== null && product.stockMinAlert !== undefined
-                          ? `${product.stockMinAlert} ${product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : 'u'}`
-                          : '-'
-                        }
+                        {product.stockMinAlert !== null &&
+                        product.stockMinAlert !== undefined
+                          ? `${product.stockMinAlert} ${product.unitType === "WEIGHT" ? "kg" : product.unitType === "VOLUME" ? "L" : "u"}`
+                          : "-"}
                       </td>
                       <td className="p-3 sm:p-4 text-sm text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -566,11 +704,12 @@ export default function StockAlertasPage() {
             </div>
           )}
 
-          {filteredProducts.length === 0 && (filterSupplierId || searchQuery) && (
-            <div className="text-center py-8 text-foreground-muted text-sm bg-background/10">
-              No se encontraron productos con los filtros ingresados.
-            </div>
-          )}
+          {filteredProducts.length === 0 &&
+            (filterSupplierId || searchQuery) && (
+              <div className="text-center py-8 text-foreground-muted text-sm bg-background/10">
+                No se encontraron productos con los filtros ingresados.
+              </div>
+            )}
         </div>
       )}
 
@@ -588,7 +727,8 @@ export default function StockAlertasPage() {
               <div className="flex items-center gap-3">
                 <CheckSquare size={20} className="text-primary" />
                 <span className="text-sm font-semibold text-foreground">
-                  {selectedIds.size} producto{selectedIds.size !== 1 ? 's' : ''} seleccionado{selectedIds.size !== 1 ? 's' : ''}
+                  {selectedIds.size} producto{selectedIds.size !== 1 ? "s" : ""}{" "}
+                  seleccionado{selectedIds.size !== 1 ? "s" : ""}
                 </span>
                 <button
                   onClick={() => setSelectedIds(new Set())}
@@ -597,7 +737,11 @@ export default function StockAlertasPage() {
                   <X size={16} />
                 </button>
               </div>
-              <Button variant="primary" onClick={handleOpenBatchOrder} className="shadow-lg hover:scale-102 active:scale-98">
+              <Button
+                variant="primary"
+                onClick={handleOpenBatchOrder}
+                className="shadow-lg hover:scale-102 active:scale-98"
+              >
                 <ShoppingCart size={16} className="mr-1.5" />
                 Crear Orden de Compra ({selectedIds.size})
               </Button>
@@ -618,18 +762,35 @@ export default function StockAlertasPage() {
           >
             <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <ShoppingCart size={20} className="text-primary animate-bounce" />
+                <ShoppingCart
+                  size={20}
+                  className="text-primary animate-bounce"
+                />
                 <div>
-                  <p className="text-sm font-bold text-foreground">Pedido Activo: {activeOrder.supplierName}</p>
-                  <p className="text-xs text-foreground-muted">{activeOrder.itemsCount} producto(s) cargado(s)</p>
+                  <p className="text-sm font-bold text-foreground">
+                    Pedido Activo: {activeOrder.supplierName}
+                  </p>
+                  <p className="text-xs text-foreground-muted">
+                    {activeOrder.itemsCount} producto(s) cargado(s)
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setActiveOrder(null)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveOrder(null)}
+                >
                   <X size={14} className="mr-1" /> Cancelar Pedido
                 </Button>
-                <Button variant="primary" size="sm" onClick={handleOpenActiveOrderCart} className="shadow-md">
-                  <ShoppingCart size={14} className="mr-1" /> Ver Carrito de Pedido
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleOpenActiveOrderCart}
+                  className="shadow-md"
+                >
+                  <ShoppingCart size={14} className="mr-1" /> Ver Carrito de
+                  Pedido
                 </Button>
               </div>
             </div>

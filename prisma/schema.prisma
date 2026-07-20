@@ -51,16 +51,17 @@ model Product {
 }
 
 model Client {
-  id        Int      @id @default(autoincrement())
-  firstName String
-  lastName  String?
-  email     String?  @unique
-  phone     String?
-  address   String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Sale      Sale[]
+  id             Int             @id @default(autoincrement())
+  firstName      String
+  lastName       String?
+  email          String?         @unique
+  phone          String?
+  address        String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  Sale           Sale[]
+  accountBalance AccountBalance?
 
   @@index([firstName, lastName])
 }
@@ -78,22 +79,24 @@ model Seller {
 }
 
 model Sale {
-  id                  Int           @id @default(autoincrement())
-  saleDate            DateTime      @default(now())
+  id                  Int               @id @default(autoincrement())
+  saleDate            DateTime          @default(now())
   totalAmount         Decimal
   paymentType         PaymentType
   notes               String?
   clientId            Int?
   sellerId            Int
   cashRegisterId      Int?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
   discountCodeApplied String?
-  promotionsApplied   String?       // JSON: [{promotionId, name, type, discountAmount}]
-  seller              Seller        @relation(fields: [sellerId], references: [id])
-  client              Client?       @relation(fields: [clientId], references: [id])
-  cashRegister        CashRegister? @relation(fields: [cashRegisterId], references: [id])
+  promotionsApplied   String?           // JSON: [{promotionId, name, type, discountAmount}]
+  onAccount           Boolean           @default(false)
+  seller              Seller            @relation(fields: [sellerId], references: [id])
+  client              Client?           @relation(fields: [clientId], references: [id])
+  cashRegister        CashRegister?     @relation(fields: [cashRegisterId], references: [id])
   items               SaleItem[]
+  accountMovements    AccountMovement[]
 }
 
 model SaleItem {
@@ -223,6 +226,7 @@ enum PaymentType {
   CARD
   QR
   OTHER
+  ON_ACCOUNT
 }
 
 enum PurchaseStatus {
@@ -279,4 +283,34 @@ model Setting {
   id    Int    @id @default(autoincrement())
   key   String @unique
   value String
+}
+
+model AccountBalance {
+  id         Int      @id @default(autoincrement())
+  clientId   Int      @unique
+  balance    Decimal  @default(0)  // positivo = debe, negativo = a favor
+  updatedAt  DateTime @updatedAt
+  client     Client   @relation(fields: [clientId], references: [id])
+  movements  AccountMovement[]
+}
+
+model AccountMovement {
+  id               Int            @id @default(autoincrement())
+  accountBalanceId Int
+  type             String         // SALE_ON_ACCOUNT, PAYMENT, ADJUSTMENT
+  amount           Decimal        // positivo = cargó deuda, negativo = pagó
+  description      String?
+  saleId           Int?           // si el movimiento viene de una venta en cuenta
+  createdAt        DateTime       @default(now())
+  accountBalance   AccountBalance @relation(fields: [accountBalanceId], references: [id], onDelete: Cascade)
+  sale             Sale?          @relation(fields: [saleId], references: [id])
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  role      String   // "ADMIN" | "SUPERVISOR" | "CASHIER"
+  pinHash   String   // SHA-256 PIN hash
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from 'next/link';
+import { useModules } from '@/hooks/useModules';
 import {
   ArrowUpRightSquare,
   History,
@@ -19,40 +22,39 @@ import {
   FileText,
 } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
-
 const priorityModules = [
   { name: 'Caja', href: '/caja', icon: Wallet, description: 'Abrir/Cerrar caja y ver movimientos del día.', shortcut: 'Ctrl+J' },
   { name: 'Nueva Venta', href: '/ventas/nueva', icon: ShoppingCart, description: 'Registra una nueva transacción de venta.', shortcut: 'Ctrl+N' },
-  { name: 'Productos', href: '/productos', icon: Package, description: 'Gestiona tu catálogo de productos.', shortcut: 'Ctrl+P' },
-  { name: 'Gastos', href: '/gastos', icon: TrendingDown, description: 'Registra y controla tus gastos.', shortcut: 'Ctrl+G' },
+  { name: 'Productos', href: '/productos', icon: Package, description: 'Gestiona tu catálogo de productos.', shortcut: 'Ctrl+P', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Gastos', href: '/gastos', icon: TrendingDown, description: 'Registra y controla tus gastos.', shortcut: 'Ctrl+G', moduleId: 'gastos', allowedRoles: ["ADMIN", "SUPERVISOR"] },
 ];
 
 const secondaryModules = [
-  { name: 'Nueva Compra', href: '/compras/nueva', icon: ArrowUpRightSquare, description: 'Ingresa mercadería y actualiza tu stock.' },
-  { name: 'Analíticas', href: '/analiticas', icon: LayoutDashboard, description: 'Visualiza tus métricas y gráficos clave.' },
-  { name: 'Clientes', href: '/clientes', icon: Users },
-  { name: 'Proveedores', href: '/proveedores', icon: Truck },
-  { name: 'Vendedores', href: '/vendedores', icon: UserPlus },
-  { name: 'Categorías', href: '/categorias', icon: Shapes },
-  { name: 'Marcas', href: '/marcas', icon: Tag },
-  { name: 'Carga de Stock', href: '/stock', icon: Barcode },
-  { name: 'Alertas de Stock', href: '/stock/alertas', icon: AlertTriangle },
-  { name: 'Combos', href: '/combos', icon: ShoppingBag },
-  { name: 'Promociones', href: '/promociones', icon: Percent },
+  { name: 'Nueva Compra', href: '/compras/nueva', icon: ArrowUpRightSquare, description: 'Ingresa mercadería y actualiza tu stock.', moduleId: 'compras', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Analíticas', href: '/analiticas', icon: LayoutDashboard, description: 'Visualiza tus métricas y gráficos clave.', moduleId: 'analiticas', allowedRoles: ["ADMIN"] },
+  { name: 'Clientes', href: '/clientes', icon: Users, moduleId: 'clientes', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Cuenta Corriente', href: '/cuenta-corriente', icon: Users, moduleId: 'cuenta_corriente', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Proveedores', href: '/proveedores', icon: Truck, moduleId: 'compras', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Vendedores', href: '/vendedores', icon: UserPlus, moduleId: 'vendedores', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Categorías', href: '/categorias', icon: Shapes, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Marcas', href: '/marcas', icon: Tag, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Carga de Stock', href: '/stock', icon: Barcode, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Alertas de Stock', href: '/stock/alertas', icon: AlertTriangle, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Combos', href: '/combos', icon: ShoppingBag, moduleId: 'combos_promociones', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { name: 'Promociones', href: '/promociones', icon: Percent, moduleId: 'combos_promociones', allowedRoles: ["ADMIN", "SUPERVISOR"] },
   { name: 'Historial Ventas', href: '/ventas', icon: FileText },
-  { name: 'Historial Compras', href: '/compras', icon: History },
+  { name: 'Historial Compras', href: '/compras', icon: History, moduleId: 'compras', allowedRoles: ["ADMIN", "SUPERVISOR"] },
 ];
 
 const shortcuts = [
   { keys: ['Ctrl', 'N'], label: 'Nueva Venta' },
   { keys: ['Ctrl', 'J'], label: 'Caja' },
-  { keys: ['Ctrl', 'P'], label: 'Productos' },
-  { keys: ['Ctrl', 'G'], label: 'Gastos' },
-  { keys: ['Ctrl', 'E'], label: 'Nueva Compra' },
-  { keys: ['Ctrl', 'A'], label: 'Analíticas' },
+  { keys: ['Ctrl', 'P'], label: 'Productos', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { keys: ['Ctrl', 'G'], label: 'Gastos', moduleId: 'gastos', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { keys: ['Ctrl', 'E'], label: 'Nueva Compra', moduleId: 'compras', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  { keys: ['Ctrl', 'A'], label: 'Analíticas', moduleId: 'analiticas', allowedRoles: ["ADMIN"] },
   { keys: ['F9'], label: 'Ir a Caja' },
-  { keys: ['Ctrl', ',', ''], label: 'Configuración' },
+  { keys: ['Ctrl', ',', ''], label: 'Configuración', allowedRoles: ["ADMIN"] },
 ];
 
 const NavCard = ({ module }: { module: typeof priorityModules[0] }) => (
@@ -88,6 +90,32 @@ const SecondaryNavCard = ({ module }: { module: typeof secondaryModules[0] }) =>
 );
 
 export default function HomePage() {
+  const { isModuleEnabled, currentUser } = useModules();
+
+  const filteredPriorityModules = priorityModules.filter(mod => {
+    if (mod.moduleId && !isModuleEnabled(mod.moduleId)) return false;
+    if (isModuleEnabled('roles') && currentUser && mod.allowedRoles) {
+      return mod.allowedRoles.includes(currentUser.role);
+    }
+    return true;
+  });
+
+  const filteredSecondaryModules = secondaryModules.filter(mod => {
+    if (mod.moduleId && !isModuleEnabled(mod.moduleId)) return false;
+    if (isModuleEnabled('roles') && currentUser && mod.allowedRoles) {
+      return mod.allowedRoles.includes(currentUser.role);
+    }
+    return true;
+  });
+
+  const filteredShortcuts = shortcuts.filter(s => {
+    if (s.moduleId && !isModuleEnabled(s.moduleId)) return false;
+    if (isModuleEnabled('roles') && currentUser && s.allowedRoles) {
+      return s.allowedRoles.includes(currentUser.role);
+    }
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-dream-100/30 to-background bg-fixed">
       <div className="w-full max-w-6xl mx-auto p-4 md:p-8">
@@ -112,7 +140,7 @@ export default function HomePage() {
               </span>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {priorityModules.map((mod) => (
+              {filteredPriorityModules.map((mod) => (
                 <NavCard key={mod.name} module={mod} />
               ))}
             </div>
@@ -130,7 +158,7 @@ export default function HomePage() {
             </div>
             <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 gap-x-6">
-                {shortcuts.map((s) => (
+                {filteredShortcuts.map((s) => (
                   <div key={s.label} className="flex items-center gap-2">
                     <div className="flex items-center gap-0.5">
                       {s.keys.filter(k => k).map((k, i) => (
@@ -153,7 +181,7 @@ export default function HomePage() {
               Todos los Módulos
             </h2>
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-              {secondaryModules.map((mod) => (
+              {filteredSecondaryModules.map((mod) => (
                 <SecondaryNavCard key={mod.name} module={mod} />
               ))}
             </div>

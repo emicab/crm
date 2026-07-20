@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
+import { runSupabaseSync } from '../../../lib/syncService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const id = parseInt(req.query.id as string);
@@ -60,6 +61,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           status: 'CLOSED',
           notes: notes || null,
         },
+      });
+
+      // Disparar copia de seguridad en la nube (segundo plano) si está configurado
+      runSupabaseSync().catch((err) => {
+        console.error("[SYNC] Error al sincronizar backup al cerrar caja:", err);
       });
 
       res.status(200).json(updated);

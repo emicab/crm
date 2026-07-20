@@ -120,6 +120,11 @@ export default async function handler(
     }
 
     try {
+      const openRegister = await prisma.cashRegister.findFirst({ where: { status: 'OPEN' } });
+      if (!openRegister) {
+        return res.status(400).json({ message: 'Debe haber una caja abierta para poder registrar un gasto.' });
+      }
+
       const result = await prisma.$transaction(async (tx) => {
         const newExpense = await tx.expense.create({
           data: {
@@ -132,20 +137,17 @@ export default async function handler(
           },
         });
 
-        // Registrar movimiento en caja si hay una abierta
-        const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
-        if (openRegister) {
-          await tx.cashMovement.create({
-            data: {
-              cashRegisterId: openRegister.id,
-              type: 'EXPENSE',
-              paymentType,
-              sourceId: newExpense.id,
-              amount: -Math.abs(amount), // gasto: monto negativo
-              description: `Gasto: ${category} - ${description}`,
-            },
-          });
-        }
+        // Registrar movimiento en caja (caja abierta garantizada por verificación previa)
+        await tx.cashMovement.create({
+          data: {
+            cashRegisterId: openRegister.id,
+            type: 'EXPENSE',
+            paymentType,
+            sourceId: newExpense.id,
+            amount: -Math.abs(amount), // gasto: monto negativo
+            description: `Gasto: ${category} - ${description}`,
+          },
+        });
 
         return newExpense;
       });

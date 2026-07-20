@@ -12,7 +12,8 @@ declare global {
     electronAPI: IElectronAPI;
     licenseAPI: {
       activate: (licenseKey: string) => Promise<{ success: boolean; message: string; }>;
-      check: () => Promise<{ isActivated: boolean; licenseKey?: string; }>;
+      check: () => Promise<{ isActivated: boolean; tier?: string; licenseKey?: string; }>;
+      setFreeMode: () => Promise<{ success: boolean }>;
     };
     updateAPI?: {
       check: () => Promise<{ status: string; version?: string; error?: string }>;

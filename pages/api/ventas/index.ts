@@ -126,6 +126,10 @@ export default async function handler(
     if (notes) notes = sanitizeString(notes);
     if (discountCodeApplied) discountCodeApplied = sanitizeString(discountCodeApplied);
 
+    if (paymentType === 'ON_ACCOUNT' && !clientId) {
+      return res.status(400).json({ message: 'Se requiere seleccionar un cliente para poder realizar una venta en cuenta corriente.' });
+    }
+
     let calculatedTotalAmount = new Decimal(0);
     for (const item of items) {
       if (item.quantity <= 0 || item.priceAtSale < 0) {
@@ -227,6 +231,8 @@ export default async function handler(
         // Registrar movimiento en caja si hay una abierta
         const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
 
+        const isOnAccount = paymentType === 'ON_ACCOUNT';
+
         const newSale = await tx.sale.create({
           data: {
             saleDate: new Date(),
@@ -235,15 +241,44 @@ export default async function handler(
             notes: notes || null,
             discountCodeApplied: discountCodeApplied || null,
             promotionsApplied: promotionsAppliedJson,
+            onAccount: isOnAccount,
             ...(clientId && { client: { connect: { id: clientId } } }),
             seller: { connect: { id: sellerId } },
             ...(openRegister && { cashRegister: { connect: { id: openRegister.id } } }),
           },
         });
 
-        if (openRegister) {
+        // Si es en cuenta corriente, actualizamos el saldo del cliente
+        if (isOnAccount && clientId) {
+          let account = await tx.accountBalance.findUnique({ where: { clientId } });
+          if (!account) {
+            account = await tx.accountBalance.create({
+              data: {
+                clientId,
+                balance: new Decimal(0),
+              },
+            });
+          }
+          await tx.accountBalance.update({
+            where: { id: account.id },
+            data: {
+              balance: {
+                increment: calculatedTotalAmount,
+              },
+            },
+          });
+          await tx.accountMovement.create({
+            data: {
+              accountBalanceId: account.id,
+              type: "SALE_ON_ACCOUNT",
+              amount: calculatedTotalAmount,
+              description: `Venta #${newSale.id} en Cuenta Corriente`,
+              saleId: newSale.id,
+            },
+          });
+        } else if (openRegister) {
           const cashAmount = paymentType === 'CASH' ? calculatedTotalAmount : new Decimal(0);
-          const otherAmount = paymentType !== 'CASH' ? calculatedTotalAmount : new Decimal(0);
+          const otherAmount = (paymentType !== 'CASH' && paymentType !== 'ON_ACCOUNT') ? calculatedTotalAmount : new Decimal(0);
           if (cashAmount.greaterThan(0)) {
             await tx.cashMovement.create({
               data: {

@@ -63,6 +63,7 @@ export interface Brand {
     CARD = 'CARD',
     QR = 'QR',
     OTHER = 'OTHER',
+    ON_ACCOUNT = 'ON_ACCOUNT',
   }
   
   export interface Combo {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Button from "@/components/ui/Button";
 
 interface UnitTypeModalProps {
@@ -17,14 +17,12 @@ const options = [
 ];
 
 const UnitTypeModal: React.FC<UnitTypeModalProps> = ({ isOpen, productName, onConfirm, onCancel }) => {
-  const [selected, setSelected] = useState('');
-
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onCancel}>
-      <div className="bg-muted text-foreground rounded-lg shadow-xl w-full max-w-sm m-4 p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold mb-1">Tipo de unidad</h3>
+      <div className="bg-muted text-foreground rounded-2xl shadow-xl w-full max-w-sm m-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold mb-1">Tipo de unidad</h3>
         <p className="text-sm text-foreground-muted mb-4">
           ¿Cómo se vende <strong>{productName}</strong>?
         </p>
@@ -33,21 +31,16 @@ const UnitTypeModal: React.FC<UnitTypeModalProps> = ({ isOpen, productName, onCo
             <button
               key={opt.value}
               type="button"
-              onClick={() => setSelected(opt.value)}
-              className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                selected === opt.value
-                  ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-border bg-background text-foreground-muted hover:border-primary/50'
-              }`}
+              onClick={() => onConfirm(opt.value)}
+              className="w-full text-left p-3.5 rounded-xl border border-border bg-background hover:border-primary hover:bg-primary/5 transition-all text-foreground cursor-pointer active:scale-98"
             >
-              <p className="font-medium text-sm">{opt.label}</p>
-              <p className="text-xs mt-0.5 opacity-70">{opt.desc}</p>
+              <p className="font-semibold text-sm">{opt.label}</p>
+              <p className="text-xs text-foreground-muted mt-0.5">{opt.desc}</p>
             </button>
           ))}
         </div>
-        <div className="flex justify-end gap-2 mt-6">
-          <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
-          <Button type="button" variant="primary" onClick={() => onConfirm(selected)} disabled={!selected}>Agregar</Button>
+        <div className="flex justify-end gap-2 mt-5">
+          <Button type="button" variant="outline" onClick={onCancel} className="rounded-xl">Cancelar</Button>
         </div>
       </div>
     </div>
