@@ -15,7 +15,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 contextBridge.exposeInMainWorld('licenseAPI', {
   activate: (licenseKey) => ipcRenderer.invoke('license:activate', licenseKey),
   check: () => ipcRenderer.invoke('license:check'),
-  setFreeMode: () => ipcRenderer.invoke('license:setFreeMode'),
 });
 
 // API de actualizaciones

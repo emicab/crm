@@ -12,7 +12,8 @@ import { SaleTotalsPanel } from "./subcomponents/SaleTotalsPanel";
 import { SaleQuickAccess } from "./subcomponents/SaleQuickAccess";
 import WeightModal from "@/components/ventas/WeightModal";
 import UnitTypeModal from "@/components/ventas/UnitTypeModal";
-import CajaModal from "@/components/ventas/CajaModal";
+import { getPaymentTypeDisplay } from "@/lib/displayTexts";
+import CajaModal from "./CajaModal";
 
 const SaleForm = () => {
   const {
@@ -68,6 +69,13 @@ const SaleForm = () => {
     handleSelectCombo,
     handleSubmit,
     handleOpenCajaFromSale,
+    config,
+    invoiceType,
+    setInvoiceType,
+    clientCuit,
+    setClientCuit,
+    clientName,
+    setClientName,
   } = useSaleState();
 
   if (isFetchingInitialData) {
@@ -108,7 +116,8 @@ const SaleForm = () => {
                   onClick={() => handleSelectCombo(combo)}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border border-amber-400/40 bg-amber-500/5 text-amber-700 hover:bg-amber-100/50 transition-colors cursor-pointer"
                 >
-                  Combo: {combo.name} <span className="opacity-80">({combo.price})</span>
+                  Combo: {combo.name}{" "}
+                  <span className="opacity-80">({combo.price})</span>
                 </button>
               ))}
             </div>
@@ -127,6 +136,13 @@ const SaleForm = () => {
             handleClientSearchChange={handleClientSearchChange}
             handleSelectClient={handleSelectClient}
             handleClearClientSelection={handleClearClientSelection}
+            config={config}
+            invoiceType={invoiceType}
+            setInvoiceType={setInvoiceType}
+            clientCuit={clientCuit}
+            setClientCuit={setClientCuit}
+            clientName={clientName}
+            setClientName={setClientName}
           />
 
           {/* Carrito de Compras Inline */}
@@ -205,15 +221,29 @@ const SaleForm = () => {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden p-6 space-y-4 text-center">
             <div className="mx-auto h-12 w-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              <svg
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="2.5"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4.5 12.75l6 6 9-13.5"
+                />
               </svg>
             </div>
-            
+
             <div className="space-y-1">
-              <h3 className="text-lg font-bold text-foreground">¡Venta Registrada!</h3>
+              <h3 className="text-lg font-bold text-foreground">
+                ¡Venta Registrada!
+              </h3>
               <p className="text-xs text-foreground-muted">
-                El comprobante de venta N° <strong>#{lastCreatedSale.id}</strong> se ha registrado con éxito.
+                El comprobante de venta N°{" "}
+                <strong>#{lastCreatedSale.id}</strong> se ha registrado con
+                éxito.
               </p>
             </div>
 
@@ -229,13 +259,17 @@ const SaleForm = () => {
               <div className="flex justify-between">
                 <span className="text-foreground-muted">Importe Total:</span>
                 <span className="font-bold text-primary font-mono text-sm">
-                  ${parseFloat(lastCreatedSale.totalAmount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                  $
+                  {parseFloat(lastCreatedSale.totalAmount).toLocaleString(
+                    "es-AR",
+                    { minimumFractionDigits: 2 },
+                  )}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-foreground-muted">Método de Pago:</span>
                 <span className="font-semibold text-foreground uppercase text-[10px]">
-                  {lastCreatedSale.paymentType}
+                  {getPaymentTypeDisplay(lastCreatedSale.paymentType)}
                 </span>
               </div>
             </div>
@@ -243,8 +277,12 @@ const SaleForm = () => {
             {/* Compartir por WhatsApp */}
             <div className="space-y-2 pt-2 border-t border-border">
               <div className="text-xs text-left font-bold text-foreground flex items-center gap-1.5">
-                <svg className="h-4 w-4 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.464L0 24zm6.59-4.846c1.6.95 3.198 1.451 4.937 1.452 5.466 0 9.909-4.444 9.913-9.91.002-2.651-1.02-5.143-2.877-7.001C16.808 1.838 14.321.815 11.99.815c-5.474 0-9.919 4.444-9.924 9.91-.001 1.89.504 3.734 1.466 5.361l-.961 3.507 3.577-.938zm11.567-7.643c-.307-.154-1.82-.9-2.1-.1-.28.1-.56.56-.687.7-.128.14-.256.155-.563.002-.307-.154-1.3-.478-2.477-1.528-.915-.815-1.532-1.822-1.712-2.129-.18-.308-.019-.475.135-.629.138-.138.307-.359.461-.539.154-.18.205-.308.307-.513.102-.206.051-.385-.026-.539-.077-.154-.687-1.657-.942-2.27-.249-.598-.5-.517-.687-.527-.179-.009-.385-.01-.59-.01-.205 0-.539.077-.82.385-.282.308-1.077 1.051-1.077 2.562 0 1.512 1.102 2.973 1.256 3.178.154.205 2.169 3.313 5.253 4.643.734.316 1.307.505 1.753.647.737.234 1.407.2 1.938.12.593-.09 1.82-.743 2.076-1.461.256-.718.256-1.333.179-1.461-.077-.128-.282-.205-.59-.359z"/>
+                <svg
+                  className="h-4 w-4 text-emerald-600 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.464L0 24zm6.59-4.846c1.6.95 3.198 1.451 4.937 1.452 5.466 0 9.909-4.444 9.913-9.91.002-2.651-1.02-5.143-2.877-7.001C16.808 1.838 14.321.815 11.99.815c-5.474 0-9.919 4.444-9.924 9.91-.001 1.89.504 3.734 1.466 5.361l-.961 3.507 3.577-.938zm11.567-7.643c-.307-.154-1.82-.9-2.1-.1-.28.1-.56.56-.687.7-.128.14-.256.155-.563.002-.307-.154-1.3-.478-2.477-1.528-.915-.815-1.532-1.822-1.712-2.129-.18-.308-.019-.475.135-.629.138-.138.307-.359.461-.539.154-.18.205-.308.307-.513.102-.206.051-.385-.026-.539-.077-.154-.687-1.657-.942-2.27-.249-.598-.5-.517-.687-.527-.179-.009-.385-.01-.59-.01-.205 0-.539.077-.82.385-.282.308-1.077 1.051-1.077 2.562 0 1.512 1.102 2.973 1.256 3.178.154.205 2.169 3.313 5.253 4.643.734.316 1.307.505 1.753.647.737.234 1.407.2 1.938.12.593-.09 1.82-.743 2.076-1.461.256-.718.256-1.333.179-1.461-.077-.128-.282-.205-.59-.359z" />
                 </svg>
                 Compartir ticket por WhatsApp
               </div>
@@ -259,18 +297,27 @@ const SaleForm = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    const phoneEl = document.getElementById("ws-phone-input") as HTMLInputElement;
-                    const phoneVal = phoneEl ? phoneEl.value.replace(/\D/g, "") : "";
+                    const phoneEl = document.getElementById(
+                      "ws-phone-input",
+                    ) as HTMLInputElement;
+                    const phoneVal = phoneEl
+                      ? phoneEl.value.replace(/\D/g, "")
+                      : "";
                     if (!phoneVal) {
                       toast.error("Ingrese un número de teléfono.");
                       return;
                     }
-                    const finalPhone = phoneVal.startsWith("54") ? phoneVal : "549" + phoneVal;
+                    const finalPhone = phoneVal.startsWith("54")
+                      ? phoneVal
+                      : "549" + phoneVal;
                     const clientName = lastCreatedSale.client
                       ? `${lastCreatedSale.client.firstName} ${lastCreatedSale.client.lastName || ""}`.trim()
                       : "Cliente";
                     const message = `Hola ${clientName}! Te adjuntamos el detalle de tu compra N° #${lastCreatedSale.id} por un total de $${parseFloat(lastCreatedSale.totalAmount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}. ¡Muchas gracias por elegirnos!`;
-                    window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, "_blank");
+                    window.open(
+                      `https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`,
+                      "_blank",
+                    );
                   }}
                   className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl active:scale-[0.97] transition-all cursor-pointer border-0"
                 >
@@ -286,7 +333,9 @@ const SaleForm = () => {
                 onClick={() => {
                   setLastCreatedSale(null);
                   setTimeout(() => {
-                    const searchInput = document.querySelector('input[placeholder*="Escanea o escribe"]') as HTMLInputElement;
+                    const searchInput = document.querySelector(
+                      'input[placeholder*="Escanea o escribe"]',
+                    ) as HTMLInputElement;
                     searchInput?.focus();
                   }, 100);
                 }}

@@ -15,7 +15,9 @@ const paymentTypeDisplay: Record<string, string> = {
   CASH: 'Efectivo',
   TRANSFER: 'Transferencia',
   CARD: 'Tarjeta',
+  QR: 'QR',
   OTHER: 'Otro',
+  ON_ACCOUNT: 'En cuenta',
 };
 
 const formatCurrency = (amount: unknown) => {

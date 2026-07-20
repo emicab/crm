@@ -5,6 +5,8 @@ import { Prisma, PaymentType } from '@prisma/client';
 const Decimal = Prisma.Decimal;
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
+import { getArcaConfig, createElectronicInvoice } from '../../../lib/arcaService';
+import { getPaymentTypeDisplay } from '../../../lib/displayTexts';
 
 interface SaleItemInput {
   productId: number;
@@ -28,6 +30,9 @@ interface CreateSaleInput {
   discountCodeApplied?: string;
   promotionsApplied?: PromoAppliedInput[];
   paymentMethodDiscount?: number;
+  invoiceType?: 'A' | 'B' | 'C' | 'NONE';
+  clientCuit?: string;
+  clientName?: string;
 }
 
 export default async function handler(
@@ -113,7 +118,7 @@ export default async function handler(
       handleApiError(res, error, "fetching sales");
     }
   } else if (req.method === 'POST') {
-    const { clientId, sellerId, paymentType, items, promotionsApplied, paymentMethodDiscount } = req.body as CreateSaleInput;
+    const { clientId, sellerId, paymentType, items, promotionsApplied, paymentMethodDiscount, invoiceType, clientCuit, clientName } = req.body as CreateSaleInput;
     let { notes, discountCodeApplied } = req.body as CreateSaleInput;
 
     if (!sellerId || !paymentType || !items || items.length === 0) {
@@ -122,13 +127,12 @@ export default async function handler(
     if (!Object.values(PaymentType).includes(paymentType)) {
         return res.status(400).json({ message: 'Tipo de pago inválido.' });
     }
+    if (paymentType === PaymentType.ON_ACCOUNT && !clientId) {
+        return res.status(400).json({ message: 'Para registrar una venta en cuenta corriente se requiere seleccionar un cliente.' });
+    }
 
     if (notes) notes = sanitizeString(notes);
     if (discountCodeApplied) discountCodeApplied = sanitizeString(discountCodeApplied);
-
-    if (paymentType === 'ON_ACCOUNT' && !clientId) {
-      return res.status(400).json({ message: 'Se requiere seleccionar un cliente para poder realizar una venta en cuenta corriente.' });
-    }
 
     let calculatedTotalAmount = new Decimal(0);
     for (const item of items) {
@@ -231,54 +235,50 @@ export default async function handler(
         // Registrar movimiento en caja si hay una abierta
         const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
 
-        const isOnAccount = paymentType === 'ON_ACCOUNT';
+        const isAccountSale = paymentType === PaymentType.ON_ACCOUNT;
 
         const newSale = await tx.sale.create({
           data: {
             saleDate: new Date(),
             totalAmount: calculatedTotalAmount,
             paymentType,
+            onAccount: isAccountSale,
             notes: notes || null,
             discountCodeApplied: discountCodeApplied || null,
             promotionsApplied: promotionsAppliedJson,
-            onAccount: isOnAccount,
             ...(clientId && { client: { connect: { id: clientId } } }),
             seller: { connect: { id: sellerId } },
             ...(openRegister && { cashRegister: { connect: { id: openRegister.id } } }),
           },
         });
 
-        // Si es en cuenta corriente, actualizamos el saldo del cliente
-        if (isOnAccount && clientId) {
-          let account = await tx.accountBalance.findUnique({ where: { clientId } });
-          if (!account) {
-            account = await tx.accountBalance.create({
-              data: {
-                clientId,
-                balance: new Decimal(0),
-              },
+        if (isAccountSale && clientId) {
+          let balanceRecord = await tx.accountBalance.findUnique({
+            where: { clientId },
+          });
+          if (!balanceRecord) {
+            balanceRecord = await tx.accountBalance.create({
+              data: { clientId, balance: new Decimal(0) },
             });
           }
           await tx.accountBalance.update({
-            where: { id: account.id },
-            data: {
-              balance: {
-                increment: calculatedTotalAmount,
-              },
-            },
+            where: { id: balanceRecord.id },
+            data: { balance: { increment: calculatedTotalAmount } },
           });
           await tx.accountMovement.create({
             data: {
-              accountBalanceId: account.id,
+              accountBalanceId: balanceRecord.id,
               type: "SALE_ON_ACCOUNT",
               amount: calculatedTotalAmount,
-              description: `Venta #${newSale.id} en Cuenta Corriente`,
+              description: `Venta en cuenta #${newSale.id}`,
               saleId: newSale.id,
             },
           });
-        } else if (openRegister) {
+        }
+
+        if (openRegister) {
           const cashAmount = paymentType === 'CASH' ? calculatedTotalAmount : new Decimal(0);
-          const otherAmount = (paymentType !== 'CASH' && paymentType !== 'ON_ACCOUNT') ? calculatedTotalAmount : new Decimal(0);
+          const otherAmount = paymentType !== 'CASH' ? calculatedTotalAmount : new Decimal(0);
           if (cashAmount.greaterThan(0)) {
             await tx.cashMovement.create({
               data: {
@@ -299,7 +299,7 @@ export default async function handler(
                 paymentType: paymentType,
                 sourceId: newSale.id,
                 amount: otherAmount,
-                description: `Venta #${newSale.id} - ${paymentType}`,
+                description: `Venta #${newSale.id} - ${getPaymentTypeDisplay(paymentType)}`,
               },
             });
           }
@@ -365,7 +365,30 @@ export default async function handler(
         });
       });
 
-      res.status(201).json(result);
+      // Intentar generar factura electrónica si corresponde y está habilitada
+      let invoice = null;
+      let arcaError = null;
+
+      try {
+        const arcaConfig = await getArcaConfig();
+        if (arcaConfig.enabled && invoiceType && invoiceType !== 'NONE') {
+          invoice = await createElectronicInvoice(
+            result!.id,
+            invoiceType as any,
+            clientCuit,
+            clientName
+          );
+        }
+      } catch (err: any) {
+        console.error("Error al generar factura electrónica al cerrar venta:", err);
+        arcaError = err.message || "No se pudo comunicar con ARCA.";
+      }
+
+      res.status(201).json({
+        ...result,
+        invoice,
+        arcaError
+      });
 
     } catch (error: any) {
       if (error instanceof Error && (error.message.startsWith('Stock insuficiente') || error.message.startsWith('Producto con ID'))) {

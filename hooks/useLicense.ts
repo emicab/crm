@@ -20,7 +20,7 @@ export function useLicense(): LicenseState {
       if (typeof window !== 'undefined' && window.licenseAPI) {
         try {
           const result = await window.licenseAPI.check();
-          setTier(result.tier === 'free' ? 'free' : 'pro');
+          setTier((result as any).tier === 'free' ? 'free' : 'pro');
         } catch {
           setTier('pro');
         }

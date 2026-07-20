@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { formatDate } from "@/lib/formatDate";
+import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 
 const SellerSalesHistoryPage = () => {
   const router = useRouter();
@@ -214,7 +215,7 @@ const SellerSalesHistoryPage = () => {
                       {formatCurrency(sale.totalAmount)}
                     </td>
                     <td className="p-3 text-sm text-foreground-muted">
-                      {sale.paymentType}
+                      {getPaymentTypeDisplay(sale.paymentType)}
                     </td>
                     <td className="p-3 text-sm text-foreground-muted text-center">
                       {sale.items.length}

@@ -5,20 +5,21 @@ import { useRouter } from "next/navigation";
 import {
   Save,
   Building,
-  Receipt,
   Percent,
   RefreshCw,
   Smartphone,
+  ShieldCheck,
+  Receipt,
   Users,
+  CreditCard,
   UserPlus,
-  ShoppingBag,
+  Truck,
   TrendingDown,
   LayoutDashboard,
   Key,
-  CreditCard,
   Scale,
-  Truck,
   Database,
+  Cloud,
   Lock,
 } from "lucide-react";
 import QRCode from "qrcode";
@@ -194,10 +195,40 @@ export default function ConfiguracionPage() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "modules" | "backup">(
+  const [activeTab, setActiveTab] = useState<"general" | "modules" | "backup" | "arca">(
     "general",
   );
   const [isSyncing, setIsSyncing] = useState(false);
+  const [testingArca, setTestingArca] = useState(false);
+  const [arcaStatusResult, setArcaStatusResult] = useState<string | null>(null);
+
+  const handleTestArca = async () => {
+    setTestingArca(true);
+    setArcaStatusResult(null);
+    try {
+      const saveRes = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!saveRes.ok) throw new Error('Error al guardar configuración temporal');
+
+      const res = await fetch('/api/arca/status');
+      const data = await res.json();
+      if (data.status === 'online') {
+        toast.success('Conexión con ARCA establecida con éxito.');
+        setArcaStatusResult(`Online - Servidor AFIP Operativo (App: ${data.serverStatus?.AppServer || 'OK'}, Db: ${data.serverStatus?.DbServer || 'OK'}, Auth: ${data.serverStatus?.AuthServer || 'OK'})`);
+      } else {
+        toast.error(data.message || 'Error en la conexión.');
+        setArcaStatusResult(`Offline: ${data.message || 'Error desconocido'}`);
+      }
+    } catch (e: any) {
+      toast.error('Error al probar conexión.');
+      setArcaStatusResult(`Error: ${e.message}`);
+    } finally {
+      setTestingArca(false);
+    }
+  };
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentItem, setPaymentItem] = useState<{
@@ -606,6 +637,16 @@ export default function ConfiguracionPage() {
             Copia de Seguridad
           </button>
         )}
+        <button
+          onClick={() => setActiveTab("arca")}
+          className={`px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            activeTab === "arca"
+              ? "border-primary text-primary"
+              : "border-transparent text-foreground-muted hover:text-foreground"
+          }`}
+        >
+          Facturación ARCA / AFIP
+        </button>
       </div>
 
       {activeTab === "general" && (
@@ -986,17 +1027,25 @@ export default function ConfiguracionPage() {
                           {m.description}
                         </p>
                       </div>
-                      <div className="shrink-0 flex items-center pt-1">
+                      <div className="shrink-0 flex items-center gap-2 pt-1">
+                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                          isActive 
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                            : "bg-slate-100 text-slate-500 border-slate-200"
+                        }`}>
+                          {isActive ? "ON" : "OFF"}
+                        </span>
                         <button
+                          type="button"
                           onClick={() => handleToggleModule(m.id, isActive)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
                             isActive
-                              ? "bg-primary"
-                              : "bg-muted-dark border-border"
+                              ? "bg-emerald-500 border-emerald-600"
+                              : "bg-slate-300 border-slate-400"
                           }`}
                         >
                           <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
                               isActive ? "translate-x-5" : "translate-x-0"
                             }`}
                           />
@@ -1081,22 +1130,32 @@ export default function ConfiguracionPage() {
                           </p>
                         )}
                       </div>
-                      <div className="shrink-0 flex items-center pt-1">
+                      <div className="shrink-0 flex items-center gap-2 pt-1">
+                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                          dependencyBlocked
+                            ? "bg-slate-100 text-slate-400 border-slate-200"
+                            : isActive 
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                            : "bg-slate-100 text-slate-500 border-slate-200"
+                        }`}>
+                          {dependencyBlocked ? "BLOQUEADO" : isActive ? "ON" : "OFF"}
+                        </span>
                         <button
+                          type="button"
                           disabled={dependencyBlocked}
                           onClick={() => handleToggleModule(m.id, isActive)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
                             dependencyBlocked
-                              ? "cursor-not-allowed bg-muted/40"
+                              ? "cursor-not-allowed bg-slate-200 border-slate-300 opacity-60"
                               : "cursor-pointer"
                           } ${
                             isActive && !dependencyBlocked
-                              ? "bg-primary"
-                              : "bg-muted-dark border-border"
+                              ? "bg-emerald-500 border-emerald-600"
+                              : "bg-slate-300 border-slate-400"
                           }`}
                         >
                           <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
                               isActive && !dependencyBlocked
                                 ? "translate-x-5"
                                 : "translate-x-0"
@@ -1171,6 +1230,96 @@ export default function ConfiguracionPage() {
               </div>
             </div>
           </section>
+        </div>
+      )}
+
+      {activeTab === "arca" && (
+        <div className="space-y-8">
+          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <ShieldCheck size={20} className="text-primary" /> Facturación Electrónica (ARCA / AFIP)
+            </h2>
+            <p className="text-sm text-foreground-muted">
+              Configurá la emisión de facturas electrónicas con el Web Service de ARCA.
+            </p>
+            
+            <div className="flex items-center gap-2 py-2">
+              <input
+                id="arcaEnabled"
+                type="checkbox"
+                checked={form.arcaEnabled === 'true'}
+                onChange={(e) => handleChange('arcaEnabled', e.target.checked ? 'true' : 'false')}
+                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary bg-background"
+              />
+              <label htmlFor="arcaEnabled" className="text-sm font-medium text-foreground select-none cursor-pointer">
+                Habilitar Facturación Electrónica
+              </label>
+            </div>
+
+            {form.arcaEnabled === 'true' && (
+              <div className="space-y-4 pt-2 border-t border-border/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input label="CUIT Emisor" value={form.arcaCuit || ''} onChange={(e) => handleChange('arcaCuit', e.target.value)} placeholder="30123456789 (sin guiones)" />
+                  <Input label="Punto de Venta" type="number" value={form.arcaPointOfSale || '1'} onChange={(e) => handleChange('arcaPointOfSale', e.target.value)} placeholder="1" />
+                  
+                  <Select label="Entorno" value={form.arcaEnv || 'homologacion'} onChange={(e) => handleChange('arcaEnv', e.target.value)}>
+                    <option value="homologacion">Homologación (Pruebas)</option>
+                    <option value="produccion">Producción (Real)</option>
+                  </Select>
+                  
+                  <Select label="Condición frente al IVA" value={form.arcaIvaCondition || 'RI'} onChange={(e) => handleChange('arcaIvaCondition', e.target.value)}>
+                    <option value="RI">Responsable Inscripto</option>
+                    <option value="MT">Monotributista</option>
+                    <option value="EX">Exento</option>
+                  </Select>
+
+                  <Input label="Ingresos Brutos (IIBB)" value={form.arcaIibb || ''} onChange={(e) => handleChange('arcaIibb', e.target.value)} placeholder="901-123456-7" />
+                  <Input label="Inicio de Actividades (AAAA-MM-DD)" value={form.arcaBusinessStartDate || ''} onChange={(e) => handleChange('arcaBusinessStartDate', e.target.value)} placeholder="2020-01-01" />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">Certificado Digital (.crt / .pem)</label>
+                    <textarea
+                      rows={4}
+                      value={form.arcaCert || ''}
+                      onChange={(e) => handleChange('arcaCert', e.target.value)}
+                      placeholder="-----BEGIN CERTIFICATE-----\nMIIFzDCCBLSgAwIBAgIQ..."
+                      className="w-full text-xs font-mono p-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring placeholder:text-foreground-muted/50"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">Clave Privada (.key)</label>
+                    <textarea
+                      rows={4}
+                      value={form.arcaKey || ''}
+                      onChange={(e) => handleChange('arcaKey', e.target.value)}
+                      placeholder="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC..."
+                      className="w-full text-xs font-mono p-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring placeholder:text-foreground-muted/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-2">
+                  <Button type="button" onClick={handleTestArca} disabled={testingArca} variant="secondary">
+                    <RefreshCw size={16} className={`mr-2 ${testingArca ? 'animate-spin' : ''}`} />
+                    {testingArca ? 'Probando...' : 'Probar conexión con ARCA'}
+                  </Button>
+                  {arcaStatusResult && (
+                    <span className={`text-sm font-medium ${arcaStatusResult.includes('Online') ? 'text-success' : 'text-destructive'}`}>
+                      {arcaStatusResult}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={isSaving}>
+              <Save size={16} className="mr-2" /> {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+          </div>
         </div>
       )}
 

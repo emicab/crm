@@ -15,6 +15,8 @@ interface ClientFormData {
   phone: string;
   address: string;
   notes: string;
+  cuit: string;
+  businessName: string;
 }
 
 interface ClientFormProps {
@@ -30,6 +32,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialClientData }) => {
     phone: '',
     address: '',
     notes: '',
+    cuit: '',
+    businessName: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +48,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialClientData }) => {
         phone: initialClientData.phone || '',
         address: initialClientData.address || '',
         notes: initialClientData.notes || '',
+        cuit: initialClientData.cuit || '',
+        businessName: initialClientData.businessName || '',
       });
     }
   }, [initialClientData]);
@@ -80,6 +86,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialClientData }) => {
         phone: formData.phone.trim() || null,
         address: formData.address.trim() || null,
         notes: formData.notes.trim() || null,
+        cuit: formData.cuit.trim() || null,
+        businessName: formData.businessName.trim() || null,
     };
 
     try {
@@ -97,7 +105,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialClientData }) => {
       setSuccessMessage(initialClientData ? '¡Cliente actualizado exitosamente!' : '¡Cliente creado exitosamente!');
       
       if (!initialClientData) { 
-        setFormData({ firstName: '', lastName: '', email: '', phone: '', address: '', notes: '' });
+        setFormData({ firstName: '', lastName: '', email: '', phone: '', address: '', notes: '', cuit: '', businessName: '' });
       }
 
       setTimeout(() => {
@@ -139,6 +147,11 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialClientData }) => {
       </div>
       
       <Input label="Dirección (Opcional)" name="address" value={formData.address} onChange={handleChange} />
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Input label="CUIT (Opcional)" name="cuit" value={formData.cuit} onChange={handleChange} placeholder="30123456789" />
+        <Input label="Razón Social (Opcional)" name="businessName" value={formData.businessName} onChange={handleChange} placeholder="Mi Empresa S.A." />
+      </div>
       
       <div>
         <label htmlFor="notes" className="block text-sm font-medium text-foreground-muted mb-1.5">Notas Adicionales (Opcional)</label>

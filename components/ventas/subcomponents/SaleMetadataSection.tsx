@@ -18,6 +18,13 @@ interface SaleMetadataSectionProps {
   handleClientSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSelectClient: (client: Client) => void;
   handleClearClientSelection: () => void;
+  config: Record<string, string>;
+  invoiceType: 'A' | 'B' | 'C' | 'NONE';
+  setInvoiceType: (type: 'A' | 'B' | 'C' | 'NONE') => void;
+  clientCuit: string;
+  setClientCuit: (cuit: string) => void;
+  clientName: string;
+  setClientName: (name: string) => void;
 }
 
 export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
@@ -32,6 +39,13 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
   handleClientSearchChange,
   handleSelectClient,
   handleClearClientSelection,
+  config,
+  invoiceType,
+  setInvoiceType,
+  clientCuit,
+  setClientCuit,
+  clientName,
+  setClientName,
 }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border pt-4">
@@ -53,15 +67,9 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
             >
               <option value="">Seleccionar...</option>
               {Object.values(PaymentTypeEnum).map((type) => {
-                if (
-                  type === PaymentTypeEnum.ON_ACCOUNT &&
-                  !(
-                    isModuleEnabled("clientes") &&
-                    isModuleEnabled("cuenta_corriente") &&
-                    formData.clientId
-                  )
-                )
+                if (type === PaymentTypeEnum.ON_ACCOUNT && !formData.clientId) {
                   return null;
+                }
                 return (
                   <option key={type} value={type}>
                     {getPaymentTypeDisplay(type)}
@@ -231,6 +239,59 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
           para vaciar la venta y empezar una nueva.
         </div>
       </div>
+
+      {config.arcaEnabled === "true" && (
+        <div className="md:col-span-2 border border-border p-4 rounded-xl bg-muted/10 space-y-3">
+          <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase pb-1 border-b border-border/50">
+            Facturación Electrónica (ARCA / AFIP)
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
+            <div>
+              <Select
+                label="Tipo de Comprobante"
+                name="invoiceType"
+                value={invoiceType}
+                onChange={(e) => setInvoiceType(e.target.value as any)}
+                className="text-xs rounded-xl h-9"
+              >
+                <option value="NONE">Ticket Común (No Fiscal)</option>
+                {config.arcaIvaCondition === "MT" ? (
+                  <option value="C">Factura C (Monotributo)</option>
+                ) : (
+                  <>
+                    <option value="B">Factura B (Consumidor Final)</option>
+                    <option value="A">Factura A (Responsable Inscripto)</option>
+                  </>
+                )}
+              </Select>
+            </div>
+            {invoiceType === "A" && (
+              <>
+                <div>
+                  <Input
+                    label="CUIT Cliente *"
+                    value={clientCuit}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setClientCuit(e.target.value)}
+                    placeholder="20123456789 (11 dígitos)"
+                    className="text-xs rounded-xl h-9"
+                    required
+                  />
+                </div>
+                <div>
+                  <Input
+                    label="Razón Social Cliente *"
+                    value={clientName}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setClientName(e.target.value)}
+                    placeholder="Nombre o Razón Social"
+                    className="text-xs rounded-xl h-9"
+                    required
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

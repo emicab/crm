@@ -167,13 +167,54 @@ function mainApp() {
                 fs.copyFileSync(templateDbSrcPath, dbPathInUserData);
                 console.log('[DB] Base de datos creada desde plantilla.');
             } else {
-                console.log('[DB] Base de datos ya existe. Las migraciones de esquema pendientes se aplicarán en el servidor.');
+                // Comprobar si necesita actualización de esquema basándonos en columnas/tablas faltantes
+                applySchemaUpdates(dbPathInUserData, templateDbSrcPath);
             }
             return true;
         } catch (error) {
             dialog.showErrorBox("Error Crítico de Base de Datos", error.message);
             app.quit();
             return false;
+        }
+    }
+
+    function applySchemaUpdates(dbPath, templatePath) {
+        try {
+            console.log('[DB] Checking DB at:', dbPath);
+            const fs = require('fs');
+            // Aumentamos a 5MB por si la base de datos es más grande y el esquema está fragmentado
+            const fd = fs.openSync(dbPath, 'r');
+            const buffer = Buffer.alloc(5000000);
+            const bytesRead = fs.readSync(fd, buffer, 0, 5000000, 0);
+            fs.closeSync(fd);
+            
+            const userDbStr = buffer.toString('utf8', 0, bytesRead);
+            
+            // Usamos 'Product_supplierId_fkey' que es específico de la nueva relación en Product
+            // 'supplierId' por sí solo daba falso positivo porque ya existía en la tabla Purchase.
+            const checks = ['Product_supplierId_fkey'];
+            const missing = checks.filter(c => !userDbStr.includes(c));
+            console.log('[DB] Missing keys:', missing);
+            
+            if (missing.length > 0) {
+                console.log('[DB] Base de datos desactualizada. Actualizando esquema (copiando template temporalmente)...');
+                
+                // NOTA: Para una app en producción real, aquí se usaría better-sqlite3 
+                // para migrar los datos. Por ahora, si estamos en este punto, el usuario
+                // ya eliminaba el crm_prod.db antes. Hacemos backup por seguridad y reemplazamos.
+                const backupPath = dbPath + '.backup-' + Date.now();
+                try {
+                    fs.copyFileSync(dbPath, backupPath);
+                    fs.copyFileSync(templatePath, dbPath);
+                    console.log('[DB] Esquema actualizado. Backup guardado en:', backupPath);
+                } catch (err) {
+                    console.error('[DB] Error actualizando BD:', err);
+                }
+            } else {
+                console.log('[DB] El esquema está actualizado.');
+            }
+        } catch (error) {
+            console.error('[DB] Error verificando el esquema de BD:', error);
         }
     }
 
@@ -199,8 +240,6 @@ function mainApp() {
                         PORT: PORT.toString(),
                         HOSTNAME: '127.0.0.1',
                         APP_SECRET: APP_SECRET,
-                        HARDWARE_ID: hardwareId,
-                        LICENSE_KEY: store.get('licenseKey') || '',
                     },
                 }
             );
@@ -376,11 +415,10 @@ function mainApp() {
         }
     });
 
+    // Este manejador revisa si la app ya está activada y revalida con el servidor
     ipcMain.handle('license:check', async () => {
-        const isFreeMode = store.get('freeMode', false);
         let isActivated = store.get('isActivated', false);
-        let tier = isFreeMode ? 'free' : 'pro';
-        console.log(`[License] Verificando estado local: activada=${isActivated}, freeMode=${isFreeMode}`);
+        console.log(`[License] Verificando estado local: ${isActivated ? 'Activada' : 'No activada'}`);
 
         if (isActivated) {
             try {
@@ -393,10 +431,11 @@ function mainApp() {
                             console.error('[License Check] Error al desencriptar la clave de licencia:', e);
                         }
                     }
-
+                    
                     const key = licenseKey.toUpperCase().trim();
                     const hardwareId = machineIdSync(true);
 
+                    // Consultar Supabase en tiempo real
                     const { data: license, error } = await supabase
                         .from('licenses')
                         .select('*')
@@ -404,46 +443,49 @@ function mainApp() {
                         .single();
 
                     if (error || !license) {
+                        console.warn('[License Check] La clave de licencia no existe o hubo un error en Supabase.');
                         store.set('isActivated', false);
                         isActivated = false;
                     } else if (!license.is_active) {
+                        console.warn('[License Check] La clave de licencia ha sido desactivada en el servidor.');
                         store.set('isActivated', false);
                         isActivated = false;
                     } else if (license.expires_at && new Date(license.expires_at) < new Date()) {
+                        console.warn('[License Check] La clave de licencia ha expirado.');
                         store.set('isActivated', false);
                         isActivated = false;
                     } else if (license.hardware_id && license.hardware_id !== hardwareId) {
+                        console.warn('[License Check] La clave de licencia está asignada a otro hardware.');
                         store.set('isActivated', false);
                         isActivated = false;
                     } else {
+                        // Licencia válida, actualizamos la fecha del último chequeo exitoso
                         store.set('lastOnlineCheck', Date.now());
-                        tier = license.tier || 'pro';
                     }
                 }
             } catch (err) {
+                // Si falla la red, permitimos el acceso local (modo offline) sólo si no se superó el límite de días
                 console.warn('[License Check] Error al conectar con el servidor de licencias (modo offline):', err.message || err);
                 const lastOnlineCheck = store.get('lastOnlineCheck', 0);
                 if (lastOnlineCheck === 0) {
+                    // Si nunca hubo un chequeo registrado, por seguridad bloqueamos
+                    console.warn('[License Check] No hay registro de chequeo online previo. Bloqueando.');
                     isActivated = false;
                 } else {
                     const diffTime = Date.now() - lastOnlineCheck;
                     const diffDays = diffTime / (1000 * 60 * 60 * 24);
-                    if (diffDays > 15) {
+                    const MAX_OFFLINE_DAYS = 15; // Límite de 15 días offline
+                    if (diffDays > MAX_OFFLINE_DAYS) {
+                        console.warn(`[License Check] Límite de días offline excedido (${diffDays.toFixed(1)} días). Reinstalando verificación obligatoria.`);
                         store.set('isActivated', false);
                         isActivated = false;
                     } else {
-                        console.info(`[License Check] Acceso offline. Días: ${diffDays.toFixed(1)}/15`);
+                        console.info(`[License Check] Permitiendo acceso offline. Días transcurridos desde el último chequeo online: ${diffDays.toFixed(1)}/${MAX_OFFLINE_DAYS}`);
                     }
                 }
             }
         }
-        return { isActivated, tier };
-    });
-
-    ipcMain.handle('license:setFreeMode', async () => {
-        store.set('freeMode', true);
-        store.set('isActivated', false);
-        return { success: true };
+        return { isActivated };
     });
 
     ipcMain.handle('db:backup', async () => {

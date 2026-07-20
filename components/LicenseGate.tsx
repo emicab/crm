@@ -17,7 +17,7 @@ const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
             setIsLoading(true);
             const status = await window.licenseAPI.check();
             setIsLicensed(status.isActivated);
-            setIsFree(status.tier === 'free');
+            setIsFree((status as any).tier === 'free');
             setIsLoading(false);
         } else {
             console.warn('licenseAPI no está lista, reintentando en 100ms...');
@@ -30,8 +30,8 @@ const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
     }, []);
 
     const handleContinueFree = async () => {
-        if (window.licenseAPI) {
-            await window.licenseAPI.setFreeMode();
+        if (window.licenseAPI && (window.licenseAPI as any).setFreeMode) {
+            await (window.licenseAPI as any).setFreeMode();
             checkLicense();
         }
     };

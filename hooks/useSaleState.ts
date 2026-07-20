@@ -98,6 +98,10 @@ export const useSaleState = () => {
     percent: number;
   } | null>(null);
 
+  const [invoiceType, setInvoiceType] = useState<'A' | 'B' | 'C' | 'NONE'>('NONE');
+  const [clientCuit, setClientCuit] = useState('');
+  const [clientName, setClientName] = useState('');
+
   const comboDiscount = useMemo(
     () => Object.values(comboDiscounts).reduce((sum, d) => sum + d, 0),
     [comboDiscounts],
@@ -412,6 +416,9 @@ export const useSaleState = () => {
     setSelectedClient(null);
     setClientSearchTerm("");
     setComboDiscounts({});
+    setInvoiceType('NONE');
+    setClientCuit('');
+    setClientName('');
     setTimeout(() => productInputRef.current?.focus(), 50);
   };
 
@@ -425,10 +432,20 @@ export const useSaleState = () => {
   };
 
   const handleSelectClient = (client: Client) => {
+    const fullName = `${client.firstName} ${client.lastName || ""}`.trim();
     setSelectedClient(client);
-    setClientSearchTerm(`${client.firstName} ${client.lastName || ""}`.trim());
+    setClientSearchTerm(fullName);
     setFormData((prev) => ({ ...prev, clientId: String(client.id) }));
     setSearchedClients([]);
+    
+    if (client.cuit) {
+      setClientCuit(client.cuit);
+    }
+    if (client.businessName) {
+      setClientName(client.businessName);
+    } else {
+      setClientName(fullName);
+    }
   };
 
   const handleClearClientSelection = () => {
@@ -441,6 +458,8 @@ export const useSaleState = () => {
         prev.paymentType === PaymentTypeEnum.ON_ACCOUNT ? "" : prev.paymentType,
     }));
     setSearchedClients([]);
+    setClientCuit("");
+    setClientName("");
   };
 
   const handleProductSearchChange = (
@@ -737,6 +756,21 @@ export const useSaleState = () => {
       setIsLoading(false);
       return;
     }
+
+    // Validar requerimientos de Factura A
+    if (config.arcaEnabled === 'true' && invoiceType === 'A') {
+      if (!clientCuit.trim() || clientCuit.replace(/\D/g, '').length !== 11) {
+        toast.error("El CUIT del cliente es requerido y debe tener 11 dígitos para Factura A.");
+        setIsLoading(false);
+        return;
+      }
+      if (!clientName.trim()) {
+        toast.error("La Razón Social del cliente es requerida para Factura A.");
+        setIsLoading(false);
+        return;
+      }
+    }
+
     const promo = appliedPromotionRef.current;
     const dataToSend = {
       clientId: formData.clientId ? parseInt(formData.clientId) : null,
@@ -772,6 +806,8 @@ export const useSaleState = () => {
             ]
           : []),
       ],
+      invoiceType,
+      ...(invoiceType === 'A' && { clientCuit: clientCuit.trim(), clientName: clientName.trim() }),
     };
     try {
       const response = await fetch("/api/ventas", {
@@ -785,7 +821,15 @@ export const useSaleState = () => {
       }
       const data = await response.json();
       setLastCreatedSale(data);
-      toast.success("¡Venta registrada exitosamente!");
+      
+      if (data.arcaError) {
+        toast.error(`Venta registrada pero falló la facturación: ${data.arcaError}`, { duration: 6000 });
+      } else if (data.invoice) {
+        toast.success(`¡Venta y Factura ${data.invoice.invoiceType} #${data.invoice.invoiceNumber} registradas!`);
+      } else {
+        toast.success("¡Venta registrada exitosamente!");
+      }
+
       clearCart();
 
       // Refrescar la lista de productos vendidos recientemente
@@ -905,5 +949,12 @@ export const useSaleState = () => {
     handleSelectCombo,
     handleSubmit,
     handleOpenCajaFromSale,
+    config,
+    invoiceType,
+    setInvoiceType,
+    clientCuit,
+    setClientCuit,
+    clientName,
+    setClientName,
   };
 };

@@ -104,11 +104,9 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const isModuleEnabled = useCallback(
     (moduleId: string) => {
-      if (isLoading) return true;
-      if (isPro) return true;
-      return FREE_MODULES.has(moduleId);
+      return true;
     },
-    [isPro, isLoading]
+    []
   );
 
   return (

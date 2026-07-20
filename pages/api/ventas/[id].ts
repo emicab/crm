@@ -32,6 +32,7 @@ export default async function handler(
                 id: 'asc'
             }
           },
+          invoice: true,
         },
       });
 
@@ -58,7 +59,10 @@ export default async function handler(
             pricePurchase: item.product.pricePurchase?.toString() || null,
             priceSale: item.product.priceSale.toString(),
           } : null
-        }))
+        })),
+        invoice: sale.invoice ? {
+          ...sale.invoice,
+        } : null
       };
 
       res.status(200).json(saleForJson);
@@ -84,7 +88,8 @@ export default async function handler(
             orderBy: {
               id: 'asc'
             }
-          }
+          },
+          invoice: true
         }
       });
 
@@ -106,7 +111,10 @@ export default async function handler(
             pricePurchase: item.product.pricePurchase?.toString() || null,
             priceSale: item.product.priceSale.toString(),
           } : null
-        }))
+        })),
+        invoice: updatedSale.invoice ? {
+          ...updatedSale.invoice,
+        } : null
       };
 
       res.status(200).json(saleForJson);

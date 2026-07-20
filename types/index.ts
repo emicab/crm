@@ -43,6 +43,8 @@ export interface Brand {
     phone?: string | null;
     address?: string | null;
     notes?: string | null;
+    cuit?: string | null;
+    businessName?: string | null;
     createdAt: string; // O Date, si lo transformas post-fetch
     updatedAt: string; // O Date
   }

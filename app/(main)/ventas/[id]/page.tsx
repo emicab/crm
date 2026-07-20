@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { Sale, SaleItem, Product, Client, Seller, CashRegister } from "@/types";
+import QRCode from "qrcode";
 import {
     Loader2,
     AlertCircle,
@@ -37,6 +38,17 @@ interface SaleDetail
     client?: Client | null;
     seller?: Seller;
     cashRegister?: CashRegister | null;
+    invoice?: {
+        cae: string;
+        caeExpiration: string;
+        invoiceType: string;
+        invoiceNumber: number;
+        pointOfSale: number;
+        clientCuit?: string | null;
+        clientName?: string | null;
+        xmlRequest?: string | null;
+        xmlResponse?: string | null;
+    } | null;
 }
 
 const SaleDetailPage = () => {
@@ -49,12 +61,66 @@ const SaleDetailPage = () => {
     const [error, setError] = useState<string | null>(null);
     const [showPhoneModal, setShowPhoneModal] = useState(false);
     const [manualPhone, setManualPhone] = useState("");
+    const [config, setConfig] = useState<Record<string, string>>({});
+    const [invoiceQrDataUrl, setInvoiceQrDataUrl] = useState<string | null>(null);
 
     // Estados para vincular cliente
     const [showClientModal, setShowClientModal] = useState(false);
     const [clientSearchTerm, setClientSearchTerm] = useState("");
     const [searchedClients, setSearchedClients] = useState<Client[]>([]);
     const [isUpdatingClient, setIsUpdatingClient] = useState(false);
+
+    useEffect(() => {
+        fetch("/api/config")
+            .then(res => res.ok ? res.json() : {})
+            .then(data => setConfig(data))
+            .catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        if (sale && sale.invoice) {
+            const invoice = sale.invoice;
+            const generateAfipQr = async () => {
+                try {
+                    let cbteTipo = 6;
+                    if (invoice.invoiceType === 'A') cbteTipo = 1;
+                    if (invoice.invoiceType === 'C') cbteTipo = 11;
+
+                    const docType = invoice.clientCuit ? (invoice.clientCuit.length === 11 ? 80 : 96) : 99;
+                    const docNum = invoice.clientCuit ? parseInt(invoice.clientCuit.replace(/\D/g, ''), 10) : 0;
+
+                    const qrData = {
+                        ver: 1,
+                        fecha: sale.saleDate.slice(0, 10),
+                        cuit: parseInt(config.arcaCuit || "30111111118", 10),
+                        ptoVta: invoice.pointOfSale,
+                        tipoCmp: cbteTipo,
+                        nroCmp: invoice.invoiceNumber,
+                        importe: sale.totalAmount,
+                        moneda: "PES",
+                        cotizacion: 1,
+                        tipoDocRec: docType,
+                        nroDocRec: docNum,
+                        tipoCodAut: "E",
+                        codAut: parseInt(invoice.cae, 10),
+                    };
+
+                    const base64Data = Buffer.from(JSON.stringify(qrData)).toString('base64');
+                    const url = `https://www.afip.gob.ar/fe/qr/?p=${base64Data}`;
+
+                    const dataUrl = await QRCode.toDataURL(url, {
+                        width: 120,
+                        margin: 1,
+                        color: { dark: '#000000', light: '#ffffff' }
+                    });
+                    setInvoiceQrDataUrl(dataUrl);
+                } catch (e) {
+                    console.error("Error generating AFIP QR Code:", e);
+                }
+            };
+            generateAfipQr();
+        }
+    }, [sale, config]);
 
     useEffect(() => {
         if (saleId) {
@@ -403,6 +469,44 @@ const SaleDetailPage = () => {
                         </div>
                     )}
                 </div>
+
+                {sale.invoice && (
+                    <div className="mb-8 p-5 bg-background border border-border rounded-xl grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                        <div className="md:col-span-3 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <span className="bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded">
+                                    COMPROBANTE FISCAL AFIP
+                                </span>
+                                <span className="font-bold text-lg text-foreground">
+                                    Factura {sale.invoice.invoiceType} #{String(sale.invoice.pointOfSale).padStart(5, '0')}-{String(sale.invoice.invoiceNumber).padStart(8, '0')}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-foreground-muted">
+                                <p>CAE: <span className="font-mono text-foreground font-semibold">{sale.invoice.cae}</span></p>
+                                <p>Vencimiento: <span className="text-foreground font-semibold">{formatDate(sale.invoice.caeExpiration)}</span></p>
+                                {sale.invoice.clientCuit && (
+                                    <p>CUIT Receptor: <span className="text-foreground font-semibold">{sale.invoice.clientCuit}</span></p>
+                                )}
+                                {sale.invoice.clientName && (
+                                    <p>Razón Social: <span className="text-foreground font-semibold">{sale.invoice.clientName}</span></p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-center justify-center border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0">
+                            {invoiceQrDataUrl ? (
+                                <img
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    src={invoiceQrDataUrl}
+                                    alt="Código QR AFIP"
+                                    className="w-28 h-28"
+                                />
+                            ) : (
+                                <span className="text-xs text-foreground-muted">Generando QR...</span>
+                            )}
+                            <span className="text-[9px] font-bold text-foreground-muted/70 mt-1 uppercase tracking-wider">AFIP / ARCA</span>
+                        </div>
+                    </div>
+                )}
 
                 <div>
                     <h2 className='text-xl font-semibold text-foreground mb-3 flex items-center'>

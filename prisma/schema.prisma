@@ -51,13 +51,15 @@ model Product {
 }
 
 model Client {
-  id             Int             @id @default(autoincrement())
-  firstName      String
-  lastName       String?
-  email          String?         @unique
-  phone          String?
-  address        String?
-  notes          String?
+  id           Int      @id @default(autoincrement())
+  firstName    String
+  lastName     String?
+  email        String?  @unique
+  phone        String?
+  address      String?
+  notes        String?
+  cuit           String?
+  businessName   String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   Sale           Sale[]
@@ -79,16 +81,16 @@ model Seller {
 }
 
 model Sale {
-  id                  Int               @id @default(autoincrement())
-  saleDate            DateTime          @default(now())
+  id                  Int           @id @default(autoincrement())
+  saleDate            DateTime      @default(now())
   totalAmount         Decimal
   paymentType         PaymentType
   notes               String?
   clientId            Int?
   sellerId            Int
   cashRegisterId      Int?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
   discountCodeApplied String?
   promotionsApplied   String?           // JSON: [{promotionId, name, type, discountAmount}]
   onAccount           Boolean           @default(false)
@@ -96,6 +98,7 @@ model Sale {
   client              Client?           @relation(fields: [clientId], references: [id])
   cashRegister        CashRegister?     @relation(fields: [cashRegisterId], references: [id])
   items               SaleItem[]
+  invoice             Invoice?
   accountMovements    AccountMovement[]
 }
 
@@ -283,6 +286,23 @@ model Setting {
   id    Int    @id @default(autoincrement())
   key   String @unique
   value String
+}
+
+model Invoice {
+  id             Int      @id @default(autoincrement())
+  saleId         Int      @unique
+  cae            String
+  caeExpiration  DateTime
+  invoiceType    String   // "A", "B", "C", "NCA", "NCB", etc.
+  invoiceNumber  Int
+  pointOfSale    Int
+  clientCuit     String?
+  clientName     String?
+  xmlRequest     String?
+  xmlResponse    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  sale           Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
 }
 
 model AccountBalance {
