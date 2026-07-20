@@ -383,10 +383,46 @@ export default function ConfiguracionPage() {
       }, 1000);
     } catch (err: any) {
       toast.error(err.message || "No se pudo aplicar el perfil.");
-      // Recargar datos originales
-      fetch("/api/config")
-        .then((res) => res.json())
-        .then((data) => setForm(data));
+    }
+  };
+
+  const currentPlan = (form.app_plan === 'pro' || form.unlocked_plan_pro === 'true' || form.storage_mode === 'seguro') ? 'pro' : 'basico';
+
+  const handlePlanChange = async (targetPlan: 'basico' | 'pro') => {
+    if (targetPlan === 'pro' && form.app_plan !== 'pro' && form.unlocked_plan_pro !== 'true') {
+      setPaymentItem({
+        key: 'unlocked_plan_pro',
+        name: 'Suscripción Plan Pro',
+        price: 28000,
+        callback: () => {
+          handlePlanChange('pro');
+        }
+      });
+      setShowPaymentModal(true);
+      return;
+    }
+
+    const updates: Record<string, string> = {
+      app_plan: targetPlan,
+      unlocked_plan_pro: targetPlan === 'pro' ? 'true' : (form.unlocked_plan_pro || 'false'),
+      storage_mode: targetPlan === 'pro' ? 'seguro' : 'local',
+    };
+
+    setForm((prev) => ({ ...prev, ...updates }));
+
+    try {
+      const res = await fetch("/api/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error("Error al cambiar plan");
+      toast.success(targetPlan === 'pro' ? "¡Plan Pro activado exitosamente!" : "Cambiado a Plan Básico.");
+      setTimeout(() => {
+        window.location.reload();
+      }, 800);
+    } catch {
+      toast.error("Error al actualizar el plan.");
     }
   };
 
@@ -623,7 +659,7 @@ export default function ConfiguracionPage() {
               : "border-transparent text-foreground-muted hover:text-foreground"
           }`}
         >
-          Módulos y Rubro
+          Rubro y Plan
         </button>
         {form.storage_mode === "seguro" && (
           <button
@@ -865,310 +901,152 @@ export default function ConfiguracionPage() {
 
       {activeTab === "modules" && (
         <div className="space-y-8">
-          {/* SECCIÓN 1: Perfil de Rubro */}
+          {/* PASO 1: Selector de Rubro */}
           <section className="bg-muted p-6 rounded-xl shadow space-y-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Building size={20} className="text-primary" /> Rubro / Perfil de
-              Negocio
+              <Building size={20} className="text-primary" /> Paso 1: Rubro de tu Comercio
             </h2>
             <p className="text-sm text-foreground-muted">
-              Seleccioná tu rubro para activar automáticamente las herramientas
-              recomendadas. Siempre podés personalizar la selección de módulos
-              de forma manual más abajo.
+              Seleccioná el rubro de tu negocio para optimizar automáticamente la velocidad de venta y el tipo de productos.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-              {Object.entries(PROFILE_PRESETS).map(([key, preset]) => (
+              {[
+                { key: "general", name: "Kiosco / Almacén / Minimarket", desc: "Ventas súper rápidas con escáner de barras y caja diaria.", icon: "🏪" },
+                { key: "fiambreria", name: "Fiambrería / Verdulería / Carnicería", desc: "Activa automáticamente la Venta Fraccionada (KG / Litros / Granel).", icon: "🧀" },
+                { key: "gastronomia", name: "Pizzería / Gastronomía / Comidas", desc: "Optimizado para combos rápidos, menús y promociones.", icon: "🍕" },
+                { key: "boutique", name: "Indumentaria / Calzado / Tienda", desc: "Búsqueda nominada, ficha de clientes e historial.", icon: "🛍️" },
+                { key: "otros", name: "Comercio General / Varios", desc: "Configuración versátil adaptable a cualquier tipo de comercio.", icon: "🏢" },
+              ].map((item) => (
                 <div
-                  key={key}
-                  onClick={() => handleProfileChange(key)}
-                  className={`border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md hover:border-primary ${
-                    currentProfile === key
-                      ? "border-primary bg-primary/5 ring-1 ring-primary"
-                      : "border-border bg-white"
+                  key={item.key}
+                  onClick={() => handleProfileChange(item.key)}
+                  className={`border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                    currentProfile === item.key
+                      ? "border-primary bg-primary/5 ring-2 ring-primary font-bold"
+                      : "border-border bg-white hover:border-foreground-muted"
                   }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-semibold text-sm text-foreground">
-                      {preset.name}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">{item.icon}</span>
+                    <h3 className="font-bold text-sm text-foreground">
+                      {item.name}
                     </h3>
-                    {["gastronomia", "boutique"].includes(key) && (
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ${
-                        form[`unlocked_profile_${key}`] === "true"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-slate-100 text-slate-500"
-                      }`}>
-                        {form[`unlocked_profile_${key}`] === "true" ? "Adquirido" : "Premium 🔒"}
-                      </span>
-                    )}
                   </div>
-                  <p className="text-xs text-foreground-muted mt-1 leading-relaxed">
-                    {preset.desc}
+                  <p className="text-xs text-foreground-muted leading-relaxed">
+                    {item.desc}
                   </p>
                 </div>
               ))}
-              <div
-                onClick={() => handleProfileChange("custom")}
-                className={`border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md hover:border-primary ${
-                  currentProfile === "custom"
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
-                    : "border-border bg-white"
-                }`}
-              >
-                <h3 className="font-semibold text-sm text-foreground">
-                  Ajuste Personalizado
-                </h3>
-                <p className="text-xs text-foreground-muted mt-1 leading-relaxed">
-                  Configurá cada módulo a mano según las necesidades exactas de
-                  tu negocio.
-                </p>
-              </div>
             </div>
           </section>
 
-          {/* SECCIÓN 2: Plan de Almacenamiento (Backup) */}
+          {/* PASO 2: Comparativa de Planes (Básico vs Pro) */}
           <section className="bg-muted p-6 rounded-xl shadow space-y-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Database size={20} className="text-primary" /> Almacenamiento y
-              Respaldo
+              <ShieldCheck size={20} className="text-primary" /> Paso 2: Plan de Suscripción
             </h2>
             <p className="text-sm text-foreground-muted">
-              Elegí dónde se guardan tus datos de venta y si querés tener copias
-              de seguridad en la nube automáticas.
+              Elegí la modalidad de plan que mejor se adapte a tus necesidades de negocio.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              <div
-                onClick={() => handleStorageModeChange("local")}
-                className={`border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md hover:border-primary bg-white ${
-                  currentStorageMode === "local"
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
-                    : "border-border"
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="font-semibold text-sm text-foreground">
-                    Plan Local
-                  </h3>
-                  <span className="text-xs font-bold text-foreground-muted bg-muted px-1.5 py-0.5 rounded">
-                    Starter
-                  </span>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              {/* PLAN BÁSICO */}
+              <div className={`border rounded-2xl p-6 bg-white flex flex-col justify-between shadow-sm transition-all ${
+                currentPlan === 'basico' ? "border-primary ring-2 ring-primary/40" : "border-border"
+              }`}>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                      Suscripción Base
+                    </span>
+                    {currentPlan === 'basico' && (
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                        ✓ Plan Actual
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-foreground">Plan Básico</h3>
+                    <p className="text-xs text-foreground-muted mt-1">100% Local & Offline en tu computadora.</p>
+                  </div>
+                  
+                  <div className="border-t border-border pt-4 space-y-2 text-xs">
+                    <p className="font-bold text-foreground mb-2">Herramientas Incluidas:</p>
+                    <ul className="space-y-2 text-foreground-muted">
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Ventas, Escáner & Medios de Pago</li>
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Caja Diaria, Cierres & Arqueo</li>
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Productos, Stock & Alertas de Stock Mínimo</li>
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Clientes e Historial de Compras</li>
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Vendedores & Comisiones</li>
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Gastos Operativos</li>
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Combos & Promociones Automáticas</li>
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Compras & Proveedores</li>
+                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Venta Fraccionada (según Rubro)</li>
+                      <li className="flex items-center gap-2 text-foreground font-semibold"><span className="text-emerald-500 font-bold">✓</span> Facturación Electrónica ARCA (AFIP)</li>
+                      <li className="flex items-center gap-2 text-slate-400"><span>•</span> Respaldo manual de base de datos</li>
+                    </ul>
+                  </div>
                 </div>
-                <p className="text-xs text-foreground-muted mt-1.5 leading-relaxed">
-                  Todo queda en tu computadora. Máxima velocidad offline. Copias
-                  de seguridad manuales.
-                </p>
+
+                <div className="pt-6 border-t border-border mt-6">
+                  <Button
+                    onClick={() => handlePlanChange('basico')}
+                    variant={currentPlan === 'basico' ? 'outline' : 'primary'}
+                    disabled={currentPlan === 'basico'}
+                    className="w-full justify-center"
+                  >
+                    {currentPlan === 'basico' ? 'Plan Básico Activo' : 'Activar Plan Básico'}
+                  </Button>
+                </div>
               </div>
 
-              <div
-                onClick={() => handleStorageModeChange("seguro")}
-                className={`border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md hover:border-primary bg-white ${
-                  currentStorageMode === "seguro"
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
-                    : "border-border"
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="font-semibold text-sm text-foreground flex items-center gap-1">
-                    Plan Seguro ⭐
-                  </h3>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ${
-                    form.unlocked_plan_seguro === "true"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-primary/10 text-primary"
-                  }`}>
-                    {form.unlocked_plan_seguro === "true" ? "Adquirido" : "Premium 🔒"}
-                  </span>
+              {/* PLAN PRO */}
+              <div className={`border rounded-2xl p-6 bg-white flex flex-col justify-between shadow-md relative overflow-hidden transition-all ${
+                currentPlan === 'pro' ? "border-emerald-500 ring-2 ring-emerald-500/40" : "border-primary/50"
+              }`}>
+                <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-extrabold uppercase px-3 py-1 rounded-bl-xl tracking-wider">
+                  Recomendado ⭐
                 </div>
-                <p className="text-xs text-foreground-muted mt-1.5 leading-relaxed">
-                  Operación local + respaldos automáticos en la nube cada vez
-                  que cerrás la caja.
-                </p>
-              </div>
 
-              <div
-                className={`border rounded-xl p-4 cursor-not-allowed transition-all opacity-60 bg-muted/30 border-border`}
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="font-semibold text-sm text-foreground-muted flex items-center gap-1">
-                    Plan Empresa <Lock size={12} />
-                  </h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
+                      Suscripción Avanzada
+                    </span>
+                    {currentPlan === 'pro' && (
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                        ✓ Plan Actual
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-foreground">Plan Pro</h3>
+                    <p className="text-xs text-foreground-muted mt-1">Sincronización en la nube + Herramientas Avanzadas.</p>
+                  </div>
+                  
+                  <div className="border-t border-border pt-4 space-y-2 text-xs">
+                    <p className="font-bold text-foreground mb-2">Todo lo del Plan Básico, más:</p>
+                    <ul className="space-y-2.5 text-foreground">
+                      <li className="flex items-center gap-2 font-bold text-primary"><span className="text-emerald-500 text-base">✓</span> Cuenta Corriente / Fiado (Cobros & Deudas)</li>
+                      <li className="flex items-center gap-2 font-bold text-primary"><span className="text-emerald-500 text-base">✓</span> Analíticas Avanzadas & Márgenes de Ganancia</li>
+                      <li className="flex items-center gap-2 font-bold text-primary"><span className="text-emerald-500 text-base">✓</span> Roles y Permisos (Multiusuario con PIN)</li>
+                      <li className="flex items-center gap-2 font-bold text-primary"><span className="text-emerald-500 text-base">✓</span> Respaldo Automático en la Nube</li>
+                    </ul>
+                  </div>
                 </div>
-                <p className="text-xs text-foreground-muted mt-1.5 leading-relaxed">
-                  Consistencia en tiempo real. Varias cajas en red, sucursales y
-                  acceso remoto web/móvil. *(Próximamente)*
-                </p>
+
+                <div className="pt-6 border-t border-border mt-6">
+                  <Button
+                    onClick={() => handlePlanChange('pro')}
+                    variant={currentPlan === 'pro' ? 'outline' : 'primary'}
+                    className={`w-full justify-center ${currentPlan !== 'pro' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold' : ''}`}
+                  >
+                    {currentPlan === 'pro' ? 'Plan Pro Activo' : 'Mejorar a Plan Pro'}
+                  </Button>
+                </div>
               </div>
             </div>
           </section>
-
-          {/* SECCIÓN 3: Grilla de Módulos (App Store Style) */}
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-foreground mb-3 px-1">
-                Herramientas de Venta (Módulos Operativos)
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {AVAILABLE_MODULES.filter(
-                  (m) => m.category === "operativos",
-                ).map((m) => {
-                  const isActive = form[`module_${m.id}`] === "true";
-                  return (
-                    <div
-                      key={m.id}
-                      className="bg-white border border-border p-5 rounded-xl flex items-start gap-4 hover:shadow-sm transition-shadow"
-                    >
-                      <div className="bg-primary/10 text-primary p-3 rounded-lg">
-                        <m.icon size={22} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-sm text-foreground">
-                          {m.name}
-                        </h3>
-                        <p className="text-xs text-foreground-muted mt-1 leading-relaxed">
-                          {m.description}
-                        </p>
-                      </div>
-                      <div className="shrink-0 flex items-center gap-2 pt-1">
-                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
-                          isActive 
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                            : "bg-slate-100 text-slate-500 border-slate-200"
-                        }`}>
-                          {isActive ? "ON" : "OFF"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleModule(m.id, isActive)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
-                            isActive
-                              ? "bg-emerald-500 border-emerald-600"
-                              : "bg-slate-300 border-slate-400"
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                              isActive ? "translate-x-5" : "translate-x-0"
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-bold text-foreground mb-3 px-1">
-                Administración y Gestión (Módulos Administrativos)
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {AVAILABLE_MODULES.filter(
-                  (m) => m.category === "administrativos",
-                ).map((m) => {
-                  const isActive = form[`module_${m.id}`] === "true";
-
-                  // Verificar dependencias
-                  let dependencyBlocked = false;
-                  if (m.dependency) {
-                    const depActive = form[`module_${m.dependency}`] === "true";
-                    if (!depActive) {
-                      dependencyBlocked = true;
-                    }
-                  }
-
-                  return (
-                    <div
-                      key={m.id}
-                      className={`bg-white border p-5 rounded-xl flex items-start gap-4 hover:shadow-sm transition-shadow ${
-                        dependencyBlocked
-                          ? "border-border bg-muted/10 opacity-70"
-                          : "border-border"
-                      }`}
-                    >
-                      <div
-                        className={`p-3 rounded-lg ${dependencyBlocked ? "bg-muted text-foreground-muted" : "bg-primary/10 text-primary"}`}
-                      >
-                        <m.icon size={22} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 w-full">
-                          <h3 className="font-semibold text-sm text-foreground">
-                            {m.name}
-                          </h3>
-                          {["analiticas", "cuenta_corriente", "compras"].includes(m.id) && (
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ${
-                              form[`unlocked_module_${m.id}`] === "true"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-slate-100 text-slate-500"
-                            }`}>
-                              {form[`unlocked_module_${m.id}`] === "true" ? "Adquirido" : "Premium 🔒"}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-foreground-muted mt-1 leading-relaxed">
-                          {m.description}
-                        </p>
-                        {m.id === "roles" && isActive && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              router.push("/configuracion/usuarios")
-                            }
-                            className="mt-2 text-xs text-primary font-bold hover:underline items-center gap-1.5 cursor-pointer flex"
-                          >
-                            <Users size={12} /> Gestionar personal y PINs
-                          </button>
-                        )}
-                        {dependencyBlocked && (
-                          <p className="text-[10px] font-semibold text-destructive mt-1.5">
-                            * Requiere activar el módulo:{" "}
-                            {
-                              AVAILABLE_MODULES.find(
-                                (x) => x.id === m.dependency,
-                              )?.name
-                            }
-                          </p>
-                        )}
-                      </div>
-                      <div className="shrink-0 flex items-center gap-2 pt-1">
-                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
-                          dependencyBlocked
-                            ? "bg-slate-100 text-slate-400 border-slate-200"
-                            : isActive 
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                            : "bg-slate-100 text-slate-500 border-slate-200"
-                        }`}>
-                          {dependencyBlocked ? "BLOQUEADO" : isActive ? "ON" : "OFF"}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={dependencyBlocked}
-                          onClick={() => handleToggleModule(m.id, isActive)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 transition-all duration-200 ease-in-out focus:outline-none shadow-inner ${
-                            dependencyBlocked
-                              ? "cursor-not-allowed bg-slate-200 border-slate-300 opacity-60"
-                              : "cursor-pointer"
-                          } ${
-                            isActive && !dependencyBlocked
-                              ? "bg-emerald-500 border-emerald-600"
-                              : "bg-slate-300 border-slate-400"
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                              isActive && !dependencyBlocked
-                                ? "translate-x-5"
-                                : "translate-x-0"
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

@@ -105,7 +105,7 @@ function saveCollapsed(groups: Set<string>) {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { isModuleEnabled, currentUser, logout, supabaseLastSync, hasSupabaseConfig, storageMode } = useModules();
+  const { isModuleEnabled, currentUser, logout, supabaseLastSync, hasSupabaseConfig, storageMode, plan } = useModules();
   const [alertCount, setAlertCount] = useState(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(loadCollapsed);
 
@@ -155,18 +155,32 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}
   `;
 
-  // Filtrar grupos y links según los módulos habilitados y roles del usuario
+  // Process nav groups with Pro lock indicators
   const filteredGroups = navGroups.map((group) => {
-    const filteredItems = group.items.filter((item) => {
-      // 1. Validar estado del módulo
-      if (item.moduleId && !isModuleEnabled(item.moduleId)) return false;
-      // 2. Validar permisos de rol si el módulo de roles está activo
-      if (isModuleEnabled("roles") && currentUser && item.allowedRoles) {
-        return item.allowedRoles.includes(currentUser.role);
+    const processedItems = group.items.map((item) => {
+      const isEnabled = !item.moduleId || isModuleEnabled(item.moduleId);
+      const isProFeature = ['cuenta_corriente', 'analiticas'].includes(item.moduleId || '');
+      
+      // If feature belongs to Pro plan and we are in basic plan, keep item visible with lock
+      if (!isEnabled && isProFeature && plan === 'basico') {
+        return {
+          ...item,
+          href: '/configuracion',
+          isLocked: true,
+        };
       }
-      return true;
-    });
-    return { ...group, items: filteredItems };
+      
+      if (!isEnabled) return null;
+
+      // Filter role permissions
+      if (isModuleEnabled("roles") && currentUser && item.allowedRoles) {
+        if (!item.allowedRoles.includes(currentUser.role)) return null;
+      }
+
+      return { ...item, isLocked: false };
+    }).filter((item): item is (NavItem & { isLocked: boolean }) => item !== null);
+
+    return { ...group, items: processedItems };
   }).filter((group) => group.items.length > 0);
 
   return (
@@ -213,10 +227,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                         key={item.label}
                         href={item.href}
                         onClick={onClose}
-                        className="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-primary-light hover:text-primary transition-colors duration-150 ease-in-out font-medium text-sm"
+                        className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-150 ease-in-out font-medium text-sm ${
+                          item.isLocked
+                            ? 'opacity-75 hover:bg-amber-50 text-amber-800'
+                            : 'hover:bg-primary-light hover:text-primary'
+                        }`}
                       >
                         {item.icon}
                         <span className="flex-1">{item.label}</span>
+                        {item.isLocked && (
+                          <span className="text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded shadow-xs">
+                            PRO 🔒
+                          </span>
+                        )}
                         {item.label === "Alertas de Stock" && alertCount > 0 && (
                           <span className="bg-destructive text-destructive-foreground text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
                             {alertCount > 99 ? '99+' : alertCount}
