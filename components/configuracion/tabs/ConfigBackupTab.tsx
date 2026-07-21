@@ -1,11 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Database, Download, Upload, Cloud, RefreshCw, Key, Save, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Database, Download, Upload, Cloud, RefreshCw, CheckCircle2, ShieldCheck } from 'lucide-react';
 import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
 import toast from 'react-hot-toast';
-import { useModules } from '@/hooks/useModules';
 
 interface ConfigBackupTabProps {
   form: Record<string, string>;
@@ -16,14 +14,11 @@ interface ConfigBackupTabProps {
 
 export default function ConfigBackupTab({
   form,
-  handleChange,
   handleManualSync,
   isSyncing,
 }: ConfigBackupTabProps) {
-  const { refresh: refreshModules } = useModules();
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [isSavingCloud, setIsSavingCloud] = useState(false);
 
   const handleExportBackup = async () => {
     setIsBackingUp(true);
@@ -72,35 +67,6 @@ export default function ConfigBackupTab({
     }
   };
 
-  const handleSaveCloudCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingCloud(true);
-    try {
-      const res = await fetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          supabase_url: form.supabase_url?.trim() || '',
-          supabase_anon_key: form.supabase_anon_key?.trim() || '',
-          storage_mode: form.supabase_url?.trim() ? 'safe' : 'local',
-        }),
-      });
-
-      if (res.ok) {
-        toast.success('Credenciales de respaldo en la nube guardadas correctamente.');
-        await refreshModules();
-      } else {
-        toast.error('Error al guardar credenciales de la nube.');
-      }
-    } catch {
-      toast.error('Error de conexión con el servidor.');
-    } finally {
-      setIsSavingCloud(false);
-    }
-  };
-
-  const hasCloudConfig = !!(form.supabase_url && form.supabase_url.trim() !== '');
-
   return (
     <div className="space-y-8">
       {/* Respaldo en Computadora */}
@@ -139,91 +105,50 @@ export default function ConfigBackupTab({
         </div>
       </section>
 
-      {/* Sincronización en la Nube */}
+      {/* Sincronización en la Nube Integrada */}
       <section className="bg-muted p-6 rounded-xl shadow space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Cloud size={20} className="text-primary" /> Respaldo Automático en la Nube
+              <Cloud size={20} className="text-primary" /> Respaldo Automático en la Nube ClinPOS
             </h2>
             <p className="text-sm text-foreground-muted mt-1">
-              Guardá una copia automática de tus datos en internet para mantener tu información 100% protegida ante cualquier inconveniente.
+              Tu información se respalda de forma segura en los servidores de ClinPOS para proteger tus ventas y clientes ante cualquier falla técnica.
             </p>
           </div>
 
-          {hasCloudConfig && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-600 text-xs font-bold rounded-full shrink-0">
-              <CheckCircle2 size={14} /> Respaldo Activo
-            </span>
-          )}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-600 text-xs font-bold rounded-full shrink-0">
+            <ShieldCheck size={14} /> Servicio Conectado
+          </span>
         </div>
 
-        <div className="p-4 bg-background border border-border rounded-xl space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
+        <div className="p-5 bg-background border border-border rounded-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-bold text-foreground">Estado de la Sincronización</p>
+              <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-500" /> Servidor Oficial Activo
+              </p>
               {form.supabase_last_sync ? (
-                <p className="text-xs text-emerald-600 font-semibold mt-0.5">
-                  Último respaldo en la nube: {new Date(form.supabase_last_sync).toLocaleString('es-AR')}
+                <p className="text-xs text-emerald-600 font-semibold mt-1">
+                  Último respaldo exitoso en la nube: {new Date(form.supabase_last_sync).toLocaleString('es-AR')}
                 </p>
               ) : (
-                <p className="text-xs text-foreground-muted mt-0.5">
-                  {hasCloudConfig
-                    ? 'Conexión lista. Todavía no realizaste el primer respaldo manual.'
-                    : 'La opción en la nube está desactivada porque aún no se ingresó la URL del servidor.'}
+                <p className="text-xs text-foreground-muted mt-1">
+                  Conexión segura lista. Todavía no realizaste la primera sincronización manual.
                 </p>
               )}
             </div>
 
             <Button
+              type="button"
               onClick={handleManualSync}
-              disabled={isSyncing || !hasCloudConfig}
-              className="shrink-0 font-bold text-xs"
+              disabled={isSyncing}
+              className="shrink-0 font-bold text-xs px-5 py-2.5"
             >
-              <RefreshCw size={14} className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+              <RefreshCw size={15} className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
               {isSyncing ? 'Guardando en la Nube...' : 'Guardar en la Nube Ahora'}
             </Button>
           </div>
-
-          {/* Formulario de Conexión a la Nube */}
-          <form onSubmit={handleSaveCloudCredentials} className="space-y-4 pt-1">
-            <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-              <Key size={14} className="text-primary" /> Configuración de Conexión a la Nube (Supabase)
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="URL del Proyecto en la Nube (Supabase URL)"
-                type="text"
-                placeholder="https://tu-proyecto.supabase.co"
-                value={form.supabase_url || ''}
-                onChange={(e) => handleChange('supabase_url', e.target.value)}
-              />
-              <Input
-                label="Clave de API / Publishable Anon Key"
-                type="password"
-                placeholder="eyJhbGciOiJIUzI1NiIsInR5..."
-                value={form.supabase_anon_key || ''}
-                onChange={(e) => handleChange('supabase_anon_key', e.target.value)}
-              />
-            </div>
-
-            {!hasCloudConfig && (
-              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                <ShieldAlert size={16} className="shrink-0 mt-0.5" />
-                <p>
-                  Para activar los respaldos en la nube, ingresá la URL y la Clave API de tu base de datos Supabase y tocá <strong>Guardar Conexión</strong>.
-                </p>
-              </div>
-            )}
-
-            <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={isSavingCloud} variant="outline" className="text-xs font-bold">
-                <Save size={14} className="mr-1.5" />
-                {isSavingCloud ? 'Guardando...' : 'Guardar Conexión a la Nube'}
-              </Button>
-            </div>
-          </form>
         </div>
       </section>
     </div>

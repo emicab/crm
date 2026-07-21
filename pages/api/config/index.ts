@@ -3,6 +3,9 @@ import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { encryptText, decryptText } from '../../../lib/encryption';
 
+const OFFICIAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://htroigemnwqiugieodmv.supabase.co';
+const OFFICIAL_SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzcwMzg4NywiZXhwIjoyMDk5Mjc5ODg3fQ.CdGy6jjP5pfF6hnlGHrVV3PAWCnJqvQ4AxGTesnnStQ';
+
 const DEFAULT_SETTINGS: Record<string, string> = {
   taxRate: '21',
   businessName: '',
@@ -28,12 +31,12 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   app_plan: 'basico',
   plan_type: 'basico',
   unlocked_plan_pro: 'false',
-  storage_mode: 'local',
+  storage_mode: 'safe',
   business_profile: 'general',
   license_key: '',
   license_activated_at: '',
-  supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  supabase_anon_key: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  supabase_url: OFFICIAL_SUPABASE_URL,
+  supabase_anon_key: OFFICIAL_SUPABASE_KEY,
   supabase_last_sync: '',
 };
 
@@ -51,6 +54,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           result[s.key] = s.value;
         }
       }
+
+      // Garantizar que siempre haya credenciales de Supabase válidas
+      if (!result.supabase_url) result.supabase_url = OFFICIAL_SUPABASE_URL;
+      if (!result.supabase_anon_key) result.supabase_anon_key = OFFICIAL_SUPABASE_KEY;
+
       res.status(200).json(result);
     } catch (error) {
       handleApiError(res, error, 'fetching settings');
@@ -59,7 +67,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const entries = req.body as Record<string, string>;
       for (const [key, rawValue] of Object.entries(entries)) {
-        // Permitir guardar cualquier configuración válida (incluyendo módulo_*, plan_*, license_*, etc)
         let storedValue = String(rawValue);
         if (ENCRYPTED_FIELDS.includes(key) && storedValue.trim() !== '') {
           storedValue = encryptText(storedValue);
