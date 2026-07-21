@@ -65,28 +65,7 @@ export default function ConfigUsuariosTab() {
     fetchUsers();
   }, []);
 
-  // Escuchar teclado físico para el modal de PIN
-  useEffect(() => {
-    if (!showPinModal || !selectedUser || isUpdatingPin) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (/^[0-9]$/.test(e.key)) {
-        if (editPin.length < 4) {
-          setEditPin((prev) => (prev + e.key).slice(0, 4));
-        }
-      } else if (e.key === 'Backspace') {
-        setEditPin((prev) => prev.slice(0, -1));
-      } else if (e.key === 'Escape') {
-        setShowPinModal(false);
-        setEditPin('');
-        setCurrentPinInput('');
-        setSelectedUser(null);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showPinModal, selectedUser, editPin, isUpdatingPin]);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();

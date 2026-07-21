@@ -41,6 +41,7 @@ export default function UsuariosPage() {
   const [isAdding, setIsAdding] = useState(false);
 
   // Formulario Cambiar PIN
+  const [currentPin, setCurrentPin] = useState("");
   const [editPin, setEditPin] = useState("");
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
 
@@ -108,8 +109,12 @@ export default function UsuariosPage() {
   const handleUpdatePin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
+    if (currentPin.length !== 4 || isNaN(Number(currentPin))) {
+      toast.error("Por favor ingresá el PIN Actual de 4 dígitos.");
+      return;
+    }
     if (editPin.length !== 4 || isNaN(Number(editPin))) {
-      toast.error("El PIN debe tener exactamente 4 números.");
+      toast.error("El Nuevo PIN debe tener exactamente 4 números.");
       return;
     }
 
@@ -118,7 +123,10 @@ export default function UsuariosPage() {
       const res = await fetch(`/api/users/${selectedUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: editPin.trim() }),
+        body: JSON.stringify({
+          currentPin: currentPin.trim(),
+          pin: editPin.trim(),
+        }),
       });
 
       const data = await res.json();
@@ -126,6 +134,7 @@ export default function UsuariosPage() {
         toast.success(`PIN de "${selectedUser.name}" actualizado con éxito.`);
         setShowPinModal(false);
         setEditPin("");
+        setCurrentPin("");
         setSelectedUser(null);
       } else {
         toast.error(data.message || "Error al cambiar PIN.");
@@ -350,6 +359,16 @@ export default function UsuariosPage() {
             </h3>
             <form onSubmit={handleUpdatePin} className="space-y-3">
               <Input
+                label="PIN Actual (4 dígitos) *"
+                type="password"
+                maxLength={4}
+                placeholder="Ej: 1234"
+                value={currentPin}
+                onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))}
+                required
+              />
+
+              <Input
                 label="Nuevo PIN de 4 dígitos *"
                 type="password"
                 maxLength={4}
@@ -366,13 +385,14 @@ export default function UsuariosPage() {
                   onClick={() => {
                     setShowPinModal(false);
                     setEditPin("");
+                    setCurrentPin("");
                     setSelectedUser(null);
                   }}
                   disabled={isUpdatingPin}
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={isUpdatingPin}>
+                <Button type="submit" disabled={isUpdatingPin || currentPin.length !== 4 || editPin.length !== 4}>
                   {isUpdatingPin ? "Guardando..." : "Actualizar PIN"}
                 </Button>
               </div>
