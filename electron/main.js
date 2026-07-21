@@ -35,6 +35,46 @@ function mainApp() {
 
     const store = new Store();
 
+    // ─── Secreto criptográfico real protegido por safeStorage (DPAPI / Keychain del SO) ───
+    // Este secreto se genera UNA VEZ en el primer arranque y se almacena encriptado
+    // con las credenciales de sesión del usuario del SO. No puede ser leído por otro
+    // proceso/usuario sin desbloquear el keychain, ni sirve si se copia el .db a otra PC.
+    function getOrCreateEncryptionSecret() {
+        const STORE_KEY = 'clinpos_encryption_secret_v1';
+
+        if (safeStorage.isEncryptionAvailable()) {
+            // Intentar recuperar el secreto existente
+            const encryptedBuffer = store.get(STORE_KEY);
+            if (encryptedBuffer) {
+                try {
+                    const decrypted = safeStorage.decryptString(Buffer.from(encryptedBuffer, 'base64'));
+                    console.log('[Security] Secreto de encriptación recuperado desde safeStorage (DPAPI).');
+                    return decrypted;
+                } catch (err) {
+                    console.warn('[Security] No se pudo desencriptar el secreto guardado, generando uno nuevo:', err.message);
+                }
+            }
+
+            // Primer arranque: generar un secreto aleatorio real y protegerlo con safeStorage
+            const newSecret = crypto.randomBytes(64).toString('hex');
+            const encrypted = safeStorage.encryptString(newSecret);
+            store.set(STORE_KEY, encrypted.toString('base64'));
+            console.log('[Security] Nuevo secreto de encriptación generado y protegido con safeStorage (DPAPI).');
+            return newSecret;
+        } else {
+            // Fallback si safeStorage no está disponible (Linux sin keychain, etc.)
+            console.warn('[Security] safeStorage no disponible. Usando fallback basado en machineId.');
+            const existingFallback = store.get(STORE_KEY + '_fallback');
+            if (existingFallback) return existingFallback;
+            const fallback = crypto.randomBytes(64).toString('hex');
+            store.set(STORE_KEY + '_fallback', fallback);
+            return fallback;
+        }
+    }
+
+    const ENCRYPTION_SECRET = getOrCreateEncryptionSecret();
+    process.env.CLINPOS_ENCRYPTION_SECRET = ENCRYPTION_SECRET;
+
     function createSplashWindow() {
         splashWindow = new BrowserWindow({
             width: 600,

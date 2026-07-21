@@ -4,34 +4,51 @@ import { machineIdSync } from "node-machine-id";
 const ALGORITHM = "aes-256-gcm";
 
 /**
- * Genera una clave Maestra de 256 bits derivada de la identidad física de la máquina (Hardware ID)
- * y la cuenta de usuario del sistema operativo (DPAPI pattern / Hardware Binding).
+ * Genera la clave maestra AES-256 combinando 3 capas de protección:
+ *
+ * 1. CLINPOS_ENCRYPTION_SECRET: Secreto aleatorio real, generado una vez por instalación
+ *    y protegido por safeStorage de Electron (DPAPI en Windows / Keychain en macOS).
+ *    → Requiere las credenciales de sesión del usuario del SO para accederlo.
+ *
+ * 2. Hardware ID (machineIdSync): UUID físico del motherboard/CPU.
+ *    → Previene portabilidad del .db entre computadoras.
+ *
+ * 3. Usuario del SO: Nombre de la cuenta de Windows/Mac activa.
+ *    → Aísla por sesión de usuario en equipos compartidos.
+ *
+ * Si el secreto de safeStorage no está disponible (modo dev sin Electron),
+ * la clave se deriva solo de machineId + usuario (protección contra portabilidad).
  */
 function getMasterKey(): Buffer {
-  let uniqueHardwareId = "";
+  const safeStorageSecret = process.env.CLINPOS_ENCRYPTION_SECRET || "";
+
+  let hardwareId = "";
   try {
-    uniqueHardwareId = machineIdSync(true);
+    hardwareId = machineIdSync(true);
   } catch {
-    uniqueHardwareId =
+    hardwareId =
       process.env.COMPUTERNAME ||
       process.env.HOSTNAME ||
       "ClinPOS-Fallback-Device-ID";
   }
 
   const osUser = process.env.USERNAME || process.env.USER || "default_user";
-  const rawSeed = `ClinPOS_HW::${uniqueHardwareId}::USER::${osUser}`;
 
-  return crypto.scryptSync(rawSeed, "clinpos_hardware_salt_v2", 32);
+  // El secreto de safeStorage es el componente crítico que aporta protección real
+  // contra acceso local. machineId y osUser complementan contra portabilidad.
+  const rawSeed = `ClinPOS::${safeStorageSecret}::HW::${hardwareId}::USER::${osUser}`;
+
+  return crypto.scryptSync(rawSeed, "clinpos_safe_salt_v3", 32);
 }
 
 /**
- * Encripta un texto sensible (ej: clave privada ARCA) usando AES-256-GCM
- * con una clave derivada del hardware único de este equipo.
- * Retorna formato: "ENC::iv.authTag.ciphertext"
+ * Encripta un texto sensible (ej: clave privada ARCA) usando AES-256-GCM.
+ * La clave de cifrado está protegida por el keychain del SO (safeStorage/DPAPI).
+ * Formato de salida: "ENC::iv.authTag.ciphertext"
  */
 export function encryptText(text: string): string {
   if (!text) return "";
-  if (text.startsWith("ENC::")) return text; // Ya está encriptado
+  if (text.startsWith("ENC::")) return text;
 
   const iv = crypto.randomBytes(12);
   const key = getMasterKey();
@@ -42,21 +59,21 @@ export function encryptText(text: string): string {
 
   const authTag = cipher.getAuthTag().toString("hex");
 
-  // Usamos el punto '.' como separador seguro (libre de colisiones Hex)
   return `ENC::${iv.toString("hex")}.${authTag}.${encrypted}`;
 }
 
 /**
- * Desencripta un texto encriptado con AES-256-GCM.
- * Si el archivo .db fue copiado a otra computadora con diferente Hardware ID,
- * el descifrado fallará de forma segura.
+ * Desencripta un texto cifrado con AES-256-GCM.
+ *
+ * Si el .db fue copiado a otra máquina o el usuario del SO cambió,
+ * el descifrado fallará de forma segura (el secreto de safeStorage
+ * no puede reproducirse fuera de la sesión original).
  */
 export function decryptText(encryptedText: string): string {
   if (!encryptedText) return "";
   if (!encryptedText.startsWith("ENC::")) return encryptedText;
 
   const rawData = encryptedText.substring(5);
-  // Soportar tanto '.' como ':' como delimitador para retrocompatibilidad
   const delimiter = rawData.includes(".") ? "." : ":";
   const parts = rawData.split(delimiter);
 
@@ -64,6 +81,7 @@ export function decryptText(encryptedText: string): string {
 
   const [ivHex, authTagHex, cipherHex] = parts;
 
+  // Intento 1: clave actual (safeStorage + machineId + user)
   try {
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
@@ -77,17 +95,17 @@ export function decryptText(encryptedText: string): string {
 
     return decrypted;
   } catch {
-    // Si la clave no coincide (ej. migración de DB entre hardware o salt anterior), probar fallback estático
+    // Intento 2: fallback con clave v2 legacy (machineId + user, sin safeStorage)
     try {
-      const fallbackKey = crypto.scryptSync(
-        "ClinPOS-ARCA-Secure-Key-2026",
-        "clinpos_salt_v1",
-        32
-      );
+      let hardwareId = "";
+      try { hardwareId = machineIdSync(true); } catch { hardwareId = process.env.COMPUTERNAME || ""; }
+      const osUser = process.env.USERNAME || process.env.USER || "default_user";
+      const legacySeed = `ClinPOS_HW::${hardwareId}::USER::${osUser}`;
+      const legacyKey = crypto.scryptSync(legacySeed, "clinpos_hardware_salt_v2", 32);
+
       const iv = Buffer.from(ivHex, "hex");
       const authTag = Buffer.from(authTagHex, "hex");
-
-      const decipher = crypto.createDecipheriv(ALGORITHM, fallbackKey, iv);
+      const decipher = crypto.createDecipheriv(ALGORITHM, legacyKey, iv);
       decipher.setAuthTag(authTag);
 
       let decrypted = decipher.update(cipherHex, "hex", "utf8");
@@ -95,8 +113,22 @@ export function decryptText(encryptedText: string): string {
 
       return decrypted;
     } catch {
-      console.warn("⚠️ No se pudo desencriptar la clave con la identidad de esta máquina.");
-      return encryptedText;
+      // Intento 3: fallback con clave v1 legacy (salt estático original)
+      try {
+        const v1Key = crypto.scryptSync("ClinPOS-ARCA-Secure-Key-2026", "clinpos_salt_v1", 32);
+        const iv = Buffer.from(ivHex, "hex");
+        const authTag = Buffer.from(authTagHex, "hex");
+        const decipher = crypto.createDecipheriv(ALGORITHM, v1Key, iv);
+        decipher.setAuthTag(authTag);
+
+        let decrypted = decipher.update(cipherHex, "hex", "utf8");
+        decrypted += decipher.final("utf8");
+
+        return decrypted;
+      } catch {
+        console.warn("⚠️ No se pudo desencriptar el dato con ninguna clave conocida.");
+        return encryptedText;
+      }
     }
   }
 }
