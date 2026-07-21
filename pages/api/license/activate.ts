@@ -34,17 +34,21 @@ export default async function handler(
     let validatedViaSupabase = false;
 
     // Intentar validación en la base de licencias de Supabase (crm-admin)
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://htroigemnwqiugieodmv.supabase.co';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzcwMzg4NywiZXhwIjoyMDk5Mjc5ODg3fQ.CdGy6jjP5pfF6hnlGHrVV3PAWCnJqvQ4AxGTesnnStQ';
 
     if (supabaseUrl && supabaseKey) {
       try {
         const supabase = createClient(supabaseUrl, supabaseKey);
         const { data: lic, error } = await supabase
           .from("licenses")
-          .select("*, plans(*)")
+          .select("*")
           .eq("key", cleanKey)
           .maybeSingle();
+
+        if (error) {
+          console.warn("Error al consultar licencia en Supabase:", error);
+        }
 
         if (lic && !error) {
           if (!lic.is_active) {
@@ -58,7 +62,7 @@ export default async function handler(
           }
 
           // Vincular hardware_id e incrementar contador de activaciones en Supabase
-          await supabase
+          const { error: updateErr } = await supabase
             .from("licenses")
             .update({
               hardware_id: activeHardwareId,
@@ -67,8 +71,11 @@ export default async function handler(
             })
             .eq("id", lic.id);
 
-          const planName = lic.plans?.name ? String(lic.plans.name).toLowerCase() : "";
-          if (planName.includes("pro") || cleanKey.includes("PRO")) {
+          if (updateErr) {
+            console.error("Error al actualizar hardware_id en Supabase:", updateErr);
+          }
+
+          if (cleanKey.includes("PRO") || cleanKey.startsWith("CLIN-PRO") || cleanKey.startsWith("CRM-PRO")) {
             targetPlan = "pro";
           } else {
             targetPlan = "basico";
