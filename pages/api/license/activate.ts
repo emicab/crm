@@ -99,6 +99,7 @@ export default async function handler(
     const updates: Record<string, string> = {
       license_key: cleanKey,
       app_plan: targetPlan,
+      plan_type: targetPlan,
       unlocked_plan_pro: targetPlan === "pro" ? "true" : "false",
       storage_mode: targetPlan === "pro" ? "seguro" : "local",
       license_activated_at: new Date().toISOString(),
@@ -115,6 +116,7 @@ export default async function handler(
     return res.status(200).json({
       success: true,
       plan: targetPlan,
+      plan_type: targetPlan,
       message,
     });
   } catch (error: any) {

@@ -6,6 +6,8 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import toast from 'react-hot-toast';
 
+import { useModules } from '@/hooks/useModules';
+
 interface ConfigRubroPlanTabProps {
   form: Record<string, string>;
   handleChange: (key: string, value: string) => void;
@@ -21,6 +23,7 @@ export default function ConfigRubroPlanTab({
   isSaving,
   profilePresets,
 }: ConfigRubroPlanTabProps) {
+  const { refresh: refreshModules } = useModules();
   const [licenseKeyInput, setLicenseKeyInput] = useState('');
   const [activatingLicense, setActivatingLicense] = useState(false);
 
@@ -42,10 +45,15 @@ export default function ConfigRubroPlanTab({
       const data = await res.json();
       if (res.ok && data.success) {
         toast.success(data.message || '¡Licencia activada con éxito!');
+        const activePlan = data.plan || data.plan_type || 'pro';
         handleChange('license_key', licenseKeyInput.trim());
-        handleChange('plan_type', data.plan_type || 'pro');
+        handleChange('plan_type', activePlan);
+        handleChange('app_plan', activePlan);
+        handleChange('unlocked_plan_pro', activePlan === 'pro' ? 'true' : 'false');
+        handleChange('storage_mode', activePlan === 'pro' ? 'seguro' : 'local');
         setLicenseKeyInput('');
-        handleSave();
+        await handleSave();
+        await refreshModules();
       } else {
         toast.error(data.message || 'La clave de licencia no es válida.');
       }
@@ -57,7 +65,7 @@ export default function ConfigRubroPlanTab({
   };
 
   const currentProfileKey = form.business_profile || 'general';
-  const currentPlan = form.plan_type || 'basico';
+  const currentPlan = form.plan_type || form.app_plan || (form.unlocked_plan_pro === 'true' ? 'pro' : 'basico');
 
   return (
     <div className="space-y-8">

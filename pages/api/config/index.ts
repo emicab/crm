@@ -19,12 +19,19 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   arcaEnabled: 'false',
   arcaCuit: '',
   arcaPointOfSale: '1',
-  arcaEnv: 'homologacion',
+  arcaEnv: 'produccion',
   arcaCert: '',
   arcaKey: '',
   arcaIibb: '',
   arcaBusinessStartDate: '',
   arcaIvaCondition: 'RI',
+  app_plan: 'basico',
+  plan_type: 'basico',
+  unlocked_plan_pro: 'false',
+  storage_mode: 'local',
+  business_profile: 'general',
+  license_key: '',
+  license_activated_at: '',
 };
 
 const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey'];
@@ -49,8 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const entries = req.body as Record<string, string>;
       for (const [key, rawValue] of Object.entries(entries)) {
-        if (!(key in DEFAULT_SETTINGS)) continue;
-        
+        // Permitir guardar cualquier configuración válida (incluyendo módulo_*, plan_*, license_*, etc)
         let storedValue = String(rawValue);
         if (ENCRYPTED_FIELDS.includes(key) && storedValue.trim() !== '') {
           storedValue = encryptText(storedValue);

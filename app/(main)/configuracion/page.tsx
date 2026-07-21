@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
+import { useModules } from "@/hooks/useModules";
+
 import ConfigGeneralTab from "@/components/configuracion/tabs/ConfigGeneralTab";
 import ConfigRubroPlanTab from "@/components/configuracion/tabs/ConfigRubroPlanTab";
 import ConfigBackupTab from "@/components/configuracion/tabs/ConfigBackupTab";
@@ -98,6 +100,7 @@ const PROFILE_PRESETS: Record<
 };
 
 export default function ConfiguracionPage() {
+  const { refresh: refreshModules } = useModules();
   const [form, setForm] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -164,6 +167,7 @@ export default function ConfiguracionPage() {
 
       if (!res.ok) throw new Error();
       toast.success("Configuración guardada correctamente.");
+      await refreshModules();
     } catch {
       toast.error("Error al guardar la configuración.");
     } finally {

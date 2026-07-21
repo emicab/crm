@@ -76,7 +76,7 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (data.business_profile) setBusinessProfile(data.business_profile);
       if (data.storage_mode) setStorageMode(data.storage_mode);
       
-      const isProPlan = data.app_plan === 'pro' || data.unlocked_plan_pro === 'true' || data.storage_mode === 'seguro';
+      const isProPlan = data.app_plan === 'pro' || data.plan_type === 'pro' || data.unlocked_plan_pro === 'true' || data.storage_mode === 'seguro';
       setPlan(isProPlan ? 'pro' : 'basico');
 
       setSupabaseLastSync(data.supabase_last_sync || "");
