@@ -1,15 +1,33 @@
 import crypto from "crypto";
+import { machineIdSync } from "node-machine-id";
 
-const SECRET_SALT = process.env.ENCRYPTION_SECRET || "ClinPOS-ARCA-Secure-Key-2026";
 const ALGORITHM = "aes-256-gcm";
 
+/**
+ * Genera una clave Maestra de 256 bits derivada de la identidad física de la máquina (Hardware ID)
+ * y la cuenta de usuario del sistema operativo (DPAPI pattern / Hardware Binding).
+ */
 function getMasterKey(): Buffer {
-  return crypto.scryptSync(SECRET_SALT, "clinpos_salt_v1", 32);
+  let uniqueHardwareId = "";
+  try {
+    uniqueHardwareId = machineIdSync(true);
+  } catch {
+    uniqueHardwareId =
+      process.env.COMPUTERNAME ||
+      process.env.HOSTNAME ||
+      "ClinPOS-Fallback-Device-ID";
+  }
+
+  const osUser = process.env.USERNAME || process.env.USER || "default_user";
+  const rawSeed = `ClinPOS_HW::${uniqueHardwareId}::USER::${osUser}`;
+
+  return crypto.scryptSync(rawSeed, "clinpos_hardware_salt_v2", 32);
 }
 
 /**
- * Encripta un texto sensible (ej: clave privada ARCA) usando AES-256-GCM.
- * Retorna un string formateado como: "ENC::iv:authTag:ciphertext"
+ * Encripta un texto sensible (ej: clave privada ARCA) usando AES-256-GCM
+ * con una clave derivada del hardware único de este equipo.
+ * Retorna formato: "ENC::iv.authTag.ciphertext"
  */
 export function encryptText(text: string): string {
   if (!text) return "";
@@ -24,22 +42,29 @@ export function encryptText(text: string): string {
 
   const authTag = cipher.getAuthTag().toString("hex");
 
-  return `ENC::${iv.toString("hex")}:${authTag}:${encrypted}`;
+  // Usamos el punto '.' como separador seguro (libre de colisiones Hex)
+  return `ENC::${iv.toString("hex")}.${authTag}.${encrypted}`;
 }
 
 /**
  * Desencripta un texto encriptado con AES-256-GCM.
- * Si el texto no está encriptado, lo retorna tal cual (para mantener retrocompatibilidad).
+ * Si el archivo .db fue copiado a otra computadora con diferente Hardware ID,
+ * el descifrado fallará de forma segura.
  */
 export function decryptText(encryptedText: string): string {
   if (!encryptedText) return "";
   if (!encryptedText.startsWith("ENC::")) return encryptedText;
 
-  try {
-    const parts = encryptedText.substring(5).split(":");
-    if (parts.length !== 3) return encryptedText;
+  const rawData = encryptedText.substring(5);
+  // Soportar tanto '.' como ':' como delimitador para retrocompatibilidad
+  const delimiter = rawData.includes(".") ? "." : ":";
+  const parts = rawData.split(delimiter);
 
-    const [ivHex, authTagHex, cipherHex] = parts;
+  if (parts.length !== 3) return encryptedText;
+
+  const [ivHex, authTagHex, cipherHex] = parts;
+
+  try {
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
     const key = getMasterKey();
@@ -51,8 +76,27 @@ export function decryptText(encryptedText: string): string {
     decrypted += decipher.final("utf8");
 
     return decrypted;
-  } catch (err) {
-    console.error("Error al desencriptar dato:", err);
-    return encryptedText;
+  } catch {
+    // Si la clave no coincide (ej. migración de DB entre hardware o salt anterior), probar fallback estático
+    try {
+      const fallbackKey = crypto.scryptSync(
+        "ClinPOS-ARCA-Secure-Key-2026",
+        "clinpos_salt_v1",
+        32
+      );
+      const iv = Buffer.from(ivHex, "hex");
+      const authTag = Buffer.from(authTagHex, "hex");
+
+      const decipher = crypto.createDecipheriv(ALGORITHM, fallbackKey, iv);
+      decipher.setAuthTag(authTag);
+
+      let decrypted = decipher.update(cipherHex, "hex", "utf8");
+      decrypted += decipher.final("utf8");
+
+      return decrypted;
+    } catch {
+      console.warn("⚠️ No se pudo desencriptar la clave con la identidad de esta máquina.");
+      return encryptedText;
+    }
   }
 }
