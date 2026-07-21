@@ -21,7 +21,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         orderBy: { name: "asc" },
       });
 
-      if (users.length === 0) {
+      // Garantizar que siempre exista al menos 1 usuario Administrador
+      const hasAdmin = users.some((u) => u.role === "ADMIN");
+      if (!hasAdmin) {
         const admin = await prisma.user.create({
           data: {
             name: "Administrador",
@@ -35,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             createdAt: true,
           },
         });
-        users = [admin];
+        users.unshift(admin);
       }
 
       return res.status(200).json(users);

@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === "PATCH") {
-    const { name, role, pin } = req.body;
+    const { name, role, pin, currentPin } = req.body;
 
     try {
       const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -37,8 +37,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         updateData.role = role;
       }
       if (pin) {
+        if (currentPin && hashPin(currentPin) !== user.pinHash) {
+          return res.status(401).json({ message: "El PIN actual ingresado es incorrecto." });
+        }
         if (pin.length !== 4 || isNaN(Number(pin))) {
-          return res.status(400).json({ message: "El PIN debe tener exactamente 4 dígitos." });
+          return res.status(400).json({ message: "El nuevo PIN debe tener exactamente 4 dígitos." });
         }
         updateData.pinHash = hashPin(pin);
       }

@@ -41,6 +41,7 @@ export default function ConfigUsuariosTab() {
   const [isAdding, setIsAdding] = useState(false);
 
   // Formulario Cambiar PIN
+  const [currentPinInput, setCurrentPinInput] = useState('');
   const [editPin, setEditPin] = useState('');
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
 
@@ -78,6 +79,7 @@ export default function ConfigUsuariosTab() {
       } else if (e.key === 'Escape') {
         setShowPinModal(false);
         setEditPin('');
+        setCurrentPinInput('');
         setSelectedUser(null);
       }
     };
@@ -130,8 +132,12 @@ export default function ConfigUsuariosTab() {
   const handleUpdatePin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!selectedUser) return;
+    if (currentPinInput.length !== 4 || isNaN(Number(currentPinInput))) {
+      toast.error('Por favor ingresá el PIN Actual de 4 dígitos.');
+      return;
+    }
     if (editPin.length !== 4 || isNaN(Number(editPin))) {
-      toast.error('El PIN debe tener exactamente 4 números.');
+      toast.error('El Nuevo PIN debe tener exactamente 4 números.');
       return;
     }
 
@@ -140,7 +146,10 @@ export default function ConfigUsuariosTab() {
       const res = await fetch(`/api/users/${selectedUser.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: editPin.trim() }),
+        body: JSON.stringify({
+          currentPin: currentPinInput.trim(),
+          pin: editPin.trim(),
+        }),
       });
 
       const data = await res.json();
@@ -148,6 +157,7 @@ export default function ConfigUsuariosTab() {
         toast.success(`PIN de "${selectedUser.name}" actualizado con éxito.`);
         setShowPinModal(false);
         setEditPin('');
+        setCurrentPinInput('');
         setSelectedUser(null);
       } else {
         toast.error(data.message || 'Error al cambiar PIN.');
@@ -425,65 +435,30 @@ export default function ConfigUsuariosTab() {
               </button>
             </div>
 
-            {/* Visualizador de Puntos PIN */}
-            <div className="flex gap-4 justify-center items-center py-2">
-              {[0, 1, 2, 3].map((idx) => {
-                const filled = editPin.length > idx;
-                return (
-                  <div
-                    key={idx}
-                    className={`h-5 w-5 rounded-full border border-border transition-all duration-150 ${
-                      filled ? 'bg-primary scale-110 shadow' : 'bg-muted'
-                    }`}
-                  />
-                );
-              })}
-            </div>
+            <div className="space-y-4 text-left pt-2">
+              <Input
+                label="PIN Actual (4 dígitos) *"
+                type="password"
+                maxLength={4}
+                placeholder="Ej: 1234"
+                value={currentPinInput}
+                onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, ''))}
+                required
+              />
 
-            {/* Teclado Numérico Táctil/Virtual */}
-            <div className="grid grid-cols-3 gap-3 w-full max-w-[260px] mx-auto pt-2">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  disabled={isUpdatingPin}
-                  onClick={() => {
-                    if (editPin.length < 4) {
-                      setEditPin((prev) => prev + num);
-                    }
-                  }}
-                  className="h-14 w-full rounded-2xl border border-border bg-muted/40 text-xl font-bold text-foreground hover:bg-primary/10 hover:text-primary active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  {num}
-                </button>
-              ))}
-              <button type="button" className="h-14 w-full rounded-2xl invisible" />
-              <button
-                key="0"
-                type="button"
-                disabled={isUpdatingPin}
-                onClick={() => {
-                  if (editPin.length < 4) {
-                    setEditPin((prev) => prev + '0');
-                  }
-                }}
-                className="h-14 w-full rounded-2xl border border-border bg-muted/40 text-xl font-bold text-foreground hover:bg-primary/10 hover:text-primary active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-              >
-                0
-              </button>
-              <button
-                type="button"
-                disabled={isUpdatingPin || editPin.length === 0}
-                onClick={() => setEditPin((prev) => prev.slice(0, -1))}
-                className="h-14 w-full rounded-2xl text-foreground hover:bg-muted active:scale-95 transition-all flex items-center justify-center cursor-pointer disabled:opacity-30"
-                title="Borrar dígito"
-              >
-                <Delete size={22} />
-              </button>
+              <Input
+                label="Nuevo PIN (4 dígitos) *"
+                type="password"
+                maxLength={4}
+                placeholder="Ej: 9876"
+                value={editPin}
+                onChange={(e) => setEditPin(e.target.value.replace(/\D/g, ''))}
+                required
+              />
             </div>
 
             <p className="text-[11px] text-foreground-muted">
-              Podés hacer clic en los números o ingresarlos con el teclado físico / Numpad USB.
+              Por seguridad, debés ingresar tu PIN actual antes de definir la nueva clave de acceso.
             </p>
 
             <div className="pt-4 border-t border-border flex justify-end gap-3 text-sm">
@@ -493,6 +468,7 @@ export default function ConfigUsuariosTab() {
                 onClick={() => {
                   setShowPinModal(false);
                   setEditPin('');
+                  setCurrentPinInput('');
                   setSelectedUser(null);
                 }}
                 disabled={isUpdatingPin}
@@ -502,7 +478,7 @@ export default function ConfigUsuariosTab() {
               <Button
                 type="button"
                 onClick={() => handleUpdatePin()}
-                disabled={isUpdatingPin || editPin.length !== 4}
+                disabled={isUpdatingPin || currentPinInput.length !== 4 || editPin.length !== 4}
                 className="font-bold"
               >
                 {isUpdatingPin ? (

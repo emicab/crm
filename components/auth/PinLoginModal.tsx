@@ -122,20 +122,6 @@ export default function PinLoginModal({
     }
   };
 
-  const handleResetAdminPin = async () => {
-    try {
-      const res = await fetch("/api/users/reset-admin", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message || "PIN del Administrador restablecido a 1234");
-      } else {
-        toast.error(data.message || "Error al restablecer PIN");
-      }
-    } catch {
-      toast.error("Error al conectar con el servidor.");
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-lg p-4">
       <div className="bg-muted border border-border text-foreground rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-6 flex flex-col items-center">
@@ -186,16 +172,6 @@ export default function PinLoginModal({
                       </div>
                     </button>
                   ))}
-                </div>
-
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    onClick={handleResetAdminPin}
-                    className="text-xs text-primary hover:underline font-semibold cursor-pointer"
-                  >
-                    ¿Olvidaste el PIN del Administrador? Restablecer a 1234
-                  </button>
                 </div>
               </>
             )}
