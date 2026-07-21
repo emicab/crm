@@ -271,12 +271,12 @@ function mainApp() {
 
             serverProcess = spawn(
                 process.execPath,
-                [__filename, serverPath],
+                [serverPath],
                 {
                     cwd: app.getAppPath(),
                     env: {
                         ...process.env,
-                        RUNNING_AS_SERVER: 'true',
+                        ELECTRON_RUN_AS_NODE: '1',
                         PORT: PORT.toString(),
                         HOSTNAME: '127.0.0.1',
                         APP_SECRET: APP_SECRET,
