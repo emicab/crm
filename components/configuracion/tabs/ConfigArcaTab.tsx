@@ -141,14 +141,16 @@ export default function ConfigArcaTab({
                 placeholder="1"
               />
 
-              <Select
-                label="Entorno"
-                value={form.arcaEnv || 'homologacion'}
-                onChange={(e) => handleChange('arcaEnv', e.target.value)}
-              >
-                <option value="homologacion">Homologación (Pruebas)</option>
-                <option value="produccion">Producción (Real)</option>
-              </Select>
+              {process.env.NODE_ENV !== 'production' && (
+                <Select
+                  label="Entorno (Solo visible en desarrollo)"
+                  value={form.arcaEnv || 'produccion'}
+                  onChange={(e) => handleChange('arcaEnv', e.target.value)}
+                >
+                  <option value="homologacion">Homologación (Pruebas)</option>
+                  <option value="produccion">Producción (Real)</option>
+                </Select>
+              )}
 
               <Select
                 label="Condición frente al IVA"

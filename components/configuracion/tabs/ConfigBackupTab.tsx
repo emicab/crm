@@ -70,69 +70,69 @@ export default function ConfigBackupTab({
 
   return (
     <div className="space-y-8">
-      {/* Respaldo Local SQLite */}
+      {/* Respaldo en Computadora */}
       <section className="bg-muted p-6 rounded-xl shadow space-y-4">
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-          <Database size={20} className="text-primary" /> Copias de Seguridad Locales (SQLite)
+          <Database size={20} className="text-primary" /> Copia de Seguridad en la Computadora
         </h2>
         <p className="text-sm text-foreground-muted">
-          Exportá la base de datos completa de tu comercio a un archivo local de respaldo `.db`, o importá una copia de seguridad existente.
+          Guardá un archivo de respaldo con todas tus ventas, clientes y productos para tener una copia protegida en tu equipo o pendrive.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div className="p-4 bg-background border border-border rounded-xl space-y-3">
             <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Download size={16} className="text-primary" /> Exportar Copia de Seguridad
+              <Download size={16} className="text-primary" /> Descargar Copia de Seguridad
             </h3>
             <p className="text-xs text-foreground-muted">
-              Genera un archivo `.db` con todas tus ventas, stock, clientes y movimientos.
+              Crea un archivo de respaldo seguro con toda la información de tu negocio.
             </p>
             <Button onClick={handleExportBackup} disabled={isBackingUp} variant="outline" className="w-full text-xs font-bold">
-              {isBackingUp ? 'Exportando...' : 'Exportar Copia (.db)'}
+              {isBackingUp ? 'Guardando Copia...' : 'Descargar Copia de Seguridad'}
             </Button>
           </div>
 
           <div className="p-4 bg-background border border-border rounded-xl space-y-3">
             <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Upload size={16} className="text-amber-600" /> Importar Copia de Seguridad
+              <Upload size={16} className="text-amber-600" /> Recuperar Copia Guardada
             </h3>
             <p className="text-xs text-foreground-muted">
-              Restaura los datos desde una copia previamente exportada.
+              Restaura la información de tu comercio desde un archivo de respaldo previamente guardado.
             </p>
             <Button onClick={handleImportBackup} disabled={isRestoring} variant="outline" className="w-full text-xs font-bold text-amber-600 border-amber-500/30 hover:bg-amber-500/10">
-              {isRestoring ? 'Restaurando...' : 'Importar Copia (.db)'}
+              {isRestoring ? 'Restaurando...' : 'Recuperar Copia Guardada'}
             </Button>
           </div>
         </div>
       </section>
 
-      {/* Sincronización Nube Supabase */}
+      {/* Sincronización en la Nube */}
       <section className="bg-muted p-6 rounded-xl shadow space-y-4">
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-          <Cloud size={20} className="text-primary" /> Respaldo en la Nube (Supabase)
+          <Cloud size={20} className="text-primary" /> Respaldo Automático en la Nube
         </h2>
         <p className="text-sm text-foreground-muted">
-          Los comercios con Plan Pro cuentan con sincronización y respaldo automático en la nube.
+          Guardá una copia de tus datos en internet para mantener tu información protegida ante cualquier inconveniente con tu computadora.
         </p>
 
         <div className="p-4 bg-background border border-border rounded-xl space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-bold text-foreground">Sincronización Automática</p>
+              <p className="text-sm font-bold text-foreground">Copia en la Nube</p>
               {form.supabase_last_sync ? (
                 <p className="text-xs text-emerald-600 font-semibold mt-0.5">
                   Último respaldo exitoso: {new Date(form.supabase_last_sync).toLocaleString('es-AR')}
                 </p>
               ) : (
                 <p className="text-xs text-foreground-muted mt-0.5">
-                  No hay registro de respaldo previo en la nube.
+                  No hay registros de respaldos previos en la nube.
                 </p>
               )}
             </div>
 
             <Button onClick={handleManualSync} disabled={isSyncing || !form.supabase_url} className="shrink-0 font-bold text-xs">
               <RefreshCw size={14} className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Guardando en la Nube...' : 'Iniciar Respaldo Manual Nube'}
+              {isSyncing ? 'Guardando en la Nube...' : 'Guardar en la Nube Ahora'}
             </Button>
           </div>
         </div>

@@ -75,14 +75,16 @@ export default function ArcaStep3UploadCert({
             placeholder="Ej: 2"
           />
 
-          <Select
-            label="Entorno de Emisión"
-            value={env}
-            onChange={(e) => setEnv(e.target.value as any)}
-          >
-            <option value="produccion">Producción (Comprobantes Reales)</option>
-            <option value="homologacion">Homologación (Pruebas AFIP)</option>
-          </Select>
+          {process.env.NODE_ENV !== 'production' && (
+            <Select
+              label="Entorno de Emisión"
+              value={env}
+              onChange={(e) => setEnv(e.target.value as any)}
+            >
+              <option value="produccion">Producción (Comprobantes Reales)</option>
+              <option value="homologacion">Homologación (Pruebas AFIP)</option>
+            </Select>
+          )}
         </div>
       </div>
 
