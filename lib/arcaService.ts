@@ -4,6 +4,7 @@ import path from 'path';
 import { decryptText } from './encryption';
 
 // Utilizaremos require para evitar problemas con los tipos y la carga de CommonJS del SDK de AFIP
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Afip = require('@afipsdk/afip.js');
 
 interface ArcaConfig {

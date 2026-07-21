@@ -10,6 +10,7 @@ export async function runSupabaseSync(): Promise<{
   syncedTables?: Record<string, number>;
 }> {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { loadEnv } = require("./envLoader");
     loadEnv();
     

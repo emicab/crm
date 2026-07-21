@@ -1,6 +1,6 @@
 {
   "name": "clinpos",
-  "version": "1.3.7",
+  "version": "1.5.0",
   "description": "ClinPOS By EmiDev",
   "author": "Emiliano Cabanillas",
   "private": true,
@@ -13,13 +13,14 @@
     "dev": "concurrently \"npm:dev:next\" \"npm:dev:electron\"",
     "dev:next": "next dev --hostname 0.0.0.0",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
-    "build": "npx prisma generate && node scripts/migrate-template.js && next build && electron-builder",
-    "publish": "npx prisma generate && node scripts/migrate-template.js && next build && electron-builder --win --x64 --publish always"
+    "build": "npx prisma generate && node scripts/migrate-template.js && next build && node scripts/compile-bytecode.js && electron-builder",
+    "publish": "npx prisma generate && node scripts/migrate-template.js && next build && node scripts/compile-bytecode.js && electron-builder --win --x64 --publish always"
   },
   "dependencies": {
     "@afipsdk/afip.js": "^1.2.3",
     "@prisma/client": "^6.4.0",
     "@supabase/supabase-js": "^2.110.2",
+    "bytenode": "^1.6.0",
     "class-variance-authority": "^0.7.1",
     "driver.js": "^1.6.0",
     "electron-store": "^7.0.3",
@@ -60,11 +61,16 @@
       "owner": "emicab",
       "repo": "crm"
     },
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      ".next/standalone",
+      "node_modules/.prisma",
+      "node_modules/@prisma"
+    ],
     "files": [
       "package.json",
       {
-        "from": "electron",
+        "from": "electron-dist",
         "to": "electron"
       },
       {
