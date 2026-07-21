@@ -1235,9 +1235,9 @@ export default function ConfiguracionPage() {
                   <Wand2 size={22} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">¿Querés configurar ARCA sin complicaciones?</h3>
+                  <h3 className="text-sm font-bold text-foreground">¿Querés activar la Facturación Electrónica sin complicaciones?</h3>
                   <p className="text-xs text-foreground-muted mt-0.5">
-                    Usá nuestro <strong>Asistente Guiado 1-Clic</strong> para generar la solicitud (.csr) y la clave (.key) de forma automática sin usar comandos de consola.
+                    Usá nuestro <strong>Asistente Guiado</strong> para habilitar las facturas de AFIP/ARCA paso a paso sin necesidad de conocimientos técnicos.
                   </p>
                 </div>
               </div>

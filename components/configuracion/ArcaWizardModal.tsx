@@ -203,15 +203,15 @@ export default function ArcaWizardModal({
             <form onSubmit={handleGenerateCsr} className="space-y-4">
               <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-xs text-foreground leading-relaxed">
                 <p className="font-bold text-primary mb-1 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-primary" /> Generación Automática Criptográfica
+                  <ShieldCheck className="w-4 h-4 text-primary" /> Configuración Automática y Segura
                 </p>
-                ClinPOS creará tu <strong>Clave Privada (.key)</strong> y la guardará cifrada con AES-256 + DPAPI en tu equipo. Al mismo tiempo, te descargará el archivo de <strong>Solicitud (.csr)</strong> que presentarás en el sitio web de AFIP.
+                ClinPOS preparará la solicitud de tu comercio y descargará el archivo listo a tu computadora. Luego te guiaremos paso a paso para activarlo en AFIP sin complicaciones.
               </div>
 
               <div className="space-y-3">
                 <Input
                   label="CUIT del Comercio *"
-                  placeholder="20123456789 (Sin guiones)"
+                  placeholder="Ej: 20123456789 (Sin guiones)"
                   value={cuit}
                   onChange={(e) => setCuit(e.target.value)}
                   required
@@ -240,11 +240,11 @@ export default function ArcaWizardModal({
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
-                      Generando Criptografía...
+                      Preparando Solicitud...
                     </>
                   ) : (
                     <>
-                      Generar Solicitud (.csr)
+                      Crear Solicitud de Facturación
                       <ArrowRight className="w-4 h-4 ml-1.5" />
                     </>
                   )}
@@ -259,9 +259,9 @@ export default function ArcaWizardModal({
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-xs text-foreground flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-emerald-700 dark:text-emerald-300">¡Solicitud Generada con Éxito!</p>
+                  <p className="font-bold text-emerald-700 dark:text-emerald-300">¡Solicitud Creada con Éxito!</p>
                   <p className="mt-0.5 text-foreground-muted">
-                    Se descargó el archivo <strong>{csrFilename}</strong> a tus Descargas. La clave privada se vinculó de forma cifrada a tu instalación.
+                    Se guardó el archivo <strong>{csrFilename}</strong> en tu carpeta de Descargas. ClinPOS dejó registrada la clave de tu comercio en este equipo.
                   </p>
                 </div>
               </div>
