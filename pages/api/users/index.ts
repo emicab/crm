@@ -11,7 +11,7 @@ function hashPin(pin: string): string {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "GET") {
     try {
-      const users = await prisma.user.findMany({
+      let users = await prisma.user.findMany({
         select: {
           id: true,
           name: true,
@@ -20,6 +20,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         orderBy: { name: "asc" },
       });
+
+      if (users.length === 0) {
+        const admin = await prisma.user.create({
+          data: {
+            name: "Administrador",
+            role: "ADMIN",
+            pinHash: hashPin("1234"),
+          },
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            createdAt: true,
+          },
+        });
+        users = [admin];
+      }
+
       return res.status(200).json(users);
     } catch (error) {
       return handleApiError(res, error, "fetching users");

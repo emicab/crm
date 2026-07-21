@@ -265,19 +265,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           })}
         </nav>
 
-        {isModuleEnabled("roles") && currentUser && (
-          <div className="px-4 py-2.5 border-t border-border flex items-center justify-between text-xs">
+        {currentUser && (
+          <div className="px-4 py-2.5 border-t border-border flex items-center justify-between text-xs bg-background/50">
             <div className="min-w-0">
               <p className="font-bold text-foreground truncate">{currentUser.name}</p>
-              <p className="text-[9px] uppercase font-bold text-foreground-muted/75 tracking-wider mt-0.5">
-                {currentUser.role === "ADMIN" ? "Administrador" : currentUser.role === "SUPERVISOR" ? "Supervisor" : "Cajero"}
+              <p className="text-[9px] uppercase font-bold text-primary tracking-wider mt-0.5">
+                {currentUser.role === "ADMIN" ? "👑 Administrador" : currentUser.role === "SUPERVISOR" ? "⭐ Supervisor" : "🛒 Cajero"}
               </p>
             </div>
             <button
+              type="button"
               onClick={logout}
-              className="px-2 py-1 text-[10px] font-semibold bg-destructive/15 text-destructive rounded hover:bg-destructive/25 transition-colors cursor-pointer"
+              className="px-2.5 py-1.5 text-[10px] font-bold bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors cursor-pointer shrink-0"
+              title="Cerrar sesión y cambiar usuario"
             >
-              Bloquear
+              Cambiar Usuario 🔓
             </button>
           </div>
         )}

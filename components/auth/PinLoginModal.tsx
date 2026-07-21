@@ -122,6 +122,20 @@ export default function PinLoginModal({
     }
   };
 
+  const handleResetAdminPin = async () => {
+    try {
+      const res = await fetch("/api/users/reset-admin", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "PIN del Administrador restablecido a 1234");
+      } else {
+        toast.error(data.message || "Error al restablecer PIN");
+      }
+    } catch {
+      toast.error("Error al conectar con el servidor.");
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-lg p-4">
       <div className="bg-muted border border-border text-foreground rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 space-y-6 flex flex-col items-center">
@@ -153,25 +167,37 @@ export default function PinLoginModal({
                 <p className="text-[10px] mt-1">Contactá al administrador para inicializar cuentas.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2.5 max-h-60 overflow-y-auto">
-                {users.map((u) => (
+              <>
+                <div className="grid grid-cols-1 gap-2.5 max-h-60 overflow-y-auto">
+                  {users.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => { setSelectedUser(u); setPin(""); }}
+                      className="flex items-center gap-3 bg-white border border-border hover:border-primary hover:shadow p-3.5 rounded-xl transition-all text-left group"
+                    >
+                      <div className="bg-primary/10 text-primary p-2.5 rounded-lg group-hover:bg-primary group-hover:text-white transition-colors">
+                        <Users size={18} />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-foreground">{u.name}</h4>
+                        <p className="text-[10px] font-bold text-foreground-muted/65 uppercase tracking-wide mt-0.5">
+                          Rol: {u.role === "ADMIN" ? "Administrador" : u.role === "SUPERVISOR" ? "Supervisor" : "Cajero"}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="text-center pt-2">
                   <button
-                    key={u.id}
-                    onClick={() => { setSelectedUser(u); setPin(""); }}
-                    className="flex items-center gap-3 bg-white border border-border hover:border-primary hover:shadow p-3.5 rounded-xl transition-all text-left group"
+                    type="button"
+                    onClick={handleResetAdminPin}
+                    className="text-xs text-primary hover:underline font-semibold cursor-pointer"
                   >
-                    <div className="bg-primary/10 text-primary p-2.5 rounded-lg group-hover:bg-primary group-hover:text-white transition-colors">
-                      <Users size={18} />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-foreground">{u.name}</h4>
-                      <p className="text-[10px] font-bold text-foreground-muted/65 uppercase tracking-wide mt-0.5">
-                        Rol: {u.role === "ADMIN" ? "Administrador" : u.role === "SUPERVISOR" ? "Supervisor" : "Cajero"}
-                      </p>
-                    </div>
+                    ¿Olvidaste el PIN del Administrador? Restablecer a 1234
                   </button>
-                ))}
-              </div>
+                </div>
+              </>
             )}
           </div>
         )}
