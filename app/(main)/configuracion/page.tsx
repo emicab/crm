@@ -1,43 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
 import {
-  Save,
   Building,
-  Percent,
-  RefreshCw,
-  Smartphone,
-  ShieldCheck,
-  Receipt,
-  Users,
-  CreditCard,
-  UserPlus,
-  Truck,
-  TrendingDown,
   LayoutDashboard,
-  Key,
-  Scale,
   Database,
-  Cloud,
-  Lock,
-  Upload,
-  FileText,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  Trash2,
-  Wand2,
+  ShieldCheck,
 } from "lucide-react";
-import ArcaWizardModal from "@/components/configuracion/ArcaWizardModal";
-import QRCode from "qrcode";
-import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
-import Select from "@/components/ui/Select";
 import toast from "react-hot-toast";
-import { PaymentTypeEnum } from "@/types";
-import { getPaymentTypeDisplay } from "@/lib/displayTexts";
-import pkg from "@/package.json";
+
+import ConfigGeneralTab from "@/components/configuracion/tabs/ConfigGeneralTab";
+import ConfigRubroPlanTab from "@/components/configuracion/tabs/ConfigRubroPlanTab";
+import ConfigBackupTab from "@/components/configuracion/tabs/ConfigBackupTab";
+import ConfigArcaTab from "@/components/configuracion/tabs/ConfigArcaTab";
+import ConfigPaymentModal from "@/components/configuracion/modals/ConfigPaymentModal";
 
 // Ajustes preestablecidos por rubro de negocio
 const PROFILE_PRESETS: Record<
@@ -101,117 +77,59 @@ const PROFILE_PRESETS: Record<
       venta_fraccionada: false,
       analiticas: false,
       cuenta_corriente: true,
-      roles: true,
+      roles: false,
     },
   },
-  boutique: {
-    name: "Boutique / Indumentaria",
-    desc: "Fidelización de clientes, comisiones de personal y analíticas de rentabilidad.",
+  general: {
+    name: "Comercio General",
+    desc: "Perfil balanceado con acceso a todas las herramientas básicas de venta y stock.",
     modules: {
       clientes: true,
       vendedores: true,
-      compras: false,
+      compras: true,
       gastos: true,
-      combos_promociones: false,
-      venta_fraccionada: false,
+      combos_promociones: true,
+      venta_fraccionada: true,
       analiticas: true,
-      cuenta_corriente: false,
+      cuenta_corriente: true,
       roles: true,
     },
   },
 };
 
-// Detalle de módulos pluggables disponibles
-const AVAILABLE_MODULES = [
-  {
-    id: "venta_fraccionada",
-    name: "Venta Fraccionada (Peso / Granel)",
-    description:
-      "Permite vender productos por peso, volumen o longitud (KG, L, M) usando cantidades decimales.",
-    icon: Scale,
-    category: "operativos",
-  },
-  {
-    id: "combos_promociones",
-    name: "Combos y Promociones",
-    description:
-      "Configura promociones automáticas (2x1, descuentos por volumen) y combos empaquetados de productos.",
-    icon: Percent,
-    category: "operativos",
-  },
-  {
-    id: "clientes",
-    name: "Clientes (CRM)",
-    description:
-      "Mantené un registro detallado de tus clientes, sus datos de contacto e historial de compras.",
-    icon: Users,
-    category: "administrativos",
-  },
-  {
-    id: "cuenta_corriente",
-    name: "Cuenta Corriente / Fiado",
-    description:
-      "Gestioná saldos deudores, entregas de dinero y plazos de cobro por cliente.",
-    icon: CreditCard,
-    category: "administrativos",
-    dependency: "clientes",
-  },
-  {
-    id: "vendedores",
-    name: "Vendedores y Comisiones",
-    description:
-      "Identificá qué empleado realiza cada venta para realizar controles o liquidar comisiones.",
-    icon: UserPlus,
-    category: "administrativos",
-  },
-  {
-    id: "compras",
-    name: "Compras y Proveedores",
-    description:
-      "Registrá ingresos de stock, órdenes de compra y gestioná la base de proveedores.",
-    icon: Truck,
-    category: "administrativos",
-  },
-  {
-    id: "gastos",
-    name: "Gastos Operativos",
-    description:
-      "Controlá las salidas de dinero menores e indirectas de la caja diaria.",
-    icon: TrendingDown,
-    category: "administrativos",
-  },
-  {
-    id: "analiticas",
-    name: "Analíticas Avanzadas",
-    description:
-      "Visualizá gráficos de rentabilidad, márgenes por categoría y tendencias de ventas.",
-    icon: LayoutDashboard,
-    category: "administrativos",
-  },
-  {
-    id: "roles",
-    name: "Roles y Permisos (Multiusuario)",
-    description:
-      "Restringí accesos mediante códigos PIN para Cajeros, Supervisores y Administradores.",
-    icon: Key,
-    category: "administrativos",
-  },
-];
-
 export default function ConfiguracionPage() {
-  const router = useRouter();
   const [form, setForm] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "modules" | "backup" | "arca">(
+  const [activeTab, setActiveTab] = useState<"general" | "rubro_plan" | "backup" | "arca">(
     "general",
   );
   const [isSyncing, setIsSyncing] = useState(false);
-  const [testingArca, setTestingArca] = useState(false);
-  const [arcaStatusResult, setArcaStatusResult] = useState<string | null>(null);
-  const [showCertText, setShowCertText] = useState(false);
-  const [showKeyText, setShowKeyText] = useState(false);
-  const [showArcaWizard, setShowArcaWizard] = useState(false);
+
+  // Modal de Pago
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentItem, setPaymentItem] = useState<{
+    key: string;
+    name: string;
+    price: number;
+    callback?: () => void;
+  } | null>(null);
+
+  const fetchConfig = () => {
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((data) => setForm(data))
+      .catch(() => toast.error("Error al cargar configuración."))
+      .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    fetchConfig();
+  }, []);
+
+  const handleChange = (key: string, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
 
   const handleFileUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -235,89 +153,21 @@ export default function ConfiguracionPage() {
     reader.readAsText(file);
   };
 
-  const handleTestArca = async () => {
-    setTestingArca(true);
-    setArcaStatusResult(null);
+  const handleSave = async () => {
+    setIsSaving(true);
     try {
-      const saveRes = await fetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!saveRes.ok) throw new Error('Error al guardar configuración temporal');
-
-      const res = await fetch('/api/arca/status');
-      const data = await res.json();
-      if (data.status === 'online') {
-        toast.success('Conexión con ARCA establecida con éxito.');
-        setArcaStatusResult(`Online - Servidor AFIP Operativo (App: ${data.serverStatus?.AppServer || 'OK'}, Db: ${data.serverStatus?.DbServer || 'OK'}, Auth: ${data.serverStatus?.AuthServer || 'OK'})`);
-      } else {
-        toast.error(data.message || 'Error en la conexión.');
-        setArcaStatusResult(`Offline: ${data.message || 'Error desconocido'}`);
-      }
-    } catch (e: any) {
-      toast.error('Error al probar conexión.');
-      setArcaStatusResult(`Error: ${e.message}`);
-    } finally {
-      setTestingArca(false);
-    }
-  };
-
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentItem, setPaymentItem] = useState<{
-    key: string;
-    name: string;
-    price: number;
-    callback?: () => void;
-  } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"mp" | "card">("mp");
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-
-  const handleConfirmPayment = async () => {
-    if (!paymentItem) return;
-    setIsProcessingPayment(true);
-    
-    // Simular retraso de pasarela de pago (1.5 segundos)
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    try {
-      const unlockKey = paymentItem.key;
-      const bodyPayload: Record<string, string> = {
-        [unlockKey]: "true",
-      };
-
-      // Si es el plan seguro, también activar el storage_mode correspondiente
-      if (unlockKey === "unlocked_plan_seguro") {
-        bodyPayload.storage_mode = "seguro";
-      }
-
       const res = await fetch("/api/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyPayload),
+        body: JSON.stringify(form),
       });
 
       if (!res.ok) throw new Error();
-      
-      toast.success(`¡Pago aprobado! Desbloqueado: ${paymentItem.name}`);
-      
-      // Actualizar estado local del formulario
-      setForm((prev) => ({
-        ...prev,
-        ...bodyPayload,
-      }));
-      
-      setShowPaymentModal(false);
-      
-      // Ejecutar callback para continuar la acción (por ejemplo, activar el toggle o aplicar el rubro)
-      if (paymentItem.callback) {
-        paymentItem.callback();
-      }
+      toast.success("Configuración guardada correctamente.");
     } catch {
-      toast.error("Error al procesar el pago ficticio.");
+      toast.error("Error al guardar la configuración.");
     } finally {
-      setIsProcessingPayment(false);
-      setPaymentItem(null);
+      setIsSaving(false);
     }
   };
 
@@ -339,1218 +189,125 @@ export default function ConfiguracionPage() {
     }
   };
 
-  useEffect(() => {
-    fetch("/api/config")
-      .then((res) => res.json())
-      .then((data) => setForm(data))
-      .catch(() => toast.error("Error al cargar configuración."))
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  const handleChange = (key: string, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const res = await fetch("/api/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error("Error al guardar");
-      toast.success("Configuración guardada correctamente.");
-    } catch {
-      toast.error("Error al guardar configuración.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // --- Manejo del cambio de perfil de rubro ---
-  const handleProfileChange = async (profileKey: string) => {
-    if (["gastronomia", "boutique"].includes(profileKey)) {
-      const unlockKey = `unlocked_profile_${profileKey}`;
-      if (form[unlockKey] !== "true") {
-        const profileNames: Record<string, string> = {
-          gastronomia: "Perfil Pizzería / Gastronomía",
-          boutique: "Perfil Boutique / Tienda de Ropa"
-        };
-        setPaymentItem({
-          key: unlockKey,
-          name: profileNames[profileKey],
-          price: 5900,
-          callback: () => {
-            handleProfileChange(profileKey);
-          }
-        });
-        setShowPaymentModal(true);
-        return;
-      }
-    }
-
-    const updates: Record<string, string> = { business_profile: profileKey };
-    if (profileKey !== "custom" && PROFILE_PRESETS[profileKey]) {
-      const preset = PROFILE_PRESETS[profileKey].modules;
-      for (const [modId, active] of Object.entries(preset)) {
-        updates[`module_${modId}`] = active ? "true" : "false";
-      }
-    }
-
-    setForm((prev) => ({ ...prev, ...updates }));
-
-    try {
-      const res = await fetch("/api/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Error al actualizar perfil");
-      }
-      toast.success("Perfil de negocio aplicado con éxito.");
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } catch (err: any) {
-      toast.error(err.message || "No se pudo aplicar el perfil.");
-    }
-  };
-
-  const currentPlan = (form.app_plan === 'pro' || form.unlocked_plan_pro === 'true' || form.storage_mode === 'seguro') ? 'pro' : 'basico';
-
-  const handlePlanChange = async (targetPlan: 'basico' | 'pro') => {
-    if (targetPlan === 'pro' && form.app_plan !== 'pro' && form.unlocked_plan_pro !== 'true') {
-      setPaymentItem({
-        key: 'unlocked_plan_pro',
-        name: 'Suscripción Plan Pro',
-        price: 28000,
-        callback: () => {
-          handlePlanChange('pro');
-        }
-      });
-      setShowPaymentModal(true);
-      return;
-    }
-
-    const updates: Record<string, string> = {
-      app_plan: targetPlan,
-      unlocked_plan_pro: targetPlan === 'pro' ? 'true' : (form.unlocked_plan_pro || 'false'),
-      storage_mode: targetPlan === 'pro' ? 'seguro' : 'local',
-    };
-
-    setForm((prev) => ({ ...prev, ...updates }));
-
-    try {
-      const res = await fetch("/api/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-      if (!res.ok) throw new Error("Error al cambiar plan");
-      toast.success(targetPlan === 'pro' ? "¡Plan Pro activado exitosamente!" : "Cambiado a Plan Básico.");
-      setTimeout(() => {
-        window.location.reload();
-      }, 800);
-    } catch {
-      toast.error("Error al actualizar el plan.");
-    }
-  };
-
-  const [licenseKeyInput, setLicenseKeyInput] = useState("");
-  const [isActivatingLicense, setIsActivatingLicense] = useState(false);
-
-  const handleActivateLicense = async () => {
-    if (!licenseKeyInput.trim()) {
-      toast.error("Ingresá una clave de licencia válida.");
-      return;
-    }
-    setIsActivatingLicense(true);
-    try {
-      const res = await fetch("/api/license/activate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ licenseKey: licenseKeyInput }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al activar clave");
-      toast.success(data.message);
-      setForm((prev) => ({
-        ...prev,
-        app_plan: data.plan,
-        unlocked_plan_pro: data.plan === "pro" ? "true" : "false",
-        storage_mode: data.plan === "pro" ? "seguro" : "local",
-      }));
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } catch (err: any) {
-      toast.error(err.message || "No se pudo activar la clave.");
-    } finally {
-      setIsActivatingLicense(false);
-    }
-  };
-
-  const handleMpCheckout = async (itemType: "basico_mensual" | "basico_unico" | "pro_mensual") => {
-    try {
-      const res = await fetch("/api/mp/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemType }),
-      });
-      const data = await res.json();
-      if (data.init_point) {
-        window.open(data.init_point, "_blank");
-      } else {
-        toast.error("No se pudo iniciar el checkout de Mercado Pago.");
-      }
-    } catch {
-      toast.error("Error de conexión con Mercado Pago.");
-    }
-  };
-
-  // --- Activar/Desactivar módulo individual ---
-  const handleToggleModule = async (moduleId: string, currentVal: boolean) => {
-    const newVal = !currentVal;
-    
-    // Si queremos activar un módulo premium y no está comprado
-    if (["analiticas", "cuenta_corriente", "compras"].includes(moduleId) && newVal) {
-      const unlockKey = `unlocked_module_${moduleId}`;
-      if (form[unlockKey] !== "true") {
-        const moduleNames: Record<string, string> = {
-          analiticas: "Módulo de Estadísticas y Reportes",
-          cuenta_corriente: "Módulo de Cuentas Corrientes (Fiado)",
-          compras: "Módulo de Gestión de Compras y Proveedores"
-        };
-        const modulePrices: Record<string, number> = {
-          analiticas: 2900,
-          cuenta_corriente: 3900,
-          compras: 4500
-        };
-        setPaymentItem({
-          key: unlockKey,
-          name: moduleNames[moduleId],
-          price: modulePrices[moduleId],
-          callback: () => {
-            handleToggleModule(moduleId, currentVal);
-          }
-        });
-        setShowPaymentModal(true);
-        return;
-      }
-    }
-
-    const newValString = newVal ? "true" : "false";
-
-    // Si desactivamos clientes, desactivamos también cuenta corriente
-    const extraUpdates: Record<string, string> = {};
-    if (moduleId === "clientes" && !newVal) {
-      extraUpdates.module_cuenta_corriente = "false";
-    }
-
-    const bodyPayload = {
-      [`module_${moduleId}`]: newValString,
-      business_profile: "custom",
-      ...extraUpdates,
-    };
-
-    // Actualización optimista de UI
-    setForm((prev) => ({
-      ...prev,
-      [`module_${moduleId}`]: newValString,
-      business_profile: "custom",
-      ...extraUpdates,
-    }));
-
-    try {
-      const res = await fetch("/api/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyPayload),
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Error al actualizar módulo");
-      }
-      toast.success(`Módulo ${newVal ? "activado" : "desactivado"} con éxito.`);
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } catch (err: any) {
-      toast.error(err.message || "No se pudo actualizar el módulo.");
-      // Revertir cambio
-      fetch("/api/config")
-        .then((res) => res.json())
-        .then((data) => setForm(data));
-    }
-  };
-
-  // --- Cambio de Modo de Almacenamiento ---
-  const handleStorageModeChange = async (mode: string) => {
-    if (mode === "seguro" && form.unlocked_plan_seguro !== "true") {
-      setPaymentItem({
-        key: "unlocked_plan_seguro",
-        name: "Plan Seguro (Respaldo Cloud Automático)",
-        price: 4900,
-        callback: () => {
-          handleStorageModeChange("seguro");
-        }
-      });
-      setShowPaymentModal(true);
-      return;
-    }
-
-    if (mode === "local") {
-      setActiveTab("general");
-    }
-
-    handleChange("storage_mode", mode);
-    try {
-      const res = await fetch("/api/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storage_mode: mode }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success(`Modo de almacenamiento cambiado a: ${mode.toUpperCase()}`);
-    } catch {
-      toast.error("No se pudo cambiar el modo de almacenamiento.");
-      fetch("/api/config")
-        .then((res) => res.json())
-        .then((data) => setForm(data));
-    }
-  };
-
-  // --- QR para carga de stock ---
-  const [qrDataUrl, setQrDataUrl] = useState("");
-  const [qrUrl, setQrUrl] = useState("");
-  const [qrError, setQrError] = useState("");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const port = window.location.port;
-      fetch("/api/server-info")
-        .then((res) => (res.ok ? res.json() : { ip: window.location.hostname }))
-        .then((info: { ip: string }) => {
-          const host = info.ip;
-          const url = port
-            ? `http://${host}:${port}/stock`
-            : `http://${host}/stock`;
-          setQrUrl(url);
-          QRCode.toDataURL(url, {
-            width: 180,
-            margin: 2,
-            color: { dark: "#0f172a", light: "#ffffff" },
-          })
-            .then((dataUrl: string) => {
-              setQrDataUrl(dataUrl);
-              setQrError("");
-            })
-            .catch(() => setQrError("Error al generar QR"));
-        })
-        .catch(() => {
-          const fallback = port
-            ? `http://127.0.0.1:${port}/stock`
-            : "http://127.0.0.1/stock";
-          setQrUrl(fallback);
-          QRCode.toDataURL(fallback, {
-            width: 180,
-            margin: 2,
-            color: { dark: "#0f172a", light: "#ffffff" },
-          })
-            .then((dataUrl: string) => {
-              setQrDataUrl(dataUrl);
-            })
-            .catch(() => setQrError("Error al generar QR"));
-        });
-    }
-  }, []);
-
-  // --- Estado de actualizaciones ---
-  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
-  const [updatePercent, setUpdatePercent] = useState(0);
-  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
-  const version = pkg.version;
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.updateAPI) {
-      const unsubscribe = window.updateAPI.onStatus((status: any) => {
-        setUpdateStatus(status.status);
-        if (status.percent) setUpdatePercent(status.percent);
-        if (status.version) setUpdateVersion(status.version);
-        if (status.error) setUpdateError(status.error);
-        if (status.status === "checking") {
-          setUpdateError(null);
-          setUpdatePercent(0);
-        }
-      });
-      return unsubscribe;
-    }
-  }, []);
-
-  const handleCheckUpdates = useCallback(async () => {
-    setUpdateStatus("checking");
-    setUpdateError(null);
-    setUpdatePercent(0);
-    if (typeof window !== "undefined" && window.updateAPI) {
-      await window.updateAPI.check();
-    } else {
-      setUpdateStatus("dev-mode");
-    }
-  }, []);
-
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <p className="text-foreground-muted">Cargando configuración...</p>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
 
-  const currentProfile = form.business_profile || "custom";
-  const currentStorageMode = form.storage_mode || "local";
-
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div id="config-header">
-        <h1 className="text-3xl font-semibold text-foreground">
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Configuración
         </h1>
-        <p className="mt-1 text-foreground-muted">
-          Ajustá los parámetros generales del sistema o gestioná sus módulos.
+        <p className="text-sm text-foreground-muted">
+          Gestioná los datos de tu comercio, rubro de negocio, facturación y copias de seguridad.
         </p>
       </div>
 
-      {/* Tabs Selector */}
-      <div className="flex border-b border-border mb-6">
+      {/* Tabs Bar */}
+      <div className="border-b border-border flex gap-2 overflow-x-auto pb-px">
         <button
           onClick={() => setActiveTab("general")}
-          className={`px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
             activeTab === "general"
-              ? "border-primary text-primary"
-              : "border-transparent text-foreground-muted hover:text-foreground"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
           }`}
         >
-          Ajustes Generales
+          <Building size={16} /> Datos del Comercio
         </button>
+
         <button
-          onClick={() => setActiveTab("modules")}
-          className={`px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
-            activeTab === "modules"
-              ? "border-primary text-primary"
-              : "border-transparent text-foreground-muted hover:text-foreground"
+          onClick={() => setActiveTab("rubro_plan")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
+            activeTab === "rubro_plan"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
           }`}
         >
-          Plan de Suscripción
+          <LayoutDashboard size={16} /> Rubro y Plan
         </button>
-        {form.storage_mode === "seguro" && (
-          <button
-            onClick={() => setActiveTab("backup")}
-            className={`px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
-              activeTab === "backup"
-                ? "border-primary text-primary"
-                : "border-transparent text-foreground-muted hover:text-foreground"
-            }`}
-          >
-            Copia de Seguridad
-          </button>
-        )}
+
+        <button
+          onClick={() => setActiveTab("backup")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
+            activeTab === "backup"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
+          }`}
+        >
+          <Database size={16} /> Copias de Seguridad
+        </button>
+
         <button
           onClick={() => setActiveTab("arca")}
-          className={`px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
             activeTab === "arca"
-              ? "border-primary text-primary"
-              : "border-transparent text-foreground-muted hover:text-foreground"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
           }`}
         >
-          Facturación ARCA / AFIP
+          <ShieldCheck size={16} /> Facturación ARCA (AFIP)
         </button>
       </div>
 
+      {/* Content Area */}
       {activeTab === "general" && (
-        <div className="space-y-8">
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Building size={20} className="text-primary" /> Datos del Negocio
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Nombre del Negocio"
-                value={form.businessName || ""}
-                onChange={(e) => handleChange("businessName", e.target.value)}
-                placeholder="Mi Negocio"
-              />
-              <Input
-                label="CUIT"
-                value={form.businessCuit || ""}
-                onChange={(e) => handleChange("businessCuit", e.target.value)}
-                placeholder="30-12345678-9"
-              />
-              <Input
-                label="Dirección"
-                value={form.businessAddress || ""}
-                onChange={(e) =>
-                  handleChange("businessAddress", e.target.value)
-                }
-                placeholder="Av. Siempre Viva 123"
-              />
-              <Input
-                label="Teléfono"
-                value={form.businessPhone || ""}
-                onChange={(e) => handleChange("businessPhone", e.target.value)}
-                placeholder="+54 11 1234-5678"
-              />
-            </div>
-          </section>
-
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Percent size={20} className="text-primary" /> Impuestos y Pagos
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="IVA (%)"
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                value={form.taxRate || "0"}
-                onChange={(e) => handleChange("taxRate", e.target.value)}
-              />
-              <Select
-                label="Método de Pago por Defecto"
-                value={form.defaultPaymentType || "CASH"}
-                onChange={(e) =>
-                  handleChange("defaultPaymentType", e.target.value)
-                }
-              >
-                {Object.values(PaymentTypeEnum).map((type) => (
-                  <option key={type} value={type}>
-                    {getPaymentTypeDisplay(type)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </section>
-
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Percent size={20} className="text-primary" /> Descuentos por
-              Método de Pago
-            </h2>
-            <p className="text-sm text-foreground-muted">
-              Descuento aplicado automáticamente al seleccionar el método de
-              pago en la venta.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {Object.values(PaymentTypeEnum).map((type) => (
-                <Input
-                  key={type}
-                  label={`${getPaymentTypeDisplay(type)} (%)`}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  value={form[`discount_${type}`] || "0"}
-                  onChange={(e) =>
-                    handleChange(`discount_${type}`, e.target.value)
-                  }
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Receipt size={20} className="text-primary" /> Comprobantes
-            </h2>
-            <div className="space-y-4">
-              <Input
-                label="Texto al Pie del Comprobante"
-                value={form.receiptFooter || ""}
-                onChange={(e) => handleChange("receiptFooter", e.target.value)}
-                placeholder="Gracias por su compra"
-              />
-              <Input
-                label="Número de Próximo Comprobante"
-                type="number"
-                min="1"
-                value={form.nextReceiptNumber || "1"}
-                onChange={(e) =>
-                  handleChange("nextReceiptNumber", e.target.value)
-                }
-              />
-            </div>
-          </section>
-
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <RefreshCw size={20} className="text-primary" /> Actualizaciones
-            </h2>
-            <p className="text-sm text-foreground-muted">
-              Versión actual: <strong>{version}</strong>
-            </p>
-            <div className="flex items-center gap-4">
-              <Button
-                onClick={handleCheckUpdates}
-                disabled={
-                  updateStatus === "checking" || updateStatus === "downloading"
-                }
-              >
-                <RefreshCw
-                  size={16}
-                  className={`mr-2 ${updateStatus === "checking" ? "animate-spin" : ""}`}
-                />
-                {updateStatus === "checking"
-                  ? "Buscando..."
-                  : updateStatus === "downloading"
-                    ? "Descargando..."
-                    : "Buscar actualizaciones"}
-              </Button>
-              {updateStatus === "up-to-date" && (
-                <span className="text-sm text-success">✓ Estás al día</span>
-              )}
-              {updateStatus === "available" && (
-                <span className="text-sm text-primary">
-                  Nueva versión {updateVersion} disponible — descargando...
-                </span>
-              )}
-              {updateStatus === "downloaded" && (
-                <span className="text-sm text-success">
-                  ✓ Versión {updateVersion} descargada. Reiniciá para instalar.
-                </span>
-              )}
-              {updateStatus === "dev-mode" && (
-                <span className="text-sm text-foreground-muted">
-                  Modo desarrollo — sin actualizador
-                </span>
-              )}
-              {updateError && (
-                <span className="text-sm text-destructive">
-                  Error: {updateError}
-                </span>
-              )}
-            </div>
-            {updateStatus === "downloading" && (
-              <div className="w-full bg-background rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-primary h-full transition-all duration-300"
-                  style={{ width: `${updatePercent}%` }}
-                />
-              </div>
-            )}
-          </section>
-
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Smartphone size={20} className="text-primary" /> Carga de Stock
-              desde Celular
-            </h2>
-            <p className="text-sm text-foreground-muted">
-              Escaneá este código QR desde tu celular para abrir la herramienta
-              de carga de stock. Asegurate de estar conectado a la misma red
-              WiFi.
-            </p>
-            <div className="flex flex-col items-center gap-3 py-2">
-              {qrError ? (
-                <p className="text-destructive text-sm">{qrError}</p>
-              ) : qrDataUrl ? (
-                <img
-                  // eslint-disable-next-line @next/next/no-img-element
-                  src={qrDataUrl}
-                  alt="QR para carga de stock"
-                  className="rounded-lg border border-border"
-                />
-              ) : (
-                <p className="text-sm text-foreground-muted">Generando QR...</p>
-              )}
-              {qrUrl && (
-                <p className="text-xs text-foreground-muted/70 font-mono bg-background px-3 py-1.5 rounded border border-border break-all text-center max-w-full">
-                  {qrUrl}
-                </p>
-              )}
-            </div>
-          </section>
-
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving}>
-              <Save size={16} className="mr-2" />{" "}
-              {isSaving ? "Guardando..." : "Guardar Cambios"}
-            </Button>
-          </div>
-        </div>
+        <ConfigGeneralTab
+          form={form}
+          handleChange={handleChange}
+          handleSave={handleSave}
+          isSaving={isSaving}
+        />
       )}
 
-      {activeTab === "modules" && (
-        <div className="space-y-8">
-          {/* Comparativa de Planes (Básico vs Pro) */}
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <ShieldCheck size={20} className="text-primary" /> Plan de Suscripción
-            </h2>
-            <p className="text-sm text-foreground-muted">
-              Elegí la modalidad de plan que mejor se adapte a tus necesidades de negocio.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              {/* PLAN BÁSICO */}
-              <div className={`border rounded-2xl p-6 bg-white flex flex-col justify-between shadow-sm transition-all ${
-                currentPlan === 'basico' ? "border-primary ring-2 ring-primary/40" : "border-border"
-              }`}>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-                      Suscripción Base
-                    </span>
-                    {currentPlan === 'basico' && (
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                        ✓ Plan Actual
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-foreground">Plan Básico</h3>
-                    <div className="mt-1 flex items-baseline gap-1.5">
-                      <span className="text-xl font-extrabold text-foreground font-mono">$9.900</span>
-                      <span className="text-xs text-foreground-muted">ARS/mes</span>
-                      <span className="text-xs text-foreground-muted mx-1">ó</span>
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">$40.000 Único</span>
-                    </div>
-                    <p className="text-xs text-foreground-muted mt-1.5">100% Local & Offline en tu computadora.</p>
-                  </div>
-                  
-                  <div className="border-t border-border pt-4 space-y-2 text-xs">
-                    <p className="font-bold text-foreground mb-2">Herramientas Incluidas:</p>
-                    <ul className="space-y-2 text-foreground-muted">
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Ventas, Escáner & Medios de Pago</li>
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Caja Diaria, Cierres & Arqueo</li>
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Productos, Stock & Alertas de Stock Mínimo</li>
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Clientes e Historial de Compras</li>
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Vendedores & Comisiones</li>
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Gastos Operativos</li>
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Combos & Promociones Automáticas</li>
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Compras & Proveedores</li>
-                      <li className="flex items-center gap-2"><span className="text-emerald-500 font-bold">✓</span> Venta Fraccionada (según Rubro)</li>
-                      <li className="flex items-center gap-2 text-foreground font-semibold"><span className="text-emerald-500 font-bold">✓</span> Facturación Electrónica ARCA (AFIP)</li>
-                      <li className="flex items-center gap-2 text-slate-400"><span>•</span> Respaldo manual de base de datos</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="pt-6 border-t border-border mt-6 space-y-2">
-                  <Button
-                    onClick={() => handlePlanChange('basico')}
-                    variant={currentPlan === 'basico' ? 'outline' : 'primary'}
-                    disabled={currentPlan === 'basico'}
-                    className="w-full justify-center text-xs"
-                  >
-                    {currentPlan === 'basico' ? 'Plan Básico Activo' : 'Activar Plan Básico'}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => handleMpCheckout('basico_mensual')}
-                    className="w-full text-center text-[11px] font-semibold text-primary hover:underline cursor-pointer pt-1"
-                  >
-                    💳 Pagar $9.900/mes por Mercado Pago
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMpCheckout('basico_unico')}
-                    className="w-full text-center text-[11px] font-semibold text-emerald-600 hover:underline cursor-pointer"
-                  >
-                    ⚡ Pagar $40.000 Único por Mercado Pago
-                  </button>
-                </div>
-              </div>
-
-              {/* PLAN PRO */}
-              <div className={`border rounded-2xl p-6 bg-white flex flex-col justify-between shadow-md relative overflow-hidden transition-all ${
-                currentPlan === 'pro' ? "border-emerald-500 ring-2 ring-emerald-500/40" : "border-primary/50"
-              }`}>
-                <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-extrabold uppercase px-3 py-1 rounded-bl-xl tracking-wider">
-                  Recomendado ⭐
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
-                      Suscripción Avanzada
-                    </span>
-                    {currentPlan === 'pro' && (
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                        ✓ Plan Actual
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-foreground">Plan Pro</h3>
-                    <div className="mt-1 flex items-baseline gap-1.5">
-                      <span className="text-xl font-extrabold text-primary font-mono">$30.000</span>
-                      <span className="text-xs text-foreground-muted">ARS/mes</span>
-                    </div>
-                    <p className="text-xs text-foreground-muted mt-1.5">Sincronización en la nube + Herramientas Avanzadas.</p>
-                  </div>
-                  
-                  <div className="border-t border-border pt-4 space-y-2 text-xs">
-                    <p className="font-bold text-foreground mb-2">Todo lo del Plan Básico, más:</p>
-                    <ul className="space-y-2.5 text-foreground">
-                      <li className="flex items-center gap-2 font-bold text-primary"><span className="text-emerald-500 text-base">✓</span> Cuenta Corriente / Fiado (Cobros & Deudas)</li>
-                      <li className="flex items-center gap-2 font-bold text-primary"><span className="text-emerald-500 text-base">✓</span> Analíticas Avanzadas & Márgenes de Ganancia</li>
-                      <li className="flex items-center gap-2 font-bold text-primary"><span className="text-emerald-500 text-base">✓</span> Roles y Permisos (Multiusuario con PIN)</li>
-                      <li className="flex items-center gap-2 font-bold text-primary"><span className="text-emerald-500 text-base">✓</span> Respaldo Automático en la Nube</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="pt-6 border-t border-border mt-6 space-y-2">
-                  <Button
-                    onClick={() => handlePlanChange('pro')}
-                    variant={currentPlan === 'pro' ? 'outline' : 'primary'}
-                    className={`w-full justify-center text-xs ${currentPlan !== 'pro' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold' : ''}`}
-                  >
-                    {currentPlan === 'pro' ? 'Plan Pro Activo' : 'Mejorar a Plan Pro'}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => handleMpCheckout('pro_mensual')}
-                    className="w-full text-center text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer pt-1"
-                  >
-                    💳 Suscribirme por $30.000/mes en Mercado Pago
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* SECCIÓN 3: Ingreso de Clave de Licencia */}
-          <section className="bg-white border border-border p-6 rounded-xl shadow-sm space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-primary/10 text-primary rounded-xl shrink-0">
-                <Key size={22} />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-foreground">¿Ya compraste o tenés tu Clave de Licencia?</h3>
-                <p className="text-xs text-foreground-muted mt-0.5">Ingresá tu clave de activación otorgada tras realizar el pago o contratar el servicio.</p>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Input
-                placeholder="Ej. CLIN-PRO-8492-2026"
-                value={licenseKeyInput}
-                onChange={(e) => setLicenseKeyInput(e.target.value)}
-                className="font-mono uppercase text-xs h-10 flex-1"
-              />
-              <Button
-                type="button"
-                onClick={handleActivateLicense}
-                disabled={isActivatingLicense}
-                className="bg-primary hover:bg-primary/90 text-white text-xs px-6 h-10 shrink-0 justify-center cursor-pointer font-bold"
-              >
-                {isActivatingLicense ? "Verificando..." : "Activar Licencia"}
-              </Button>
-            </div>
-          </section>
-        </div>
+      {activeTab === "rubro_plan" && (
+        <ConfigRubroPlanTab
+          form={form}
+          handleChange={handleChange}
+          handleSave={handleSave}
+          isSaving={isSaving}
+          profilePresets={PROFILE_PRESETS}
+        />
       )}
 
       {activeTab === "backup" && (
-        <div className="space-y-8">
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Database size={20} className="text-primary" /> Respaldo en la Nube
-            </h2>
-            <p className="text-sm text-foreground-muted">
-              El sistema guarda de forma automática una copia de seguridad en la nube para proteger tus datos de ventas, clientes y stock frente a fallas del equipo físico.
-            </p>
-
-            <div className="bg-white border border-border p-5 rounded-xl space-y-4 shadow-sm text-sm">
-              <div className="flex items-center justify-between pb-3 border-b border-border">
-                <span className="font-semibold text-foreground">
-                  Estado del Respaldo
-                </span>
-                {form.supabase_url ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />{" "}
-                    Activo
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
-                    <span className="h-2 w-2 rounded-full bg-red-500" />{" "}
-                    Desconectado
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-foreground-muted flex justify-between">
-                  <span>Última Sincronización Automática:</span>
-                  <span className="font-mono text-xs font-semibold text-foreground">
-                    {form.supabase_last_sync
-                      ? new Date(form.supabase_last_sync).toLocaleString()
-                      : "Nunca completada"}
-                  </span>
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-border flex items-center justify-between gap-4">
-                <p className="text-xs text-foreground-muted max-w-md">
-                  El respaldo automático se ejecuta de forma silenciosa cada 5
-                  minutos y al cerrar la caja del día.
-                </p>
-                <Button
-                  onClick={handleManualSync}
-                  disabled={isSyncing || !form.supabase_url}
-                  className="shrink-0"
-                >
-                  <RefreshCw
-                    size={16}
-                    className={`mr-2 ${isSyncing ? "animate-spin" : ""}`}
-                  />
-                  {isSyncing ? "Guardando copia..." : "Iniciar Respaldo Manual"}
-                </Button>
-              </div>
-            </div>
-          </section>
-        </div>
+        <ConfigBackupTab
+          form={form}
+          handleChange={handleChange}
+          handleManualSync={handleManualSync}
+          isSyncing={isSyncing}
+        />
       )}
 
       {activeTab === "arca" && (
-        <div className="space-y-8">
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <ShieldCheck size={20} className="text-primary" /> Facturación Electrónica (ARCA / AFIP)
-            </h2>
-            <p className="text-sm text-foreground-muted">
-              Configurá la emisión de facturas electrónicas con el Web Service de ARCA.
-            </p>
-            
-            {/* Banner Asistente Guiado */}
-            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 bg-primary/20 text-primary rounded-lg shrink-0">
-                  <Wand2 size={22} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">¿Querés activar la Facturación Electrónica sin complicaciones?</h3>
-                  <p className="text-xs text-foreground-muted mt-0.5">
-                    Usá nuestro <strong>Asistente Guiado</strong> para habilitar las facturas de AFIP/ARCA paso a paso sin necesidad de conocimientos técnicos.
-                  </p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                onClick={() => setShowArcaWizard(true)}
-                className="shrink-0 flex items-center justify-center gap-2 cursor-pointer shadow-md"
-              >
-                <Wand2 size={16} /> Abrir Asistente ARCA
-              </Button>
-            </div>
-
-            <ArcaWizardModal
-              isOpen={showArcaWizard}
-              onClose={() => setShowArcaWizard(false)}
-              initialCuit={form.arcaCuit || form.businessCuit || ''}
-              onSuccess={() => {
-                fetch("/api/config")
-                  .then((res) => res.json())
-                  .then((data) => setForm(data));
-              }}
-            />
-            
-            <div className="flex items-center gap-2 py-2">
-              <input
-                id="arcaEnabled"
-                type="checkbox"
-                checked={form.arcaEnabled === 'true'}
-                onChange={(e) => handleChange('arcaEnabled', e.target.checked ? 'true' : 'false')}
-                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary bg-background"
-              />
-              <label htmlFor="arcaEnabled" className="text-sm font-medium text-foreground select-none cursor-pointer">
-                Habilitar Facturación Electrónica
-              </label>
-            </div>
-
-            {form.arcaEnabled === 'true' && (
-              <div className="space-y-4 pt-2 border-t border-border/30">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="CUIT Emisor" value={form.arcaCuit || ''} onChange={(e) => handleChange('arcaCuit', e.target.value)} placeholder="30123456789 (sin guiones)" />
-                  <Input label="Punto de Venta" type="number" value={form.arcaPointOfSale || '1'} onChange={(e) => handleChange('arcaPointOfSale', e.target.value)} placeholder="1" />
-                  
-                  <Select label="Entorno" value={form.arcaEnv || 'homologacion'} onChange={(e) => handleChange('arcaEnv', e.target.value)}>
-                    <option value="homologacion">Homologación (Pruebas)</option>
-                    <option value="produccion">Producción (Real)</option>
-                  </Select>
-                  
-                  <Select label="Condición frente al IVA" value={form.arcaIvaCondition || 'RI'} onChange={(e) => handleChange('arcaIvaCondition', e.target.value)}>
-                    <option value="RI">Responsable Inscripto</option>
-                    <option value="MT">Monotributista</option>
-                    <option value="EX">Exento</option>
-                  </Select>
-
-                  <Input label="Ingresos Brutos (IIBB)" value={form.arcaIibb || ''} onChange={(e) => handleChange('arcaIibb', e.target.value)} placeholder="901-123456-7" />
-                  <Input label="Inicio de Actividades (AAAA-MM-DD)" value={form.arcaBusinessStartDate || ''} onChange={(e) => handleChange('arcaBusinessStartDate', e.target.value)} placeholder="2020-01-01" />
-                </div>
-
-                <div className="grid grid-cols-1 gap-5 pt-2">
-                  {/* CERTIFICADO DIGITAL */}
-                  <div className="flex flex-col gap-2 p-4 bg-background border border-border/80 rounded-xl shadow-xs">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
-                          <FileText size={18} />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold uppercase tracking-wider text-foreground">
-                            Certificado Digital ARCA (.crt / .pem)
-                          </label>
-                          {form.arcaCert ? (
-                            <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
-                              <CheckCircle2 size={13} /> Certificado cargado y resguardado
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-foreground-muted block mt-0.5">
-                              No se ha subido ningún certificado digital.
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-lg transition-colors">
-                          <Upload size={14} />
-                          {form.arcaCert ? "Reemplazar (.crt)" : "Subir Archivo (.crt/.pem)"}
-                          <input
-                            type="file"
-                            accept=".crt,.pem,.txt"
-                            onChange={(e) => handleFileUpload(e, "arcaCert")}
-                            className="hidden"
-                          />
-                        </label>
-                        {form.arcaCert && (
-                          <button
-                            type="button"
-                            onClick={() => setShowCertText(!showCertText)}
-                            className="p-1.5 text-foreground-muted hover:text-foreground rounded-lg hover:bg-muted transition-colors cursor-pointer"
-                            title={showCertText ? "Ocultar contenido" : "Ver / Editar texto"}
-                          >
-                            {showCertText ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {form.arcaCert && !showCertText && (
-                      <div className="flex items-center justify-between bg-muted/40 p-2.5 rounded-lg border border-border/40 text-xs font-mono text-foreground-muted mt-1">
-                        <span className="truncate max-w-[280px] sm:max-w-md">•••••••••••••••••••••••••••••••••••••••••••• (Certificado Protegido)</span>
-                        <button
-                          type="button"
-                          onClick={() => handleChange("arcaCert", "")}
-                          className="text-destructive hover:underline text-[11px] font-sans font-semibold cursor-pointer shrink-0 ml-2"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    )}
-
-                    {(showCertText || !form.arcaCert) && (
-                      <textarea
-                        rows={3}
-                        value={form.arcaCert || ""}
-                        onChange={(e) => handleChange("arcaCert", e.target.value)}
-                        placeholder="-----BEGIN CERTIFICATE-----\nMIIFzDCCBLSgAwIBAgIQ..."
-                        className="w-full text-xs font-mono p-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring placeholder:text-foreground-muted/50 mt-1"
-                      />
-                    )}
-                  </div>
-
-                  {/* CLAVE PRIVADA */}
-                  <div className="flex flex-col gap-2 p-4 bg-background border border-border/80 rounded-xl shadow-xs">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-amber-500/10 text-amber-600 rounded-lg shrink-0">
-                          <Lock size={18} />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold uppercase tracking-wider text-foreground">
-                            Clave Privada ARCA (.key)
-                          </label>
-                          {form.arcaKey ? (
-                            <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
-                              <CheckCircle2 size={13} /> Clave privada cargada y resguardada
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-foreground-muted block mt-0.5">
-                              No se ha subido la clave privada aún.
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 text-xs font-bold rounded-lg transition-colors">
-                          <Upload size={14} />
-                          {form.arcaKey ? "Reemplazar (.key)" : "Subir Archivo (.key)"}
-                          <input
-                            type="file"
-                            accept=".key,.pem,.txt"
-                            onChange={(e) => handleFileUpload(e, "arcaKey")}
-                            className="hidden"
-                          />
-                        </label>
-                        {form.arcaKey && (
-                          <button
-                            type="button"
-                            onClick={() => setShowKeyText(!showKeyText)}
-                            className="p-1.5 text-foreground-muted hover:text-foreground rounded-lg hover:bg-muted transition-colors cursor-pointer"
-                            title={showKeyText ? "Ocultar clave" : "Ver / Editar texto"}
-                          >
-                            {showKeyText ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {form.arcaKey && !showKeyText && (
-                      <div className="flex items-center justify-between bg-muted/40 p-2.5 rounded-lg border border-border/40 text-xs font-mono text-foreground-muted mt-1">
-                        <span className="truncate max-w-[280px] sm:max-w-md">•••••••••••••••••••••••••••••••••••••••••••• (Clave Privada Protegida por Seguridad)</span>
-                        <button
-                          type="button"
-                          onClick={() => handleChange("arcaKey", "")}
-                          className="text-destructive hover:underline text-[11px] font-sans font-semibold cursor-pointer shrink-0 ml-2"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    )}
-
-                    {(showKeyText || !form.arcaKey) && (
-                      <textarea
-                        rows={3}
-                        value={form.arcaKey || ""}
-                        onChange={(e) => handleChange("arcaKey", e.target.value)}
-                        placeholder="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC..."
-                        className="w-full text-xs font-mono p-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring placeholder:text-foreground-muted/50 mt-1"
-                      />
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-2">
-                  <Button type="button" onClick={handleTestArca} disabled={testingArca} variant="secondary">
-                    <RefreshCw size={16} className={`mr-2 ${testingArca ? 'animate-spin' : ''}`} />
-                    {testingArca ? 'Probando...' : 'Probar conexión con ARCA'}
-                  </Button>
-                  {arcaStatusResult && (
-                    <span className={`text-sm font-medium ${arcaStatusResult.includes('Online') ? 'text-success' : 'text-destructive'}`}>
-                      {arcaStatusResult}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving}>
-              <Save size={16} className="mr-2" /> {isSaving ? 'Guardando...' : 'Guardar Cambios'}
-            </Button>
-          </div>
-        </div>
+        <ConfigArcaTab
+          form={form}
+          handleChange={handleChange}
+          handleFileUpload={handleFileUpload}
+          handleSave={handleSave}
+          isSaving={isSaving}
+          onRefreshConfig={fetchConfig}
+        />
       )}
 
-      {/* MODAL: Simulación de Pago */}
-      {showPaymentModal && paymentItem && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white border border-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4 text-center">
-            
-            {/* Header / Logo de MP */}
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <span className="text-xs font-bold text-foreground-muted uppercase tracking-wider">Pasarela de Pago Segura</span>
-              <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">Simulación</span>
-            </div>
-
-            <div className="space-y-2 py-2">
-              <div className="mx-auto h-12 w-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-foreground">Activar {paymentItem.name}</h3>
-              <p className="text-xs text-foreground-muted">
-                Para desbloquear este módulo e integrarlo a tu comercio de forma permanente, por favor realiza el pago simulado.
-              </p>
-            </div>
-
-            {/* Factura / Precio */}
-            <div className="bg-slate-50 border border-border rounded-xl p-4 space-y-2 text-xs text-left">
-              <div className="flex justify-between font-medium">
-                <span className="text-foreground-muted">Detalle:</span>
-                <span className="text-foreground">{paymentItem.name}</span>
-              </div>
-              <div className="flex justify-between border-t border-border/60 pt-2 font-bold text-sm">
-                <span className="text-foreground-muted">Total a Pagar:</span>
-                <span className="text-primary font-mono">${paymentItem.price.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ARS</span>
-              </div>
-            </div>
-
-            {/* Método de Pago */}
-            <div className="space-y-2.5 text-xs text-left">
-              <span className="font-bold text-foreground block">Método de Pago Ficticio:</span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("mp")}
-                  className={`p-3 rounded-xl border text-center transition-all ${
-                    paymentMethod === "mp"
-                      ? "border-primary bg-primary/5 ring-1 ring-primary font-semibold text-primary"
-                      : "border-border bg-white text-foreground-muted hover:border-foreground-muted"
-                  }`}
-                >
-                  Mercado Pago (Simulado)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("card")}
-                  className={`p-3 rounded-xl border text-center transition-all ${
-                    paymentMethod === "card"
-                      ? "border-primary bg-primary/5 ring-1 ring-primary font-semibold text-primary"
-                      : "border-border bg-white text-foreground-muted hover:border-foreground-muted"
-                  }`}
-                >
-                  Tarjeta Crédito (Simulada)
-                </button>
-              </div>
-            </div>
-
-            {/* Acciones */}
-            <div className="pt-4 border-t border-border flex justify-end gap-2 text-xs">
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setPaymentItem(null);
-                }}
-                disabled={isProcessingPayment}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                onClick={handleConfirmPayment}
-                disabled={isProcessingPayment}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-              >
-                {isProcessingPayment ? "Aprobando transacción..." : "Realizar Pago Simulado"}
-              </Button>
-            </div>
-
-          </div>
-        </div>
-      )}
+      {/* Modal de Simulación de Pago */}
+      <ConfigPaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setPaymentItem(null);
+        }}
+        paymentItem={paymentItem}
+        onSuccessPayload={(payload) => {
+          setForm((prev) => ({ ...prev, ...payload }));
+        }}
+      />
     </div>
   );
 }
