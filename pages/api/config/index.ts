@@ -32,6 +32,9 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   business_profile: 'general',
   license_key: '',
   license_activated_at: '',
+  supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  supabase_anon_key: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  supabase_last_sync: '',
 };
 
 const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey'];

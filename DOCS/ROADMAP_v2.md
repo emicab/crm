@@ -10,6 +10,7 @@ Este documento es el plan de trabajo concreto para implementar todo lo definido 
 ## Estado Actual (v1.3.7)
 
 ### Lo que ya funciona
+
 - ✅ Ventas con carrito, métodos de pago, descuentos
 - ✅ Caja diaria (apertura/cierre, movimientos, arqueo)
 - ✅ Productos, stock, alertas de stock mínimo
@@ -22,7 +23,8 @@ Este documento es el plan de trabajo concreto para implementar todo lo definido 
 - ✅ Sistema de licencias básico (LicenseGate)
 
 ### Lo que NO existe todavía
-- ❌ Sistema de módulos (toggles en config)
+
+- ❌ Sistema de módulos (toggles en config) -> descartamos la idea.
 - ❌ Sidebar/UI dinámica por módulos activos
 - ❌ Perfil de negocio / onboarding
 - ❌ Vendedor por defecto "Caja Principal" en seed
@@ -61,6 +63,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] Agregar también a `prisma/crm_template.db` para que los instaladores nuevos lo tengan desde el día 0.
 
 **Archivos a modificar:**
+
 - `electron/main.js` — agregar llamada al seed al inicio
 - `scripts/seed.ts` — nuevo archivo
 
@@ -89,6 +92,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] Actualizar validación del `PUT` en el mismo endpoint para permitir las nuevas claves.
 
 **Archivos a modificar:**
+
 - `pages/api/config/index.ts`
 
 ---
@@ -115,6 +119,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] El hook usa `SWR` o `useEffect` con un fetch simple. Sin contexto global aún — si se necesita optimizar, se puede envolver en Provider después.
 
 **Archivos a crear:**
+
 - `hooks/useModules.ts`
 
 ---
@@ -127,14 +132,21 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 
 - [ ] En `pages/api/gastos/index.ts`, antes de crear el `Expense`, verificar:
   ```ts
-  const openRegister = await prisma.cashRegister.findFirst({ where: { status: 'OPEN' } });
+  const openRegister = await prisma.cashRegister.findFirst({
+    where: { status: "OPEN" },
+  });
   if (!openRegister) {
-    return res.status(400).json({ message: 'Debe haber una caja abierta para registrar un gasto.' });
+    return res
+      .status(400)
+      .json({
+        message: "Debe haber una caja abierta para registrar un gasto.",
+      });
   }
   ```
 - [ ] Hacer lo mismo para cualquier otro endpoint que cree `CashMovement` directamente (revisar `pages/api/caja/`).
 
 **Archivos a modificar:**
+
 - `pages/api/gastos/index.ts`
 - `pages/api/caja/` (revisar endpoints de movimientos manuales)
 
@@ -158,17 +170,18 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 
 **Mapeo módulo → ítems a ocultar:**
 
-| `moduleId` | Ítems del sidebar ocultos |
-| :--- | :--- |
-| `clientes` | Clientes |
-| `vendedores` | Vendedores |
-| `compras` | Nueva Compra, Historial Compras, Proveedores |
-| `gastos` | Gastos |
-| `combos_promociones` | Combos, Promociones |
-| `analiticas` | Analíticas |
-| `cuenta_corriente` | Cuenta Corriente *(futuro)* |
+| `moduleId`           | Ítems del sidebar ocultos                    |
+| :------------------- | :------------------------------------------- |
+| `clientes`           | Clientes                                     |
+| `vendedores`         | Vendedores                                   |
+| `compras`            | Nueva Compra, Historial Compras, Proveedores |
+| `gastos`             | Gastos                                       |
+| `combos_promociones` | Combos, Promociones                          |
+| `analiticas`         | Analíticas                                   |
+| `cuenta_corriente`   | Cuenta Corriente _(futuro)_                  |
 
 **Archivos a modificar:**
+
 - `components/layout/Sidebar.tsx`
 
 ---
@@ -180,6 +193,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] Filtrar la tabla de atajos de teclado (no mostrar `Ctrl+A` para Analíticas si está desactivado).
 
 **Archivos a modificar:**
+
 - `app/page.tsx`
 
 ---
@@ -197,6 +211,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] Módulos agrupados en dos secciones visuales: **Operativos** / **Administrativos**.
 
 **Archivos a modificar:**
+
 - `app/(main)/configuracion/page.tsx`
 
 ---
@@ -206,16 +221,17 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] Detectar si `business_profile` en `Setting` está vacío o es `'unset'` al arrancar la app.
 - [ ] Si es primera vez: mostrar pantalla de bienvenida con tarjetas de rubro antes de entrar al sistema.
 - [ ] Cada tarjeta activa un preset de módulos al hacer click:
-  - *Kiosco / Almacén* → activa: `clientes`, `gastos`
-  - *Fiambrería / Carnicería* → activa: `venta_fraccionada`, `compras`, `gastos`, `clientes`
-  - *Pizzería / Gastronomía* → activa: `combos_promociones`, `gastos`
-  - *Ferretería / Corralón* → activa: `cuenta_corriente`, `compras`, `vendedores`
-  - *Boutique / Indumentaria* → activa: `clientes`, `vendedores`, `analiticas`
-  - *Personalizado* → va directo a pantalla de módulos sin preselección
+  - _Kiosco / Almacén_ → activa: `clientes`, `gastos`
+  - _Fiambrería / Carnicería_ → activa: `venta_fraccionada`, `compras`, `gastos`, `clientes`
+  - _Pizzería / Gastronomía_ → activa: `combos_promociones`, `gastos`
+  - _Ferretería / Corralón_ → activa: `cuenta_corriente`, `compras`, `vendedores`
+  - _Boutique / Indumentaria_ → activa: `clientes`, `vendedores`, `analiticas`
+  - _Personalizado_ → va directo a pantalla de módulos sin preselección
 - [ ] El preset llama a `PUT /api/config` con el conjunto de módulos correspondiente y guarda `business_profile`.
 - [ ] El onboarding solo se muestra una vez. Después se accede solo desde Configuración.
 
 **Archivos a crear/modificar:**
+
 - `components/onboarding/BusinessProfileSelector.tsx` — nuevo
 - `app/layout.tsx` o `app/(main)/layout.tsx` — agregar lógica de detección primera vez
 
@@ -239,6 +255,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] Si la sección queda completamente vacía de campos visibles, ocultar el `<details>` completo.
 
 **Archivos a modificar:**
+
 - `components/ventas/AdditionalDetailsSection.tsx`
 
 ---
@@ -251,6 +268,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] Si `module_clientes` está desactivado: no ejecutar el `useEffect` de búsqueda de clientes.
 
 **Archivos a modificar:**
+
 - `components/ventas/SaleForm.tsx`
 
 ---
@@ -261,6 +279,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] Al abrir la caja sin selección de vendedor: enviar `sellerId: 1` automáticamente.
 
 **Archivos a modificar:**
+
 - `components/ventas/CajaModal.tsx`
 
 ---
@@ -273,6 +292,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] En `app/(main)/productos/` ocultar el campo `unitType` al crear/editar productos si el módulo está desactivado.
 
 **Archivos a modificar:**
+
 - `components/ventas/SaleForm.tsx`
 - `components/ventas/ProductSearchPanel.tsx`
 - Formulario de productos
@@ -291,6 +311,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 ### 3.1 — Migración de base de datos
 
 - [ ] Crear nueva migración Prisma con las tablas:
+
   ```prisma
   model AccountBalance {
     id         Int      @id @default(autoincrement())
@@ -313,6 +334,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
     sale             Sale?          @relation(fields: [saleId], references: [id])
   }
   ```
+
 - [ ] Agregar campo opcional `onAccount Boolean @default(false)` en `Sale`.
 
 ---
@@ -325,6 +347,7 @@ Fundación   UI Mod.   Adaptar    Cuenta      Roles      Backup
 - [ ] `GET /api/account-balance/debtors` — lista de clientes con deuda > 0
 
 **Archivos a crear:**
+
 - `pages/api/account-balance/index.ts`
 - `pages/api/account-balance/charge.ts`
 - `pages/api/account-balance/payment.ts`
@@ -390,15 +413,15 @@ enum UserRole {
 
 ### 4.3 — Control de acceso por rol
 
-| Acción | Admin | Supervisor | Cajero |
-| :--- | :---: | :---: | :---: |
-| Ver historial completo de ventas | ✅ | ✅ | ❌ |
-| Modificar precios de productos | ✅ | ❌ | ❌ |
-| Ver Analíticas | ✅ | ✅ | ❌ |
-| Gestionar módulos | ✅ | ❌ | ❌ |
-| Abrir/cerrar caja | ✅ | ✅ | ✅ |
-| Registrar venta | ✅ | ✅ | ✅ |
-| Dar descuentos manuales | ✅ | ✅ | ❌ |
+| Acción                           | Admin | Supervisor | Cajero |
+| :------------------------------- | :---: | :--------: | :----: |
+| Ver historial completo de ventas |  ✅   |     ✅     |   ❌   |
+| Modificar precios de productos   |  ✅   |     ❌     |   ❌   |
+| Ver Analíticas                   |  ✅   |     ✅     |   ❌   |
+| Gestionar módulos                |  ✅   |     ❌     |   ❌   |
+| Abrir/cerrar caja                |  ✅   |     ✅     |   ✅   |
+| Registrar venta                  |  ✅   |     ✅     |   ✅   |
+| Dar descuentos manuales          |  ✅   |     ✅     |   ❌   |
 
 ---
 
@@ -414,7 +437,7 @@ enum UserRole {
 ### 5.1 — Schema espejo en Supabase
 
 - [ ] Crear en Supabase el equivalente de las tablas del Core:
-  `Product`, `Sale`, `SaleItem`, `Client`, `CashRegister`, `CashMovement`, `Seller`, `Setting`, `AccountBalance`, `AccountMovement`
+      `Product`, `Sale`, `SaleItem`, `Client`, `CashRegister`, `CashMovement`, `Seller`, `Setting`, `AccountBalance`, `AccountMovement`
 - [ ] Agregar columna `syncedAt` en cada tabla de Supabase para control de conflictos.
 - [ ] Usar Row Level Security (RLS) en Supabase: cada instalación tiene su propio `businessId` como tenant.
 
@@ -454,13 +477,13 @@ enum UserRole {
 
 Estos módulos se desarrollan después de que la infraestructura v2.0.0 esté estable:
 
-| Módulo | Versión estimada | Complejidad |
-| :--- | :---: | :---: |
-| Facturación Electrónica (ARCA) | v2.1.0 | Muy alta |
-| Mercado Pago (integración webhook) | v2.1.0 | Alta |
-| WhatsApp Business | v2.2.0 | Media |
-| Modo Empresa (multi-caja) | v2.3.0 | Muy alta |
-| Analíticas avanzadas mejoradas | v2.1.0 | Media |
+| Módulo                             | Versión estimada | Complejidad |
+| :--------------------------------- | :--------------: | :---------: |
+| Facturación Electrónica (ARCA)     |      v2.1.0      |  Muy alta   |
+| Mercado Pago (integración webhook) |      v2.1.0      |    Alta     |
+| WhatsApp Business                  |      v2.2.0      |    Media    |
+| Modo Empresa (multi-caja)          |      v2.3.0      |  Muy alta   |
+| Analíticas avanzadas mejoradas     |      v2.1.0      |    Media    |
 
 ---
 
