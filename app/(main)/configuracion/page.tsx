@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   Building,
   LayoutDashboard,
+  Users,
   Database,
   ShieldCheck,
 } from "lucide-react";
@@ -13,6 +14,7 @@ import { useModules } from "@/hooks/useModules";
 
 import ConfigGeneralTab from "@/components/configuracion/tabs/ConfigGeneralTab";
 import ConfigRubroPlanTab from "@/components/configuracion/tabs/ConfigRubroPlanTab";
+import ConfigUsuariosTab from "@/components/configuracion/tabs/ConfigUsuariosTab";
 import ConfigBackupTab from "@/components/configuracion/tabs/ConfigBackupTab";
 import ConfigArcaTab from "@/components/configuracion/tabs/ConfigArcaTab";
 import ConfigPaymentModal from "@/components/configuracion/modals/ConfigPaymentModal";
@@ -104,7 +106,7 @@ export default function ConfiguracionPage() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "rubro_plan" | "backup" | "arca">(
+  const [activeTab, setActiveTab] = useState<"general" | "rubro_plan" | "usuarios" | "backup" | "arca">(
     "general",
   );
   const [isSyncing, setIsSyncing] = useState(false);
@@ -209,7 +211,7 @@ export default function ConfiguracionPage() {
           Configuración
         </h1>
         <p className="text-sm text-foreground-muted">
-          Gestioná los datos de tu comercio, rubro de negocio, facturación y copias de seguridad.
+          Gestioná los datos de tu comercio, usuarios y claves, rubro de negocio, facturación y copias de seguridad.
         </p>
       </div>
 
@@ -235,6 +237,17 @@ export default function ConfiguracionPage() {
           }`}
         >
           <LayoutDashboard size={16} /> Rubro y Plan
+        </button>
+
+        <button
+          onClick={() => setActiveTab("usuarios")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
+            activeTab === "usuarios"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
+          }`}
+        >
+          <Users size={16} /> Usuarios y Permisos
         </button>
 
         <button
@@ -278,6 +291,10 @@ export default function ConfiguracionPage() {
           isSaving={isSaving}
           profilePresets={PROFILE_PRESETS}
         />
+      )}
+
+      {activeTab === "usuarios" && (
+        <ConfigUsuariosTab />
       )}
 
       {activeTab === "backup" && (

@@ -51,6 +51,25 @@ export default function PinLoginModal({
     fetchUsers();
   }, [isOpen]);
 
+  // Escuchar teclado físico (Teclado numérico / Numpad USB / números superiores)
+  useEffect(() => {
+    if (!isOpen || !selectedUser || isLoading) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key)) {
+        handleKeyPress(e.key);
+      } else if (e.key === 'Backspace') {
+        handleDelete();
+      } else if (e.key === 'Escape') {
+        setSelectedUser(null);
+        setPin('');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, selectedUser, pin, isLoading]);
+
   // Si no está abierto el modal de PIN, no renderiza nada
   if (!isOpen) return null;
 

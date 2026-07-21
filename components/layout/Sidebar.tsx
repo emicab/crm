@@ -84,6 +84,7 @@ const navGroups: NavGroup[] = [
     title: "General",
     items: [
       { href: "/analiticas", label: "Analíticas", icon: <LayoutDashboard size={20} />, moduleId: "analiticas", allowedRoles: ["ADMIN"] },
+      { href: "/configuracion/usuarios", label: "Usuarios y Permisos", icon: <Users size={20} />, allowedRoles: ["ADMIN"] },
       { href: "/configuracion", label: "Configuración", icon: <Settings size={20} />, allowedRoles: ["ADMIN"] },
     ],
   },
