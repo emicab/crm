@@ -659,7 +659,7 @@ export default function ConfiguracionPage() {
               : "border-transparent text-foreground-muted hover:text-foreground"
           }`}
         >
-          Rubro y Plan
+          Plan de Suscripción
         </button>
         {form.storage_mode === "seguro" && (
           <button
@@ -901,49 +901,10 @@ export default function ConfiguracionPage() {
 
       {activeTab === "modules" && (
         <div className="space-y-8">
-          {/* PASO 1: Selector de Rubro */}
+          {/* Comparativa de Planes (Básico vs Pro) */}
           <section className="bg-muted p-6 rounded-xl shadow space-y-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Building size={20} className="text-primary" /> Paso 1: Rubro de tu Comercio
-            </h2>
-            <p className="text-sm text-foreground-muted">
-              Seleccioná el rubro de tu negocio para optimizar automáticamente la velocidad de venta y el tipo de productos.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-              {[
-                { key: "general", name: "Kiosco / Almacén / Minimarket", desc: "Ventas súper rápidas con escáner de barras y caja diaria.", icon: "🏪" },
-                { key: "fiambreria", name: "Fiambrería / Verdulería / Carnicería", desc: "Activa automáticamente la Venta Fraccionada (KG / Litros / Granel).", icon: "🧀" },
-                { key: "gastronomia", name: "Pizzería / Gastronomía / Comidas", desc: "Optimizado para combos rápidos, menús y promociones.", icon: "🍕" },
-                { key: "boutique", name: "Indumentaria / Calzado / Tienda", desc: "Búsqueda nominada, ficha de clientes e historial.", icon: "🛍️" },
-                { key: "otros", name: "Comercio General / Varios", desc: "Configuración versátil adaptable a cualquier tipo de comercio.", icon: "🏢" },
-              ].map((item) => (
-                <div
-                  key={item.key}
-                  onClick={() => handleProfileChange(item.key)}
-                  className={`border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
-                    currentProfile === item.key
-                      ? "border-primary bg-primary/5 ring-2 ring-primary font-bold"
-                      : "border-border bg-white hover:border-foreground-muted"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-2xl">{item.icon}</span>
-                    <h3 className="font-bold text-sm text-foreground">
-                      {item.name}
-                    </h3>
-                  </div>
-                  <p className="text-xs text-foreground-muted leading-relaxed">
-                    {item.desc}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* PASO 2: Comparativa de Planes (Básico vs Pro) */}
-          <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <ShieldCheck size={20} className="text-primary" /> Paso 2: Plan de Suscripción
+              <ShieldCheck size={20} className="text-primary" /> Plan de Suscripción
             </h2>
             <p className="text-sm text-foreground-muted">
               Elegí la modalidad de plan que mejor se adapte a tus necesidades de negocio.

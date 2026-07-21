@@ -104,10 +104,13 @@ function saveCollapsed(groups: Set<string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...groups]));
 }
 
+import ProUpgradeModal from "@/components/ui/ProUpgradeModal";
+
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { isModuleEnabled, currentUser, logout, supabaseLastSync, hasSupabaseConfig, storageMode, plan } = useModules();
   const [alertCount, setAlertCount] = useState(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(loadCollapsed);
+  const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(null);
 
   useEffect(() => {
     saveCollapsed(collapsedGroups);
@@ -225,11 +228,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                     {group.items.map((item) => (
                       <Link
                         key={item.label}
-                        href={item.href}
-                        onClick={onClose}
+                        href={item.isLocked ? "#" : item.href}
+                        onClick={(e) => {
+                          if (item.isLocked) {
+                            e.preventDefault();
+                            setLockedFeatureModal(item.label);
+                          } else {
+                            onClose();
+                          }
+                        }}
                         className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-150 ease-in-out font-medium text-sm ${
                           item.isLocked
-                            ? 'opacity-75 hover:bg-amber-50 text-amber-800'
+                            ? 'opacity-75 hover:bg-amber-50 text-amber-800 cursor-pointer'
                             : 'hover:bg-primary-light hover:text-primary'
                         }`}
                       >
@@ -352,11 +362,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               </span>
             </div>
           )}
-          <div className="text-center text-[10px] text-foreground-muted/50 font-medium">
-            ClinPOS v{pkg.version}
-          </div>
         </div>
       </aside>
+
+      <ProUpgradeModal
+        isOpen={!!lockedFeatureModal}
+        onClose={() => setLockedFeatureModal(null)}
+        featureName={lockedFeatureModal || undefined}
+      />
     </>
   );
 };
