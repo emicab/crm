@@ -75,22 +75,47 @@ const ProUpgradeModal: React.FC<ProUpgradeModalProps> = ({
           </ul>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 pt-2">
+        <div className="flex flex-col gap-2 pt-2">
           <Button
             type="button"
-            onClick={handleGoToPlan}
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/mp/checkout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ itemType: "pro_mensual" }),
+                });
+                const data = await res.json();
+                if (data.init_point) {
+                  window.open(data.init_point, "_blank");
+                }
+              } catch {
+                /* fallback */
+              }
+              handleGoToPlan();
+            }}
             className="w-full justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 shadow-sm cursor-pointer"
           >
-            Ver Planes y Cambiar a Pro
+            💳 Suscribirme al Plan Pro ($30.000/mes MP)
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            className="w-full sm:w-auto justify-center text-xs h-10 cursor-pointer"
-          >
-            Volver
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGoToPlan}
+              className="w-full justify-center text-xs h-9 cursor-pointer"
+            >
+              Ver Planes y Licencias
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              className="w-auto justify-center text-xs h-9 cursor-pointer"
+            >
+              Volver
+            </Button>
+          </div>
         </div>
       </div>
     </div>

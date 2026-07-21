@@ -426,6 +426,58 @@ export default function ConfiguracionPage() {
     }
   };
 
+  const [licenseKeyInput, setLicenseKeyInput] = useState("");
+  const [isActivatingLicense, setIsActivatingLicense] = useState(false);
+
+  const handleActivateLicense = async () => {
+    if (!licenseKeyInput.trim()) {
+      toast.error("Ingresá una clave de licencia válida.");
+      return;
+    }
+    setIsActivatingLicense(true);
+    try {
+      const res = await fetch("/api/license/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licenseKey: licenseKeyInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Error al activar clave");
+      toast.success(data.message);
+      setForm((prev) => ({
+        ...prev,
+        app_plan: data.plan,
+        unlocked_plan_pro: data.plan === "pro" ? "true" : "false",
+        storage_mode: data.plan === "pro" ? "seguro" : "local",
+      }));
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err: any) {
+      toast.error(err.message || "No se pudo activar la clave.");
+    } finally {
+      setIsActivatingLicense(false);
+    }
+  };
+
+  const handleMpCheckout = async (itemType: "basico_mensual" | "basico_unico" | "pro_mensual") => {
+    try {
+      const res = await fetch("/api/mp/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemType }),
+      });
+      const data = await res.json();
+      if (data.init_point) {
+        window.open(data.init_point, "_blank");
+      } else {
+        toast.error("No se pudo iniciar el checkout de Mercado Pago.");
+      }
+    } catch {
+      toast.error("Error de conexión con Mercado Pago.");
+    }
+  };
+
   // --- Activar/Desactivar módulo individual ---
   const handleToggleModule = async (moduleId: string, currentVal: boolean) => {
     const newVal = !currentVal;
@@ -928,7 +980,13 @@ export default function ConfiguracionPage() {
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold text-foreground">Plan Básico</h3>
-                    <p className="text-xs text-foreground-muted mt-1">100% Local & Offline en tu computadora.</p>
+                    <div className="mt-1 flex items-baseline gap-1.5">
+                      <span className="text-xl font-extrabold text-foreground font-mono">$9.900</span>
+                      <span className="text-xs text-foreground-muted">ARS/mes</span>
+                      <span className="text-xs text-foreground-muted mx-1">ó</span>
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">$40.000 Único</span>
+                    </div>
+                    <p className="text-xs text-foreground-muted mt-1.5">100% Local & Offline en tu computadora.</p>
                   </div>
                   
                   <div className="border-t border-border pt-4 space-y-2 text-xs">
@@ -949,15 +1007,29 @@ export default function ConfiguracionPage() {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-border mt-6">
+                <div className="pt-6 border-t border-border mt-6 space-y-2">
                   <Button
                     onClick={() => handlePlanChange('basico')}
                     variant={currentPlan === 'basico' ? 'outline' : 'primary'}
                     disabled={currentPlan === 'basico'}
-                    className="w-full justify-center"
+                    className="w-full justify-center text-xs"
                   >
                     {currentPlan === 'basico' ? 'Plan Básico Activo' : 'Activar Plan Básico'}
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => handleMpCheckout('basico_mensual')}
+                    className="w-full text-center text-[11px] font-semibold text-primary hover:underline cursor-pointer pt-1"
+                  >
+                    💳 Pagar $9.900/mes por Mercado Pago
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMpCheckout('basico_unico')}
+                    className="w-full text-center text-[11px] font-semibold text-emerald-600 hover:underline cursor-pointer"
+                  >
+                    ⚡ Pagar $40.000 Único por Mercado Pago
+                  </button>
                 </div>
               </div>
 
@@ -982,7 +1054,11 @@ export default function ConfiguracionPage() {
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold text-foreground">Plan Pro</h3>
-                    <p className="text-xs text-foreground-muted mt-1">Sincronización en la nube + Herramientas Avanzadas.</p>
+                    <div className="mt-1 flex items-baseline gap-1.5">
+                      <span className="text-xl font-extrabold text-primary font-mono">$30.000</span>
+                      <span className="text-xs text-foreground-muted">ARS/mes</span>
+                    </div>
+                    <p className="text-xs text-foreground-muted mt-1.5">Sincronización en la nube + Herramientas Avanzadas.</p>
                   </div>
                   
                   <div className="border-t border-border pt-4 space-y-2 text-xs">
@@ -996,16 +1072,53 @@ export default function ConfiguracionPage() {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-border mt-6">
+                <div className="pt-6 border-t border-border mt-6 space-y-2">
                   <Button
                     onClick={() => handlePlanChange('pro')}
                     variant={currentPlan === 'pro' ? 'outline' : 'primary'}
-                    className={`w-full justify-center ${currentPlan !== 'pro' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold' : ''}`}
+                    className={`w-full justify-center text-xs ${currentPlan !== 'pro' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold' : ''}`}
                   >
                     {currentPlan === 'pro' ? 'Plan Pro Activo' : 'Mejorar a Plan Pro'}
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => handleMpCheckout('pro_mensual')}
+                    className="w-full text-center text-[11px] font-bold text-emerald-600 hover:underline cursor-pointer pt-1"
+                  >
+                    💳 Suscribirme por $30.000/mes en Mercado Pago
+                  </button>
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* SECCIÓN 3: Ingreso de Clave de Licencia */}
+          <section className="bg-white border border-border p-6 rounded-xl shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-primary/10 text-primary rounded-xl shrink-0">
+                <Key size={22} />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-foreground">¿Ya compraste o tenés tu Clave de Licencia?</h3>
+                <p className="text-xs text-foreground-muted mt-0.5">Ingresá tu clave de activación otorgada tras realizar el pago o contratar el servicio.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Input
+                placeholder="Ej. CLIN-PRO-8492-2026"
+                value={licenseKeyInput}
+                onChange={(e) => setLicenseKeyInput(e.target.value)}
+                className="font-mono uppercase text-xs h-10 flex-1"
+              />
+              <Button
+                type="button"
+                onClick={handleActivateLicense}
+                disabled={isActivatingLicense}
+                className="bg-primary hover:bg-primary/90 text-white text-xs px-6 h-10 shrink-0 justify-center cursor-pointer font-bold"
+              >
+                {isActivatingLicense ? "Verificando..." : "Activar Licencia"}
+              </Button>
             </div>
           </section>
         </div>
