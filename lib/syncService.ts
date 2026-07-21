@@ -1,7 +1,7 @@
 // lib/syncService.ts
 import prisma from "./prisma";
 
-const fmtDec = (val: any) => (val !== undefined && val !== null ? val.toString() : null);
+const fmtDec = (val: any, fallback: string | null = "0.00") => (val !== undefined && val !== null ? val.toString() : fallback);
 
 export async function runSupabaseSync(): Promise<{ 
   success: boolean; 
@@ -127,8 +127,10 @@ export async function runSupabaseSync(): Promise<{
       })),
       CashRegister: cashRegisters.map(c => ({
         id: c.id, openDate: c.openDate.toISOString(), closeDate: c.closeDate?.toISOString() || null, tenant_id: tenantId,
-        initialBalance: fmtDec(c.initialBalance), expectedBalance: fmtDec(c.expectedBalance),
-        actualBalance: fmtDec(c.actualBalance), difference: fmtDec(c.difference),
+        initialBalance: fmtDec(c.initialBalance),
+        expectedBalance: fmtDec(c.expectedBalance),
+        actualBalance: fmtDec(c.actualBalance),
+        difference: fmtDec(c.difference),
         status: c.status, notes: c.notes, sellerId: c.sellerId,
         createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString()
       })),
@@ -201,24 +203,25 @@ export async function runSupabaseSync(): Promise<{
       summary[tableName] = records.length;
     }
 
-    // 5. Actualizar fecha de última sincronización local
+    // 5. Actualizar marca de tiempo de última sincronización
+    const syncTimeString = syncStartTime.toISOString();
     await prisma.setting.upsert({
       where: { key: "supabase_last_sync" },
-      update: { value: syncStartTime.toISOString() },
-      create: { key: "supabase_last_sync", value: syncStartTime.toISOString() }
+      update: { value: syncTimeString },
+      create: { key: "supabase_last_sync", value: syncTimeString }
     });
 
     return {
       success: true,
-      lastSync: syncStartTime.toISOString(),
+      message: "Sincronización con la nube realizada con éxito.",
+      lastSync: syncTimeString,
       syncedTables: summary
     };
-
   } catch (error: any) {
     console.error("Error en runSupabaseSync:", error);
     return {
       success: false,
-      message: error.message || String(error)
+      message: error.message || "Error al sincronizar con Supabase."
     };
   }
 }
