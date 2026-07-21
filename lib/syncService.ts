@@ -170,7 +170,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         supplierId: pu.supplierId, createdAt: pu.createdAt.toISOString(), updatedAt: pu.updatedAt.toISOString()
       })),
       PurchaseItem: purchaseItems.map(pi => ({
-        id: pi.id, quantity: pi.quantity, quantityReceived: pi.quantityReceived, tenant_id: tenantId,
+        id: pi.id, quantity: pi.quantity, quantityReceived: pi.quantityReceived ?? pi.quantity ?? 0, tenant_id: tenantId,
         purchasePrice: fmtDec(pi.purchasePrice), purchaseId: pi.purchaseId, productId: pi.productId
       })),
       Expense: expenses.map(e => ({

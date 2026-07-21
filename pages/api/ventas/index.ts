@@ -127,7 +127,7 @@ export default async function handler(
     if (!Object.values(PaymentType).includes(paymentType)) {
         return res.status(400).json({ message: 'Tipo de pago inválido.' });
     }
-    if (paymentType === PaymentType.ON_ACCOUNT && !clientId) {
+    if ((paymentType === PaymentType.ON_ACCOUNT || req.body.onAccount === true) && !clientId) {
         return res.status(400).json({ message: 'Para registrar una venta en cuenta corriente se requiere seleccionar un cliente.' });
     }
 
@@ -235,13 +235,14 @@ export default async function handler(
         // Registrar movimiento en caja si hay una abierta
         const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
 
-        const isAccountSale = paymentType === PaymentType.ON_ACCOUNT;
+        const isAccountSale = paymentType === PaymentType.ON_ACCOUNT || req.body.onAccount === true;
+        const effectivePaymentType = isAccountSale ? PaymentType.ON_ACCOUNT : paymentType;
 
         const newSale = await tx.sale.create({
           data: {
             saleDate: new Date(),
             totalAmount: calculatedTotalAmount,
-            paymentType,
+            paymentType: effectivePaymentType,
             onAccount: isAccountSale,
             notes: notes || null,
             discountCodeApplied: discountCodeApplied || null,
