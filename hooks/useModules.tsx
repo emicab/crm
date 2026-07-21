@@ -9,6 +9,30 @@ export interface UserSession {
   role: string;
 }
 
+export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
+  ADMIN: ["*"],
+  SUPERVISOR: [
+    "/caja",
+    "/ventas",
+    "/productos",
+    "/stock",
+    "/combos",
+    "/promociones",
+    "/categorias",
+    "/marcas",
+    "/compras",
+    "/gastos",
+    "/clientes",
+    "/cuenta-corriente",
+    "/proveedores",
+    "/vendedores",
+  ],
+  CASHIER: [
+    "/caja",
+    "/ventas",
+  ],
+};
+
 interface ModuleContextType {
   isModuleEnabled: (moduleId: string) => boolean;
   modules: Record<string, boolean>;
@@ -25,6 +49,8 @@ interface ModuleContextType {
   tier: LicenseTier;
   isPro: boolean;
   isFree: boolean;
+  rolePermissions: Record<string, string[]>;
+  hasRolePermission: (role: string, pathPrefix: string) => boolean;
 }
 
 const ModuleContext = createContext<ModuleContextType | undefined>(undefined);
@@ -39,6 +65,7 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [supabaseLastSync, setSupabaseLastSync] = useState<string>("");
   const [hasSupabaseConfig, setHasSupabaseConfig] = useState<boolean>(false);
+  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>(DEFAULT_ROLE_PERMISSIONS);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -79,6 +106,20 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const isProPlan = data.app_plan === 'pro' || data.plan_type === 'pro' || data.unlocked_plan_pro === 'true' || data.storage_mode === 'seguro';
       setPlan(isProPlan ? 'pro' : 'basico');
 
+      if (data.role_permissions) {
+        try {
+          const parsedPerms = JSON.parse(data.role_permissions);
+          setRolePermissions({
+            ...DEFAULT_ROLE_PERMISSIONS,
+            ...parsedPerms,
+          });
+        } catch {
+          setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
+        }
+      } else {
+        setRolePermissions(DEFAULT_ROLE_PERMISSIONS);
+      }
+
       setSupabaseLastSync(data.supabase_last_sync || "");
       setHasSupabaseConfig(!!data.supabase_url && !!data.supabase_anon_key);
     } catch (error) {
@@ -107,10 +148,20 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (modules['venta_fraccionada'] !== undefined) return modules['venta_fraccionada'];
         return ['fiambreria', 'verduleria', 'panaderia', 'carniceria', 'granel'].includes(businessProfile);
       }
-      // Módulos básicos (Ventas, Caja, Stock, Clientes, ARCA, Gastos, Vendedores, Compras, Combos)
+      // Módulos básicos
       return true;
     },
     [plan, modules, businessProfile]
+  );
+
+  const hasRolePermission = useCallback(
+    (role: string, pathPrefix: string): boolean => {
+      if (role === "ADMIN") return true;
+      const perms = rolePermissions[role] || DEFAULT_ROLE_PERMISSIONS[role] || [];
+      if (perms.includes("*")) return true;
+      return perms.some((p) => pathPrefix.startsWith(p) || p.startsWith(pathPrefix));
+    },
+    [rolePermissions]
   );
 
   return (
@@ -119,6 +170,7 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isModuleEnabled, modules, businessProfile, storageMode, plan,
         isLoading, refresh: fetchModules, currentUser, loginUser, logout,
         supabaseLastSync, hasSupabaseConfig, tier, isPro, isFree,
+        rolePermissions, hasRolePermission,
       }}
     >
       {children}

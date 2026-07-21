@@ -44,7 +44,7 @@ const AccessDeniedView = () => (
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { businessProfile, isLoading, isModuleEnabled, currentUser, hasSupabaseConfig, storageMode } = useModules();
+  const { businessProfile, isLoading, isModuleEnabled, currentUser, hasSupabaseConfig, storageMode, hasRolePermission } = useModules();
   const pathname = usePathname() || "";
 
   // Si la configuración cargó y no hay rubro configurado, mostramos onboarding bloqueante
@@ -82,10 +82,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Validar si el rol actual puede acceder a la ruta activa
   let isAccessAllowed = true;
   if (!isLoading && !showOnboarding && !showPinLock && isModuleEnabled('roles') && currentUser) {
-    const rule = ROUTE_PERMISSIONS.find(route => pathname.startsWith(route.pathPrefix));
-    if (rule) {
-      isAccessAllowed = rule.allowedRoles.includes(currentUser.role);
-    }
+    isAccessAllowed = hasRolePermission(currentUser.role, pathname);
   }
 
   return (

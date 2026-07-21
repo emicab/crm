@@ -9,14 +9,17 @@ import {
   Trash2,
   Lock,
   Loader2,
-  Delete,
   X,
   CheckCircle2,
+  Sliders,
+  Save,
+  Check,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import toast from 'react-hot-toast';
+import { useModules, DEFAULT_ROLE_PERMISSIONS } from '@/hooks/useModules';
 
 interface User {
   id: number;
@@ -25,9 +28,34 @@ interface User {
   createdAt: string;
 }
 
+const PERMISSION_SECTIONS = [
+  { id: '/caja', name: 'Caja Diaria', cat: 'Ventas y Caja' },
+  { id: '/ventas/nueva', name: 'Nueva Venta', cat: 'Ventas y Caja' },
+  { id: '/ventas', name: 'Historial de Ventas', cat: 'Ventas y Caja' },
+  { id: '/productos', name: 'Catálogo de Productos', cat: 'Productos y Stock' },
+  { id: '/stock', name: 'Carga y Ajustes de Stock', cat: 'Productos y Stock' },
+  { id: '/combos', name: 'Combos de Productos', cat: 'Productos y Stock' },
+  { id: '/promociones', name: 'Promociones y Descuentos', cat: 'Productos y Stock' },
+  { id: '/categorias', name: 'Categorías y Marcas', cat: 'Productos y Stock' },
+  { id: '/compras', name: 'Compras e Historial', cat: 'Compras y Gastos' },
+  { id: '/gastos', name: 'Control de Gastos', cat: 'Compras y Gastos' },
+  { id: '/clientes', name: 'Gestión de Clientes', cat: 'Contactos' },
+  { id: '/cuenta-corriente', name: 'Cuentas Corrientes (Fiado)', cat: 'Contactos' },
+  { id: '/proveedores', name: 'Proveedores', cat: 'Contactos' },
+  { id: '/vendedores', name: 'Vendedores', cat: 'Contactos' },
+  { id: '/analiticas', name: 'Analíticas Financieras', cat: 'General' },
+  { id: '/configuracion', name: 'Configuración General', cat: 'General' },
+];
+
 export default function ConfigUsuariosTab() {
+  const { rolePermissions, refresh: refreshModules } = useModules();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Customizador de Permisos por Rol
+  const [selectedPermissionRole, setSelectedPermissionRole] = useState<'CASHIER' | 'SUPERVISOR'>('CASHIER');
+  const [customPermissions, setCustomPermissions] = useState<Record<string, string[]>>({ ...rolePermissions });
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
 
   // Modales
   const [showAddModal, setShowAddModal] = useState(false);
@@ -44,6 +72,10 @@ export default function ConfigUsuariosTab() {
   const [currentPinInput, setCurrentPinInput] = useState('');
   const [editPin, setEditPin] = useState('');
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
+
+  useEffect(() => {
+    setCustomPermissions({ ...rolePermissions });
+  }, [rolePermissions]);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -64,8 +96,6 @@ export default function ConfigUsuariosTab() {
   useEffect(() => {
     fetchUsers();
   }, []);
-
-
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,6 +203,45 @@ export default function ConfigUsuariosTab() {
     }
   };
 
+  const togglePermission = (routePath: string) => {
+    setCustomPermissions((prev) => {
+      const currentList = prev[selectedPermissionRole] || DEFAULT_ROLE_PERMISSIONS[selectedPermissionRole] || [];
+      const hasIt = currentList.includes(routePath);
+      const updatedList = hasIt
+        ? currentList.filter((p) => p !== routePath)
+        : [...currentList, routePath];
+
+      return {
+        ...prev,
+        [selectedPermissionRole]: updatedList,
+      };
+    });
+  };
+
+  const handleSavePermissions = async () => {
+    setIsSavingPermissions(true);
+    try {
+      const res = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role_permissions: JSON.stringify(customPermissions),
+        }),
+      });
+
+      if (res.ok) {
+        toast.success(`¡Permisos de ${selectedPermissionRole === 'CASHIER' ? 'Cajero' : 'Supervisor'} guardados con éxito!`);
+        await refreshModules();
+      } else {
+        toast.error('Error al guardar permisos.');
+      }
+    } catch {
+      toast.error('Error al conectar con el servidor.');
+    } finally {
+      setIsSavingPermissions(false);
+    }
+  };
+
   const getRoleBadgeStyle = (role: string) => {
     switch (role) {
       case 'ADMIN':
@@ -195,6 +264,8 @@ export default function ConfigUsuariosTab() {
     }
   };
 
+  const activeRolePermissionsList = customPermissions[selectedPermissionRole] || DEFAULT_ROLE_PERMISSIONS[selectedPermissionRole] || [];
+
   return (
     <div className="space-y-8">
       {/* Explicación de Roles */}
@@ -202,10 +273,10 @@ export default function ConfigUsuariosTab() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Users size={20} className="text-primary" /> Gestión de Roles y Permisos
+              <Users size={20} className="text-primary" /> Gestión de Usuarios y Permisos
             </h2>
             <p className="text-sm text-foreground-muted mt-1">
-              Administrá los usuarios del sistema y asigná sus niveles de acceso con clave PIN numérica.
+              Administrá el personal autorizado y personalizá los accesos exactos para cada rol.
             </p>
           </div>
           <Button onClick={() => setShowAddModal(true)} className="shrink-0 font-bold text-sm">
@@ -217,23 +288,110 @@ export default function ConfigUsuariosTab() {
           <div className="p-4 bg-background border border-border rounded-xl space-y-1.5">
             <span className="font-extrabold text-blue-600 uppercase text-[11px]">👑 Administrador</span>
             <p className="text-foreground-muted leading-relaxed">
-              Acceso total al sistema: Ventas, Caja, Productos, Compras, Clientes, Analíticas Avanzadas y Configuración General.
+              Acceso ilimitado y total a todas las funciones, reportes y configuración.
             </p>
           </div>
 
           <div className="p-4 bg-background border border-border rounded-xl space-y-1.5">
             <span className="font-bold text-purple-600 uppercase text-[11px]">⭐ Supervisor</span>
             <p className="text-foreground-muted leading-relaxed">
-              Gestión operativa: Ventas, Caja Diaria, Productos, Alertas de Stock, Clientes y Compras. Sin acceso a Configuración sensible.
+              Gestión operativa diaria. Podés personalizar qué herramientas avanzadas puede utilizar.
             </p>
           </div>
 
           <div className="p-4 bg-background border border-border rounded-xl space-y-1.5">
             <span className="font-semibold text-slate-700 uppercase text-[11px]">🛒 Cajero</span>
             <p className="text-foreground-muted leading-relaxed">
-              Acceso exclusivo de cobro: Registrar Nueva Venta, visualizar Caja Diaria e Historial de Ventas.
+              Acceso a Caja y Ventas por defecto. Podés habilitarle o restringirle secciones específicas abajo.
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* MATRIZ DE PERMISOS CONFIGURABLES POR ROL */}
+      <section className="bg-muted p-6 rounded-xl shadow space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
+          <div>
+            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+              <Sliders size={18} className="text-primary" /> Personalizar Permisos de Acceso por Rol
+            </h3>
+            <p className="text-xs text-foreground-muted mt-0.5">
+              Marcá o desmarcá las secciones que deseas permitir o bloquear a cada nivel de usuario.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSelectedPermissionRole('CASHIER')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                selectedPermissionRole === 'CASHIER'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'bg-background text-foreground-muted hover:text-foreground border border-border'
+              }`}
+            >
+              🛒 Rol Cajero
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedPermissionRole('SUPERVISOR')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                selectedPermissionRole === 'SUPERVISOR'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-background text-foreground-muted hover:text-foreground border border-border'
+              }`}
+            >
+              ⭐ Rol Supervisor
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+          {PERMISSION_SECTIONS.map((sec) => {
+            const isAllowed = activeRolePermissionsList.includes(sec.id);
+            return (
+              <div
+                key={sec.id}
+                onClick={() => togglePermission(sec.id)}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 select-none ${
+                  isAllowed
+                    ? 'border-primary bg-primary/10 text-foreground font-semibold shadow-xs'
+                    : 'border-border bg-background text-foreground-muted hover:border-foreground-muted'
+                }`}
+              >
+                <div>
+                  <span className="text-xs font-bold block">{sec.name}</span>
+                  <span className="text-[10px] text-foreground-muted uppercase tracking-wider block mt-0.5">{sec.cat}</span>
+                </div>
+                <div
+                  className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors shrink-0 ${
+                    isAllowed ? 'bg-primary border-primary text-primary-foreground' : 'border-border bg-muted'
+                  }`}
+                >
+                  {isAllowed && <Check size={14} strokeWidth={3} />}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="pt-3 flex justify-end">
+          <Button
+            type="button"
+            onClick={handleSavePermissions}
+            disabled={isSavingPermissions}
+            className="font-bold text-xs px-5 py-2"
+          >
+            {isSavingPermissions ? (
+              <>
+                <Loader2 size={15} className="animate-spin mr-1.5" /> Guardando Permisos...
+              </>
+            ) : (
+              <>
+                <Save size={15} className="mr-1.5" /> Guardar Permisos para {selectedPermissionRole === 'CASHIER' ? 'Cajero' : 'Supervisor'}
+              </>
+            )}
+          </Button>
         </div>
       </section>
 
@@ -296,6 +454,7 @@ export default function ConfigUsuariosTab() {
                           onClick={() => {
                             setSelectedUser(user);
                             setEditPin('');
+                            setCurrentPinInput('');
                             setShowPinModal(true);
                           }}
                           className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -406,6 +565,7 @@ export default function ConfigUsuariosTab() {
                 onClick={() => {
                   setShowPinModal(false);
                   setEditPin('');
+                  setCurrentPinInput('');
                   setSelectedUser(null);
                 }}
                 className="text-foreground-muted hover:text-foreground"

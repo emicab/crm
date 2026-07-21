@@ -108,7 +108,7 @@ function saveCollapsed(groups: Set<string>) {
 import ProUpgradeModal from "@/components/ui/ProUpgradeModal";
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { isModuleEnabled, currentUser, logout, supabaseLastSync, hasSupabaseConfig, storageMode, plan } = useModules();
+  const { isModuleEnabled, currentUser, logout, supabaseLastSync, hasSupabaseConfig, storageMode, plan, hasRolePermission } = useModules();
   const [alertCount, setAlertCount] = useState(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(loadCollapsed);
   const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(null);
@@ -176,9 +176,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       
       if (!isEnabled) return null;
 
-      // Filter role permissions
-      if (isModuleEnabled("roles") && currentUser && item.allowedRoles) {
-        if (!item.allowedRoles.includes(currentUser.role)) return null;
+      // Filter role permissions dynamically
+      if (isModuleEnabled("roles") && currentUser) {
+        if (!hasRolePermission(currentUser.role, item.href)) return null;
       }
 
       return { ...item, isLocked: false };
