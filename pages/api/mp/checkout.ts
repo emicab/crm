@@ -72,16 +72,16 @@ export default async function handler(
       });
     }
 
-    // Fallback: Si no hay token de MP configurado todavía, retornar un link directo de Mercado Pago predeterminado
-    const fallbackLinks: Record<string, string> = {
-      basico_mensual: "https://mpago.la/pos-basico-9900",
-      basico_unico: "https://mpago.la/pos-basico-40000",
-      pro_mensual: "https://mpago.la/pos-pro-30000",
+    // Links oficiales de Mercado Pago
+    const officialLinks: Record<string, string> = {
+      basico_mensual: "https://mpago.la/1V3hSPq",
+      basico_unico: "https://mpago.la/2gsif4Z",
+      pro_mensual: "https://mpago.la/1BG9zyU",
     };
 
     return res.status(200).json({
       success: true,
-      init_point: fallbackLinks[itemType] || "https://mercadopago.com.ar",
+      init_point: officialLinks[itemType] || "https://mpago.la/1BG9zyU",
     });
   } catch (error: any) {
     console.error("Error al crear preferencia de Mercado Pago:", error);
