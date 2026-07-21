@@ -190,6 +190,10 @@
         </p>
       </div>
     </div>
-    <div class="version">v1.3.5</div>
+    <div id="version" class="version">v1.5.2</div>
   </body>
+  <script>
+    const version = document.getElementById("version");
+    version.textContent = "v" + require("../package.json").version;
+  </script>
 </html>
