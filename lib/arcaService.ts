@@ -1,6 +1,7 @@
 import prisma from './prisma';
 import fs from 'fs';
 import path from 'path';
+import { decryptText } from './encryption';
 
 // Utilizaremos require para evitar problemas con los tipos y la carga de CommonJS del SDK de AFIP
 const Afip = require('@afipsdk/afip.js');
@@ -60,8 +61,11 @@ export async function getAfipInstance(config: ArcaConfig) {
     const certPath = path.join(certsDir, `arca_${config.cuit}.crt`);
     const keyPath = path.join(certsDir, `arca_${config.cuit}.key`);
 
-    fs.writeFileSync(certPath, config.cert.trim());
-    fs.writeFileSync(keyPath, config.key.trim());
+    const rawCert = decryptText(config.cert).trim();
+    const rawKey = decryptText(config.key).trim();
+
+    fs.writeFileSync(certPath, rawCert);
+    fs.writeFileSync(keyPath, rawKey);
 
     options.cert = certPath;
     options.key = keyPath;
