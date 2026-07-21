@@ -1,13 +1,15 @@
 // lib/syncService.ts
 import prisma from "./prisma";
+import os from "os";
 
 const fmtDec = (val: any, fallback: string | null = "0.00") => (val !== undefined && val !== null ? val.toString() : fallback);
 
-export async function runSupabaseSync(): Promise<{ 
+export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{ 
   success: boolean; 
   message?: string; 
   lastSync?: string; 
   syncedTables?: Record<string, number>;
+  tenantId?: string;
 }> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -32,48 +34,57 @@ export async function runSupabaseSync(): Promise<{
       };
     }
 
-    const lastSync = lastSyncStr ? new Date(lastSyncStr) : new Date(0);
+    const lastSync = (forceFullSync || !lastSyncStr) ? new Date(0) : new Date(lastSyncStr);
     const syncStartTime = new Date();
 
     // 2. Extraer cambios incrementales en orden jerárquico
-    const brands = await prisma.brand.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const categories = await prisma.category.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const suppliers = await prisma.supplier.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const discountCodes = await prisma.discountCode.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const promotions = await prisma.promotion.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const clients = await prisma.client.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const sellers = await prisma.seller.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const users = await prisma.user.findMany({ where: { updatedAt: { gt: lastSync } } });
+    const brands = await prisma.brand.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const categories = await prisma.category.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const suppliers = await prisma.supplier.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const discountCodes = await prisma.discountCode.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const promotions = await prisma.promotion.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const clients = await prisma.client.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const sellers = await prisma.seller.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const users = await prisma.user.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
 
-    const products = await prisma.product.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const cashRegisters = await prisma.cashRegister.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const accountBalances = await prisma.accountBalance.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const combos = await prisma.combo.findMany({ where: { updatedAt: { gt: lastSync } } });
+    const products = await prisma.product.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const cashRegisters = await prisma.cashRegister.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const accountBalances = await prisma.accountBalance.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const combos = await prisma.combo.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
 
-    const sales = await prisma.sale.findMany({ where: { updatedAt: { gt: lastSync } } });
+    const sales = await prisma.sale.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
     const saleItems = await prisma.saleItem.findMany({
-      where: {
+      where: forceFullSync ? {} : {
         sale: { updatedAt: { gt: lastSync } }
       }
     });
 
-    const purchases = await prisma.purchase.findMany({ where: { updatedAt: { gt: lastSync } } });
+    const purchases = await prisma.purchase.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
     const purchaseItems = await prisma.purchaseItem.findMany({
-      where: {
+      where: forceFullSync ? {} : {
         purchase: { updatedAt: { gt: lastSync } }
       }
     });
 
-    const expenses = await prisma.expense.findMany({ where: { updatedAt: { gt: lastSync } } });
-    const cashMovements = await prisma.cashMovement.findMany({ where: { createdAt: { gt: lastSync } } });
-    const accountMovements = await prisma.accountMovement.findMany({ where: { createdAt: { gt: lastSync } } });
+    const expenses = await prisma.expense.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const cashMovements = await prisma.cashMovement.findMany({ where: forceFullSync ? {} : { createdAt: { gt: lastSync } } });
+    const accountMovements = await prisma.accountMovement.findMany({ where: forceFullSync ? {} : { createdAt: { gt: lastSync } } });
     const comboItems = await prisma.comboItem.findMany({
-      where: {
+      where: forceFullSync ? {} : {
         combo: { updatedAt: { gt: lastSync } }
       }
     });
 
-    const tenantId = config.license_key || config.businessCuit || config.businessName || process.env.LICENSE_KEY || process.env.HARDWARE_ID || "default_tenant";
+    const computerHostname = typeof os.hostname === "function" ? os.hostname() : "pos_local";
+    const rawTenant = (
+      config.license_key?.trim() ||
+      config.businessCuit?.trim() ||
+      config.businessName?.trim() ||
+      process.env.LICENSE_KEY?.trim() ||
+      process.env.HARDWARE_ID?.trim() ||
+      `pos_${computerHostname}`
+    );
+    const tenantId = rawTenant.toLowerCase().replace(/[^a-z0-9_\-]/gi, "_");
 
     // 3. Serializar decodificando Decimales a strings compatibles con JSON
     const payload = {
@@ -213,9 +224,10 @@ export async function runSupabaseSync(): Promise<{
 
     return {
       success: true,
-      message: "Sincronización con la nube realizada con éxito.",
+      message: `Sincronización realizada con éxito. Identificador de Local: ${tenantId}`,
       lastSync: syncTimeString,
-      syncedTables: summary
+      syncedTables: summary,
+      tenantId
     };
   } catch (error: any) {
     console.error("Error en runSupabaseSync:", error);

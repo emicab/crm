@@ -8,7 +8,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const result = await runSupabaseSync();
+  const forceFullSync = req.body?.forceFullSync === true;
+  const result = await runSupabaseSync(forceFullSync);
   if (result.success) {
     return res.status(200).json(result);
   } else {
