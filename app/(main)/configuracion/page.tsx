@@ -21,6 +21,12 @@ import {
   Database,
   Cloud,
   Lock,
+  Upload,
+  FileText,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  Trash2,
 } from "lucide-react";
 import QRCode from "qrcode";
 import Button from "@/components/ui/Button";
@@ -201,6 +207,30 @@ export default function ConfiguracionPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [testingArca, setTestingArca] = useState(false);
   const [arcaStatusResult, setArcaStatusResult] = useState<string | null>(null);
+  const [showCertText, setShowCertText] = useState(false);
+  const [showKeyText, setShowKeyText] = useState(false);
+
+  const handleFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: "arcaCert" | "arcaKey"
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        handleChange(field, content);
+        toast.success(
+          field === "arcaCert"
+            ? "Certificado cargado correctamente."
+            : "Clave privada cargada correctamente."
+        );
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleTestArca = async () => {
     setTestingArca(true);
@@ -1229,27 +1259,147 @@ export default function ConfiguracionPage() {
                   <Input label="Inicio de Actividades (AAAA-MM-DD)" value={form.arcaBusinessStartDate || ''} onChange={(e) => handleChange('arcaBusinessStartDate', e.target.value)} placeholder="2020-01-01" />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">Certificado Digital (.crt / .pem)</label>
-                    <textarea
-                      rows={4}
-                      value={form.arcaCert || ''}
-                      onChange={(e) => handleChange('arcaCert', e.target.value)}
-                      placeholder="-----BEGIN CERTIFICATE-----\nMIIFzDCCBLSgAwIBAgIQ..."
-                      className="w-full text-xs font-mono p-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring placeholder:text-foreground-muted/50"
-                    />
+                <div className="grid grid-cols-1 gap-5 pt-2">
+                  {/* CERTIFICADO DIGITAL */}
+                  <div className="flex flex-col gap-2 p-4 bg-background border border-border/80 rounded-xl shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
+                          <FileText size={18} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-foreground">
+                            Certificado Digital ARCA (.crt / .pem)
+                          </label>
+                          {form.arcaCert ? (
+                            <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
+                              <CheckCircle2 size={13} /> Certificado cargado y resguardado
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-foreground-muted block mt-0.5">
+                              No se ha subido ningún certificado digital.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-lg transition-colors">
+                          <Upload size={14} />
+                          {form.arcaCert ? "Reemplazar (.crt)" : "Subir Archivo (.crt/.pem)"}
+                          <input
+                            type="file"
+                            accept=".crt,.pem,.txt"
+                            onChange={(e) => handleFileUpload(e, "arcaCert")}
+                            className="hidden"
+                          />
+                        </label>
+                        {form.arcaCert && (
+                          <button
+                            type="button"
+                            onClick={() => setShowCertText(!showCertText)}
+                            className="p-1.5 text-foreground-muted hover:text-foreground rounded-lg hover:bg-muted transition-colors cursor-pointer"
+                            title={showCertText ? "Ocultar contenido" : "Ver / Editar texto"}
+                          >
+                            {showCertText ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {form.arcaCert && !showCertText && (
+                      <div className="flex items-center justify-between bg-muted/40 p-2.5 rounded-lg border border-border/40 text-xs font-mono text-foreground-muted mt-1">
+                        <span className="truncate max-w-[280px] sm:max-w-md">•••••••••••••••••••••••••••••••••••••••••••• (Certificado Protegido)</span>
+                        <button
+                          type="button"
+                          onClick={() => handleChange("arcaCert", "")}
+                          className="text-destructive hover:underline text-[11px] font-sans font-semibold cursor-pointer shrink-0 ml-2"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
+
+                    {(showCertText || !form.arcaCert) && (
+                      <textarea
+                        rows={3}
+                        value={form.arcaCert || ""}
+                        onChange={(e) => handleChange("arcaCert", e.target.value)}
+                        placeholder="-----BEGIN CERTIFICATE-----\nMIIFzDCCBLSgAwIBAgIQ..."
+                        className="w-full text-xs font-mono p-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring placeholder:text-foreground-muted/50 mt-1"
+                      />
+                    )}
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">Clave Privada (.key)</label>
-                    <textarea
-                      rows={4}
-                      value={form.arcaKey || ''}
-                      onChange={(e) => handleChange('arcaKey', e.target.value)}
-                      placeholder="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC..."
-                      className="w-full text-xs font-mono p-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring placeholder:text-foreground-muted/50"
-                    />
+                  {/* CLAVE PRIVADA */}
+                  <div className="flex flex-col gap-2 p-4 bg-background border border-border/80 rounded-xl shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-amber-500/10 text-amber-600 rounded-lg shrink-0">
+                          <Lock size={18} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-foreground">
+                            Clave Privada ARCA (.key)
+                          </label>
+                          {form.arcaKey ? (
+                            <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-0.5">
+                              <CheckCircle2 size={13} /> Clave privada cargada y resguardada
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-foreground-muted block mt-0.5">
+                              No se ha subido la clave privada aún.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 text-xs font-bold rounded-lg transition-colors">
+                          <Upload size={14} />
+                          {form.arcaKey ? "Reemplazar (.key)" : "Subir Archivo (.key)"}
+                          <input
+                            type="file"
+                            accept=".key,.pem,.txt"
+                            onChange={(e) => handleFileUpload(e, "arcaKey")}
+                            className="hidden"
+                          />
+                        </label>
+                        {form.arcaKey && (
+                          <button
+                            type="button"
+                            onClick={() => setShowKeyText(!showKeyText)}
+                            className="p-1.5 text-foreground-muted hover:text-foreground rounded-lg hover:bg-muted transition-colors cursor-pointer"
+                            title={showKeyText ? "Ocultar clave" : "Ver / Editar texto"}
+                          >
+                            {showKeyText ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {form.arcaKey && !showKeyText && (
+                      <div className="flex items-center justify-between bg-muted/40 p-2.5 rounded-lg border border-border/40 text-xs font-mono text-foreground-muted mt-1">
+                        <span className="truncate max-w-[280px] sm:max-w-md">•••••••••••••••••••••••••••••••••••••••••••• (Clave Privada Protegida por Seguridad)</span>
+                        <button
+                          type="button"
+                          onClick={() => handleChange("arcaKey", "")}
+                          className="text-destructive hover:underline text-[11px] font-sans font-semibold cursor-pointer shrink-0 ml-2"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
+
+                    {(showKeyText || !form.arcaKey) && (
+                      <textarea
+                        rows={3}
+                        value={form.arcaKey || ""}
+                        onChange={(e) => handleChange("arcaKey", e.target.value)}
+                        placeholder="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC..."
+                        className="w-full text-xs font-mono p-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring placeholder:text-foreground-muted/50 mt-1"
+                      />
+                    )}
                   </div>
                 </div>
 
