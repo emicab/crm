@@ -13,8 +13,8 @@
     "dev": "concurrently \"npm:dev:next\" \"npm:dev:electron\"",
     "dev:next": "next dev --hostname 0.0.0.0",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
-    "build": "npx prisma generate && node scripts/migrate-template.js && next build && node scripts/compile-bytecode.js && electron-builder",
-    "publish": "npx prisma generate && node scripts/migrate-template.js && next build && node scripts/compile-bytecode.js && electron-builder --win --x64 --publish always"
+    "build": "npx prisma generate && node scripts/migrate-template.js && next build && npx electron scripts/compile-bytecode.js && electron-builder",
+    "publish": "npx prisma generate && node scripts/migrate-template.js && next build && npx electron scripts/compile-bytecode.js && electron-builder --win --x64 --publish always"
   },
   "dependencies": {
     "@afipsdk/afip.js": "^1.2.3",

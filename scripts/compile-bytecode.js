@@ -59,6 +59,7 @@ require('./preload.jsc');
 try {
   setupDistDir();
   compileFiles();
+  process.exit(0);
 } catch (error) {
   console.error('[Bytecode] Error en el proceso de compilación:', error);
   process.exit(1);
