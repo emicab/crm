@@ -1,6 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "../../../lib/prisma";
 import { createClient } from "@supabase/supabase-js";
+import os from "os";
+
+const getHardwareId = () => {
+  if (process.env.HARDWARE_ID) return process.env.HARDWARE_ID;
+  const hostname = typeof os.hostname === "function" ? os.hostname() : "LOCAL-POS";
+  return `POS-${hostname.toUpperCase().replace(/[^A-Z0-9_\-]/g, "_")}`;
+};
 
 export default async function handler(
   req: NextApiRequest,
@@ -11,7 +18,7 @@ export default async function handler(
   }
 
   try {
-    const { licenseKey } = req.body;
+    const { licenseKey, hardwareId: clientHardwareId } = req.body;
 
     if (!licenseKey || typeof licenseKey !== "string") {
       return res
@@ -20,6 +27,7 @@ export default async function handler(
     }
 
     const cleanKey = licenseKey.trim().toUpperCase();
+    const activeHardwareId = clientHardwareId || getHardwareId();
 
     let targetPlan: "basico" | "pro" = "basico";
     let message = "";
@@ -45,14 +53,15 @@ export default async function handler(
           if (lic.expires_at && new Date(lic.expires_at) < new Date()) {
             return res.status(400).json({ message: "Esta licencia ha expirado." });
           }
-          if (lic.max_activations && lic.activations_count >= lic.max_activations && !lic.hardware_id) {
+          if (lic.max_activations && lic.activations_count >= lic.max_activations && lic.hardware_id && lic.hardware_id !== activeHardwareId) {
             return res.status(400).json({ message: "La licencia alcanzó el máximo de activaciones permitidas." });
           }
 
-          // Incrementar contador de activaciones
+          // Vincular hardware_id e incrementar contador de activaciones en Supabase
           await supabase
             .from("licenses")
             .update({
+              hardware_id: activeHardwareId,
               activations_count: (lic.activations_count || 0) + 1,
               updated_at: new Date().toISOString(),
             })
@@ -98,6 +107,7 @@ export default async function handler(
 
     const updates: Record<string, string> = {
       license_key: cleanKey,
+      hardware_id: activeHardwareId,
       app_plan: targetPlan,
       plan_type: targetPlan,
       unlocked_plan_pro: targetPlan === "pro" ? "true" : "false",

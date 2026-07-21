@@ -2,9 +2,16 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { encryptText, decryptText } from '../../../lib/encryption';
+import os from 'os';
 
 const OFFICIAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://htroigemnwqiugieodmv.supabase.co';
 const OFFICIAL_SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzcwMzg4NywiZXhwIjoyMDk5Mjc5ODg3fQ.CdGy6jjP5pfF6hnlGHrVV3PAWCnJqvQ4AxGTesnnStQ';
+
+const getHardwareId = () => {
+  if (process.env.HARDWARE_ID) return process.env.HARDWARE_ID;
+  const hostname = typeof os.hostname === 'function' ? os.hostname() : 'LOCAL-POS';
+  return `POS-${hostname.toUpperCase().replace(/[^A-Z0-9_\-]/g, '_')}`;
+};
 
 const DEFAULT_SETTINGS: Record<string, string> = {
   taxRate: '21',
@@ -35,6 +42,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   business_profile: 'general',
   license_key: '',
   license_activated_at: '',
+  hardware_id: getHardwareId(),
   supabase_url: OFFICIAL_SUPABASE_URL,
   supabase_anon_key: OFFICIAL_SUPABASE_KEY,
   supabase_last_sync: '',
@@ -55,7 +63,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Garantizar que siempre haya credenciales de Supabase válidas
+      // Garantizar que siempre haya credenciales y hardware_id válidos
+      if (!result.hardware_id) result.hardware_id = getHardwareId();
       if (!result.supabase_url) result.supabase_url = OFFICIAL_SUPABASE_URL;
       if (!result.supabase_anon_key) result.supabase_anon_key = OFFICIAL_SUPABASE_KEY;
 

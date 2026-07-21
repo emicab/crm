@@ -24,7 +24,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
     }
 
     const supabaseUrl = config.supabase_url || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = config.supabase_anon_key || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || config.supabase_anon_key || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     const lastSyncStr = config.supabase_last_sync;
 
     if (!supabaseUrl || !supabaseKey) {
@@ -142,7 +142,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         expectedBalance: fmtDec(c.expectedBalance),
         actualBalance: fmtDec(c.actualBalance),
         difference: fmtDec(c.difference),
-        status: c.status, notes: c.notes, sellerId: c.sellerId,
+        status: c.status, notes: c.notes, sellerId: c.sellerId || 1,
         createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString()
       })),
       AccountBalance: accountBalances.map(a => ({
@@ -151,7 +151,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       })),
       Sale: sales.map(s => ({
         id: s.id, saleDate: s.saleDate.toISOString(), totalAmount: fmtDec(s.totalAmount), tenant_id: tenantId,
-        paymentType: s.paymentType, notes: s.notes, clientId: s.clientId, sellerId: s.sellerId,
+        paymentType: s.paymentType, notes: s.notes, clientId: s.clientId, sellerId: s.sellerId || 1,
         cashRegisterId: s.cashRegisterId, discountCodeApplied: s.discountCodeApplied,
         promotionsApplied: s.promotionsApplied, onAccount: s.onAccount,
         createdAt: s.createdAt.toISOString(), updatedAt: s.updatedAt.toISOString()
