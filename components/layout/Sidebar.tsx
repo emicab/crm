@@ -284,69 +284,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
         )}
 
-        <div className="p-4 border-t border-border space-y-2">
-          <div className="flex space-x-2 justify-center">
-            <button
-              onClick={async () => {
-                try {
-                  if (typeof window !== "undefined" && window.electronAPI) {
-                    const res = await window.electronAPI.backupDatabase();
-                    if (res.success) {
-                      alert(
-                        `Copia de seguridad exportada con éxito en:\n${res.path}`,
-                      );
-                    } else if (!res.canceled) {
-                      alert(
-                        `Error al exportar copia de seguridad: ${res.error}`,
-                      );
-                    }
-                  } else {
-                    alert(
-                      "La copia de seguridad solo está disponible en la versión de escritorio (Electron).",
-                    );
-                  }
-                } catch (err: any) {
-                  alert(`Error: ${err.message}`);
-                }
-              }}
-              className="text-xs px-2 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors cursor-pointer"
-              title="Copia de seguridad"
-            >
-              Exportar BD
-            </button>
-            <button
-              onClick={async () => {
-                try {
-                  if (typeof window !== "undefined" && window.electronAPI) {
-                    const confirmRestore = confirm(
-                      "¿Estás seguro de que deseas importar una base de datos? Esto sobrescribirá la base de datos actual.",
-                    );
-                    if (!confirmRestore) return;
-
-                    const res = await window.electronAPI.restoreDatabase();
-                    if (res.success) {
-                      alert(`${res.message}`);
-                      window.location.reload();
-                    } else if (!res.canceled) {
-                      alert(
-                        `Error al importar copia de seguridad: ${res.error}`,
-                      );
-                    }
-                  } else {
-                    alert(
-                      "La restauración solo está disponible en la versión de escritorio (Electron).",
-                    );
-                  }
-                } catch (err: any) {
-                  alert(`Error: ${err.message}`);
-                }
-              }}
-              className="text-xs px-2 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded transition-colors cursor-pointer"
-              title="Restaurar base de datos"
-            >
-              Importar BD
-            </button>
-          </div>
+        <div className="p-4 border-t border-border space-y-2 text-center">
+          <p className="text-[11px] font-semibold text-foreground-muted">
+            ClinPOS v{pkg.version}
+          </p>
           {storageMode === "safe" && (
             <div className="flex items-center justify-center gap-1.5 text-[9px] text-foreground-muted/70 font-semibold mb-1">
               <span className={`h-1.5 w-1.5 rounded-full ${
