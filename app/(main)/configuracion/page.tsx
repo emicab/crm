@@ -27,7 +27,9 @@ import {
   EyeOff,
   CheckCircle2,
   Trash2,
+  Wand2,
 } from "lucide-react";
+import ArcaWizardModal from "@/components/configuracion/ArcaWizardModal";
 import QRCode from "qrcode";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -209,6 +211,7 @@ export default function ConfiguracionPage() {
   const [arcaStatusResult, setArcaStatusResult] = useState<string | null>(null);
   const [showCertText, setShowCertText] = useState(false);
   const [showKeyText, setShowKeyText] = useState(false);
+  const [showArcaWizard, setShowArcaWizard] = useState(false);
 
   const handleFileUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -1224,6 +1227,39 @@ export default function ConfiguracionPage() {
             <p className="text-sm text-foreground-muted">
               Configurá la emisión de facturas electrónicas con el Web Service de ARCA.
             </p>
+            
+            {/* Banner Asistente Guiado */}
+            <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 bg-blue-500/20 text-blue-400 rounded-lg shrink-0">
+                  <Wand2 size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">¿Querés configurar ARCA sin complicaciones?</h3>
+                  <p className="text-xs text-foreground-muted mt-0.5">
+                    Usá nuestro <strong>Asistente Guiado 1-Clic</strong> para generar la solicitud (.csr) y la clave (.key) de forma automática sin usar comandos de consola.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowArcaWizard(true)}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-md transition-colors shrink-0 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Wand2 size={16} /> Abrir Asistente ARCA
+              </button>
+            </div>
+
+            <ArcaWizardModal
+              isOpen={showArcaWizard}
+              onClose={() => setShowArcaWizard(false)}
+              initialCuit={form.arcaCuit || form.businessCuit || ''}
+              onSuccess={() => {
+                fetch("/api/config")
+                  .then((res) => res.json())
+                  .then((data) => setForm(data));
+              }}
+            />
             
             <div className="flex items-center gap-2 py-2">
               <input
