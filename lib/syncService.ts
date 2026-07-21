@@ -73,7 +73,7 @@ export async function runSupabaseSync(): Promise<{
       }
     });
 
-    const tenantId = process.env.LICENSE_KEY || process.env.HARDWARE_ID || "default_tenant";
+    const tenantId = config.license_key || config.businessCuit || config.businessName || process.env.LICENSE_KEY || process.env.HARDWARE_ID || "default_tenant";
 
     // 3. Serializar decodificando Decimales a strings compatibles con JSON
     const payload = {
