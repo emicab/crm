@@ -78,6 +78,39 @@ const SaleForm = () => {
     setClientName,
   } = useSaleState();
 
+  const handleCloseSuccessModal = React.useCallback(() => {
+    setLastCreatedSale(null);
+    setTimeout(() => {
+      productInputRef.current?.focus();
+    }, 100);
+  }, [setLastCreatedSale, productInputRef]);
+
+  React.useEffect(() => {
+    if (!lastCreatedSale) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleCloseSuccessModal();
+        return;
+      }
+      if (e.key === "Enter") {
+        const activeElement = document.activeElement;
+        if (activeElement?.id === "ws-phone-input") {
+          e.preventDefault();
+          const sendBtn = document.getElementById("ws-send-btn");
+          if (sendBtn) sendBtn.click();
+          return;
+        }
+        e.preventDefault();
+        handleCloseSuccessModal();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lastCreatedSale, handleCloseSuccessModal]);
+
   if (isFetchingInitialData) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -185,6 +218,7 @@ const SaleForm = () => {
         productName={pendingWeightProduct?.name || ""}
         unitType={pendingWeightUnitType}
         initialValue={weightInputValue}
+        maxStock={pendingWeightProduct?.quantityStock}
         onConfirm={handleWeightConfirm}
         onCancel={() => {
           setShowWeightModal(false);
@@ -218,8 +252,14 @@ const SaleForm = () => {
       />
 
       {lastCreatedSale && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden p-6 space-y-4 text-center">
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 cursor-pointer"
+          onClick={handleCloseSuccessModal}
+        >
+          <div
+            className="bg-white border border-border w-full max-w-md rounded-2xl shadow-xl overflow-hidden p-6 space-y-4 text-center cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mx-auto h-12 w-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
               <svg
                 className="h-6 w-6"
@@ -295,6 +335,7 @@ const SaleForm = () => {
                   id="ws-phone-input"
                 />
                 <button
+                  id="ws-send-btn"
                   type="button"
                   onClick={() => {
                     const phoneEl = document.getElementById(
@@ -330,15 +371,7 @@ const SaleForm = () => {
               <Button
                 variant="outline"
                 className="rounded-xl"
-                onClick={() => {
-                  setLastCreatedSale(null);
-                  setTimeout(() => {
-                    const searchInput = document.querySelector(
-                      'input[placeholder*="Escanea o escribe"]',
-                    ) as HTMLInputElement;
-                    searchInput?.focus();
-                  }, 100);
-                }}
+                onClick={handleCloseSuccessModal}
               >
                 Nueva Venta
               </Button>

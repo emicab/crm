@@ -230,9 +230,12 @@ function mainApp() {
             
             const userDbStr = buffer.toString('utf8', 0, bytesRead);
             
-            // Usamos 'Product_supplierId_fkey' que es específico de la nueva relación en Product
-            // 'supplierId' por sí solo daba falso positivo porque ya existía en la tabla Purchase.
-            const checks = ['Product_supplierId_fkey'];
+            // Comprobamos elementos críticos de las últimas migraciones
+            const checks = [
+                'Product_supplierId_fkey',
+                'CREATE TABLE "User"',
+                'CREATE TABLE "AccountBalance"'
+            ];
             const missing = checks.filter(c => !userDbStr.includes(c));
             console.log('[DB] Missing keys:', missing);
             
@@ -261,33 +264,51 @@ function mainApp() {
     function startNextServer() {
         return new Promise((resolve, reject) => {
             if (!app.isPackaged) {
+                console.log('[Server] Modo desarrollo detectado, no se inicia servidor.');
                 return resolve(true);
             }
 
-            const serverPath = path.join(app.getAppPath(), '.next/standalone/server.js');
+            // The standalone server is in extraResources → resources/standalone/
+            const standalonePath = path.join(process.resourcesPath, 'standalone');
+            const serverPath = path.join(standalonePath, 'server.js');
+            console.log('[Server] resourcesPath:', process.resourcesPath);
+            console.log('[Server] Buscando server.js en:', serverPath);
+            console.log('[Server] ¿Existe server.js?', fs.existsSync(serverPath));
+
             if (!fs.existsSync(serverPath)) {
                 return reject(new Error(`El servidor no se encuentra en ${serverPath}`));
             }
+
+            console.log('[Server] DATABASE_URL para el proceso hijo:', process.env.DATABASE_URL);
+            console.log('[Server] Iniciando proceso hijo con ELECTRON_RUN_AS_NODE=1...');
+            console.log('[Server] process.execPath:', process.execPath);
 
             serverProcess = spawn(
                 process.execPath,
                 [serverPath],
                 {
-                    cwd: app.getAppPath(),
+                    cwd: standalonePath,
                     env: {
                         ...process.env,
                         ELECTRON_RUN_AS_NODE: '1',
                         PORT: PORT.toString(),
                         HOSTNAME: '127.0.0.1',
                         APP_SECRET: APP_SECRET,
+                        DATABASE_URL: process.env.DATABASE_URL,
                     },
                 }
             );
 
+            console.log('[Server] Proceso hijo PID:', serverProcess.pid);
+
             serverProcess.stdout.on('data', (data) => console.log(`[Next.js]: ${data.toString().trim()}`));
             serverProcess.stderr.on('data', (data) => console.error(`[Next.js ERR]: ${data.toString().trim()}`));
-            serverProcess.on('error', (err) => reject(err));
+            serverProcess.on('error', (err) => {
+                console.error('[Server] Error al iniciar proceso hijo:', err);
+                reject(err);
+            });
             serverProcess.on('close', (code) => {
+                console.log('[Server] Proceso hijo cerrado con código:', code);
                 if (code !== 0 && !isServerReady) {
                     reject(new Error(`El servidor se cerró inesperadamente con código ${code}`));
                 }
@@ -296,21 +317,28 @@ function mainApp() {
         });
     }
 
-    function checkServerReady(timeout = 20000) {
+    function checkServerReady(timeout = 30000) {
         return new Promise((resolve, reject) => {
             const controller = new AbortController();
+            let attempts = 0;
             const timeoutId = setTimeout(() => {
                 controller.abort();
-                reject(new Error(`El servidor no respondió en ${timeout / 1000} segundos (usando fetch).`));
+                console.error(`[Server] TIMEOUT: El servidor no respondió en ${timeout / 1000}s tras ${attempts} intentos.`);
+                reject(new Error(`El servidor no respondió en ${timeout / 1000} segundos tras ${attempts} intentos.`));
             }, timeout);
 
             const tryConnect = async () => {
+                attempts++;
                 try {
-                    await fetch(`http://127.0.0.1:${PORT}`, { signal: controller.signal });
+                    const res = await fetch(`http://127.0.0.1:${PORT}`, { signal: controller.signal });
+                    console.log(`[Server] Servidor respondió HTTP ${res.status} tras ${attempts} intentos.`);
                     clearTimeout(timeoutId);
                     resolve();
                 } catch (error) {
                     if (error.name !== 'AbortError') {
+                        if (attempts % 5 === 0) {
+                            console.log(`[Server] Intento ${attempts}: servidor aún no responde...`);
+                        }
                         setTimeout(tryConnect, 1000);
                     }
                 }

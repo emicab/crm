@@ -143,15 +143,18 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (['cuenta_corriente', 'analiticas', 'roles', 'backup_nube'].includes(moduleId)) {
         return plan === 'pro';
       }
-      // Venta fraccionada según Rubro
-      if (moduleId === 'venta_fraccionada') {
-        if (modules['venta_fraccionada'] !== undefined) return modules['venta_fraccionada'];
-        return ['fiambreria', 'verduleria', 'panaderia', 'carniceria', 'granel'].includes(businessProfile);
+      // Vendedores, clientes y venta fraccionada siempre habilitados por defecto en POS
+      if (['vendedores', 'clientes', 'venta_fraccionada'].includes(moduleId)) {
+        return true;
       }
-      // Módulos básicos
+      // Si el módulo está definido explícitamente en la config, usar ese valor
+      if (modules[moduleId] !== undefined) {
+        return modules[moduleId];
+      }
+      // Módulos básicos por defecto
       return true;
     },
-    [plan, modules, businessProfile]
+    [plan, modules]
   );
 
   const hasRolePermission = useCallback(

@@ -7,11 +7,12 @@ interface WeightModalProps {
   productName: string;
   unitType: string;
   initialValue?: string;
+  maxStock?: number;
   onConfirm: (quantityInKgOrL: number) => void;
   onCancel: () => void;
 }
 
-const WeightModal: React.FC<WeightModalProps> = ({ isOpen, productName, unitType, initialValue, onConfirm, onCancel }) => {
+const WeightModal: React.FC<WeightModalProps> = ({ isOpen, productName, unitType, initialValue, maxStock, onConfirm, onCancel }) => {
   const [value, setValue] = useState(initialValue || '');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -42,6 +43,11 @@ const WeightModal: React.FC<WeightModalProps> = ({ isOpen, productName, unitType
         <h3 className="text-base font-semibold mb-1">{productName}</h3>
         <p className="text-sm text-foreground-muted mb-4">
           Ingresá cantidad en <strong>{unitType === 'WEIGHT' ? 'gramos' : 'mililitros'}</strong>
+          {maxStock !== undefined && (
+            <span className="block text-amber-600/90 font-semibold mt-1">
+              Disponibles: {(maxStock * 1000).toFixed(0)} {unitType === 'WEIGHT' ? 'g' : 'mL'}
+            </span>
+          )}
         </p>
         <div className="relative">
           <input

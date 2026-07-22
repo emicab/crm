@@ -26,19 +26,11 @@ function compileFiles() {
 
   const mainJsPath = path.join(destDir, 'main.js');
   const mainJscPath = path.join(destDir, 'main.jsc');
-  const preloadJsPath = path.join(destDir, 'preload.js');
-  const preloadJscPath = path.join(destDir, 'preload.jsc');
 
   // Compilar main.js
   bytenode.compileFile({
     filename: mainJsPath,
     output: mainJscPath
-  });
-
-  // Compilar preload.js
-  bytenode.compileFile({
-    filename: preloadJsPath,
-    output: preloadJscPath
   });
 
   // Reemplazar main.js original en destDir con el cargador (loader)
@@ -47,13 +39,8 @@ require('bytenode');
 require('./main.jsc');
 `, 'utf8');
 
-  // Reemplazar preload.js original en destDir con el cargador (loader)
-  fs.writeFileSync(preloadJsPath, `// ClinPOS Obfuscated Preload Loader
-require('bytenode');
-require('./preload.jsc');
-`, 'utf8');
-
-  console.log('[Bytecode] Compilación completada con éxito.');
+  // Dejamos preload.js como texto plano JS tal como fue copiado en setupDistDir()
+  console.log('[Bytecode] Compilación completada con éxito (preload.js se mantiene sin compilar por compatibilidad).');
 }
 
 try {

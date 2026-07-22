@@ -1,6 +1,6 @@
 {
   "name": "clinpos",
-  "version": "1.5.2",
+  "version": "1.5.4",
   "description": "ClinPOS By EmiDev",
   "author": "Emiliano Cabanillas",
   "private": true,
@@ -65,10 +65,10 @@
     },
     "asar": true,
     "asarUnpack": [
-      ".next/standalone",
       "node_modules/.prisma",
       "node_modules/@prisma"
     ],
+    "afterPack": "scripts/after-pack.js",
     "files": [
       "package.json",
       {
@@ -78,14 +78,6 @@
       {
         "from": "public",
         "to": "public"
-      },
-      {
-        "from": ".next/standalone",
-        "to": ".next/standalone"
-      },
-      {
-        "from": ".next/static",
-        "to": ".next/standalone/.next/static"
       },
       {
         "from": "node_modules/.prisma",
@@ -102,12 +94,25 @@
     ],
     "extraFiles": [
       {
-        "from": ".next/standalone/node_modules/.prisma",
-        "to": "resources/app/.next/standalone/node_modules/.prisma"
+        "from": ".next/standalone",
+        "to": "resources/standalone",
+        "filter": [
+          "**/*"
+        ]
       },
       {
-        "from": ".next/standalone/node_modules/@prisma",
-        "to": "resources/app/.next/standalone/node_modules/@prisma"
+        "from": ".next/static",
+        "to": "resources/standalone/.next/static",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "public",
+        "to": "resources/standalone/public",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "extraResources": [

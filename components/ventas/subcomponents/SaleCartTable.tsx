@@ -1,7 +1,48 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ShoppingCart, Trash2 } from "lucide-react";
 import { SaleItemInCart } from "@/types";
 import { formatCurrency } from "@/lib/formatCurrency";
+
+interface QuantityInputProps {
+  item: SaleItemInCart;
+  onChange: (tempId: number, field: "quantity", value: string) => void;
+}
+
+const QuantityInput: React.FC<QuantityInputProps> = ({ item, onChange }) => {
+  const [localValue, setLocalValue] = useState(String(item.quantity));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) {
+      setLocalValue(String(item.quantity));
+    }
+  }, [item.quantity]);
+
+  const handleChange = (val: string) => {
+    const normalized = val.replace(",", ".");
+    if (val === "" || /^[0-9]*\.?[0-9]*$/.test(normalized)) {
+      setLocalValue(val);
+      onChange(item.tempId, "quantity", val);
+    }
+  };
+
+  const handleBlur = () => {
+    setLocalValue(String(item.quantity));
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      id={`qty-input-${item.tempId}`}
+      type="text"
+      inputMode="decimal"
+      value={localValue}
+      onChange={(e) => handleChange(e.target.value)}
+      onBlur={handleBlur}
+      className="w-16 text-center border border-border rounded-lg px-2 py-1 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary font-mono font-medium"
+    />
+  );
+};
 
 interface SaleCartTableProps {
   items: SaleItemInCart[];
@@ -89,20 +130,9 @@ export const SaleCartTable: React.FC<SaleCartTableProps> = ({
                     </span>
                   </td>
                   <td className="p-3 text-center align-middle">
-                    <input
-                      id={`qty-input-${item.tempId}`}
-                      type="number"
-                      value={String(item.quantity)}
-                      onChange={(e) =>
-                        handleItemDetailChange(
-                          item.tempId,
-                          "quantity",
-                          e.target.value,
-                        )
-                      }
-                      min="0"
-                      step="any"
-                      className="w-16 text-center border border-border rounded-lg px-2 py-1 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    <QuantityInput
+                      item={item}
+                      onChange={handleItemDetailChange}
                     />
                   </td>
                   <td className="p-3 text-right align-middle">

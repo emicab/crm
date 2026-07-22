@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Client,
   Seller,
@@ -140,8 +140,8 @@ export const useSaleState = () => {
         const configData = configRes.ok ? await configRes.json() : {};
         setConfig(configData);
 
-        const showVendedores = configData.module_vendedores !== "false";
-        const showCombos = configData.module_combos_promociones !== "false";
+        const showVendedores = isModuleEnabled("vendedores");
+        const showCombos = isModuleEnabled("combos_promociones");
 
         const [sellersData, cajaData, combosData, promosData] =
           await Promise.all([
@@ -165,12 +165,22 @@ export const useSaleState = () => {
               : Promise.resolve([]),
           ]);
 
-        setSellers(sellersData);
+        const normalizedSellers: Seller[] = Array.isArray(sellersData)
+          ? sellersData
+          : (sellersData as any)?.data || [];
+        setSellers(normalizedSellers);
         setHasOpenCaja(!!cajaData.open);
-        if (cajaData.open?.seller?.id) {
+
+        const defaultSellerId = cajaData.open?.seller?.id
+          ? String(cajaData.open.seller.id)
+          : normalizedSellers.length > 0
+          ? String(normalizedSellers[0].id)
+          : "";
+
+        if (defaultSellerId) {
           setFormData((prev) => ({
             ...prev,
-            sellerId: String(cajaData.open.seller.id),
+            sellerId: prev.sellerId || defaultSellerId,
           }));
         }
 
@@ -382,6 +392,21 @@ export const useSaleState = () => {
     comboDiscounts,
   ]);
 
+  const clearCart = useCallback(() => {
+    clearCartPersist();
+    setFormData((prev) => ({
+      ...initialFormData,
+      sellerId: prev.sellerId || (sellers.length > 0 ? String(sellers[0].id) : ""),
+    }));
+    setSelectedClient(null);
+    setClientSearchTerm("");
+    setComboDiscounts({});
+    setInvoiceType('NONE');
+    setClientCuit('');
+    setClientName('');
+    setTimeout(() => productInputRef.current?.focus(), 50);
+  }, [sellers]);
+
   // Atajos de teclado
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -408,19 +433,7 @@ export const useSaleState = () => {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  });
-
-  const clearCart = () => {
-    clearCartPersist();
-    setFormData(initialFormData);
-    setSelectedClient(null);
-    setClientSearchTerm("");
-    setComboDiscounts({});
-    setInvoiceType('NONE');
-    setClientCuit('');
-    setClientName('');
-    setTimeout(() => productInputRef.current?.focus(), 50);
-  };
+  }, [formData.items.length, clearCart]);
 
   const handleClientSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const searchTerm = e.target.value;
@@ -589,6 +602,13 @@ export const useSaleState = () => {
   const handleWeightConfirm = (qtyInKgOrL: number) => {
     if (!pendingWeightProduct) return;
     const product = pendingWeightProduct;
+    let finalQty = qtyInKgOrL;
+
+    if (finalQty > product.quantityStock + 0.0001) {
+      toast.error(`Stock máximo para ${product.name} es ${product.quantityStock}.`);
+      finalQty = product.quantityStock;
+    }
+
     const unitType = pendingWeightUnitType;
     const existing = formData.items.find(
       (i) => i.productId === String(product.id),
@@ -600,8 +620,8 @@ export const useSaleState = () => {
           i.tempId === existing.tempId
             ? {
                 ...i,
-                quantity: qtyInKgOrL,
-                subtotal: qtyInKgOrL * i.priceAtSale,
+                quantity: finalQty,
+                subtotal: finalQty * i.priceAtSale,
               }
             : i,
         ),
@@ -614,8 +634,8 @@ export const useSaleState = () => {
           idx === arr.length - 1
             ? {
                 ...item,
-                quantity: qtyInKgOrL,
-                subtotal: qtyInKgOrL * item.priceAtSale,
+                quantity: finalQty,
+                subtotal: finalQty * item.priceAtSale,
               }
             : item,
         ),
@@ -648,6 +668,9 @@ export const useSaleState = () => {
     const numericValue =
       normalizedValue === "" ? 0 : parseFloat(normalizedValue);
     if (isNaN(numericValue)) return;
+
+    let showStockError: string | null = null;
+
     setFormData((prev) => ({
       ...prev,
       items: prev.items.map((item) => {
@@ -655,13 +678,15 @@ export const useSaleState = () => {
         const updatedItem = { ...item };
         if (field === "quantity") {
           let finalQty = numericValue;
-          if (!isModuleEnabled("venta_fraccionada")) {
+          const isFraccionado =
+            item.unitType === "WEIGHT" ||
+            item.unitType === "VOLUME" ||
+            isModuleEnabled("venta_fraccionada");
+          if (!isFraccionado) {
             finalQty = Math.round(finalQty);
           }
-          if (finalQty > item.availableStock) {
-            toast.error(
-              `Stock máximo para ${item.productName} es ${item.availableStock}.`,
-            );
+          if (finalQty > item.availableStock + 0.0001) {
+            showStockError = `Stock máximo para ${item.productName} es ${item.availableStock}.`;
             updatedItem.quantity = item.availableStock;
           } else updatedItem.quantity = finalQty < 0 ? 0 : finalQty;
         } else updatedItem.priceAtSale = numericValue < 0 ? 0 : numericValue;
@@ -669,6 +694,10 @@ export const useSaleState = () => {
         return updatedItem;
       }),
     }));
+
+    if (showStockError) {
+      toast.error(showStockError);
+    }
   };
 
   const handleRemoveItem = (tempIdToRemove: number) => {
