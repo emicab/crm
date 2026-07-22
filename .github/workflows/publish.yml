@@ -6,18 +6,35 @@ on:
 
 jobs:
   release:
+    permissions:
+      contents: write
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - run: npx prisma generate
-      - run: npx next build
-      - run: npx electron-builder --publish always
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build and Publish Tauri
+        uses: tauri-apps/tauri-action@v0
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'ClinPOS ${{ github.ref_name }}'
+          releaseBody: 'Nueva actualización automática de ClinPOS.'
+          releaseDraft: false
+          prerelease: false

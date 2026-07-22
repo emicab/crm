@@ -17,7 +17,7 @@
     "build:next": "powershell -Command \"if (Test-Path .next) { Remove-Item -Recurse -Force .next }; if (Test-Path dist_tauri) { Remove-Item -Recurse -Force dist_tauri }\"; npx prisma generate && node scripts/migrate-template.js && next build && powershell -Command \"New-Item -ItemType Directory -Path dist_tauri; Copy-Item -Recurse public/* dist_tauri/; New-Item -ItemType Directory -Path .next/standalone/.next -ErrorAction SilentlyContinue; Copy-Item -Recurse .next/static .next/standalone/.next/static; Copy-Item -Recurse public .next/standalone/public; Copy-Item (Get-Command node).Source .next/standalone/node.exe\"",
     "build": "npm run build:next && npx electron scripts/compile-bytecode.js && electron-builder",
     "build:tauri": "powershell -Command \"$env:PATH = \\\"$env:USERPROFILE\\.cargo\\bin;$env:PATH\\\"; npx @tauri-apps/cli build\"",
-    "publish": "npx prisma generate && node scripts/migrate-template.js && next build && npx electron scripts/compile-bytecode.js && electron-builder --win --x64 --publish always"
+    "publish": "echo 'Para publicar una release, simplemente crea un tag en git (ej. git tag v1.5.6) y haz push (git push origin v1.5.6). GitHub Actions se encargará de compilar y subir el instalador a Releases.' && exit 1"
   },
   "dependencies": {
     "@afipsdk/afip.js": "^1.2.3",
