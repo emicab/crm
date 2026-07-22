@@ -1,6 +1,6 @@
 {
   "name": "clinpos",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "ClinPOS By EmiDev",
   "author": "Emiliano Cabanillas",
   "private": true,
@@ -13,13 +13,17 @@
     "dev": "concurrently \"npm:dev:next\" \"npm:dev:electron\"",
     "dev:next": "next dev --hostname 0.0.0.0",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
-    "build": "npx prisma generate && node scripts/migrate-template.js && next build && npx electron scripts/compile-bytecode.js && electron-builder",
+    "dev:tauri": "powershell -Command \"$env:PATH = \\\"$env:USERPROFILE\\.cargo\\bin;$env:PATH\\\"; npx @tauri-apps/cli dev\"",
+    "build:next": "powershell -Command \"if (Test-Path .next) { Remove-Item -Recurse -Force .next }; if (Test-Path dist_tauri) { Remove-Item -Recurse -Force dist_tauri }\"; npx prisma generate && node scripts/migrate-template.js && next build && powershell -Command \"New-Item -ItemType Directory -Path dist_tauri; Copy-Item -Recurse public/* dist_tauri/\"",
+    "build": "npm run build:next && npx electron scripts/compile-bytecode.js && electron-builder",
+    "build:tauri": "powershell -Command \"$env:PATH = \\\"$env:USERPROFILE\\.cargo\\bin;$env:PATH\\\"; npx @tauri-apps/cli build\"",
     "publish": "npx prisma generate && node scripts/migrate-template.js && next build && npx electron scripts/compile-bytecode.js && electron-builder --win --x64 --publish always"
   },
   "dependencies": {
     "@afipsdk/afip.js": "^1.2.3",
     "@prisma/client": "^6.4.0",
     "@supabase/supabase-js": "^2.110.2",
+    "@tauri-apps/api": "^2.2.0",
     "bytenode": "^1.6.0",
     "class-variance-authority": "^0.7.1",
     "driver.js": "^1.6.0",
@@ -46,6 +50,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "concurrently": "^9.1.2",
+    "@tauri-apps/cli": "^2.2.0",
     "electron": "^36.3.2",
     "electron-builder": "^26.0.12",
     "eslint": "^9",
@@ -79,18 +84,14 @@
         "from": "public",
         "to": "public"
       },
-      {
-        "from": "node_modules/.prisma",
-        "to": "node_modules/.prisma"
-      },
-      {
-        "from": "node_modules/@prisma/client/libquery_engine-windows.dll.node",
-        "to": "node_modules/@prisma/client/libquery_engine-windows.dll.node"
-      },
-      {
-        "from": "node_modules/prisma",
-        "to": "node_modules/prisma"
-      }
+      "!node_modules/prisma/**/*",
+      "!node_modules/@next/swc*/**/*",
+      "!node_modules/typescript/**/*",
+      "!node_modules/@types/**/*",
+      "!node_modules/eslint*/**/*",
+      "!node_modules/tailwindcss/**/*",
+      "!node_modules/@tailwindcss/**/*",
+      "!node_modules/postcss/**/*"
     ],
     "extraFiles": [
       {
@@ -130,7 +131,8 @@
       "output": "dist_electron"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "compression": "maximum"
     },
     "mac": {
       "target": "dmg"
