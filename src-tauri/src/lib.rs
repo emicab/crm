@@ -1,6 +1,6 @@
-use std::fs;
+use std::fs::{self, File};
 use std::os::windows::process::CommandExt;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::Manager;
 
@@ -55,6 +55,11 @@ pub fn run() {
         let server_js = standalone_dir.join("server.js");
         let local_node = standalone_dir.join("node.exe");
 
+        // DEBUG: Write paths to temp dir
+        let debug_info = format!("resource_dir: {:?}\napp_data_dir: {:?}\nstandalone_dir: {:?}\nserver_js exists: {}\nlocal_node exists: {}\n", 
+            resource_dir, app_data_dir, standalone_dir, server_js.exists(), local_node.exists());
+        let _ = fs::write(std::env::temp_dir().join("clinpos_debug.txt"), debug_info);
+
         if server_js.exists() {
           let node_bin = if local_node.exists() {
             local_node.to_string_lossy().to_string()
@@ -62,13 +67,23 @@ pub fn run() {
             "node".to_string()
           };
 
-          let mut cmd = Command::new(node_bin);
-          cmd.arg(&server_js);
-          cmd.current_dir(&standalone_dir);
+          let log_file_path = app_data_dir.join("server.log");
+          let log_file = File::create(&log_file_path).expect("failed to create log file");
+          let err_file = log_file.try_clone().expect("failed to clone log file");
+
+          let node_bin_clean = node_bin.replace("\\\\?\\", "");
+          let server_js_clean = server_js.to_string_lossy().replace("\\\\?\\", "");
+          let standalone_dir_clean = standalone_dir.to_string_lossy().replace("\\\\?\\", "");
+
+          let mut cmd = Command::new(node_bin_clean);
+          cmd.arg(server_js_clean);
+          cmd.current_dir(standalone_dir_clean);
           cmd.env("PORT", "3001");
           cmd.env("NODE_ENV", "production");
           cmd.env("DATABASE_URL", db_url);
           cmd.creation_flags(CREATE_NO_WINDOW);
+          cmd.stdout(Stdio::from(log_file));
+          cmd.stderr(Stdio::from(err_file));
 
           if let Ok(child) = cmd.spawn() {
             if let Ok(mut state) = app.state::<ServerState>().0.lock() {
