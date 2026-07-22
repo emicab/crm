@@ -47,10 +47,10 @@
   <script>
     (function () {
       function pollServer() {
-        fetch('http://localhost:3001/api/config')
+        fetch('http://127.0.0.1:3001/api/config')
           .then(function (res) {
             if (res.ok || res.status < 500) {
-              window.location.href = 'http://localhost:3001';
+              window.location.href = 'http://127.0.0.1:3001';
             } else {
               setTimeout(pollServer, 300);
             }
