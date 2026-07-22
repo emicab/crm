@@ -23,9 +23,16 @@ pub fn run() {
         let resource_dir = app.path().resource_dir().unwrap_or_default();
         let standalone_dir = resource_dir.join("standalone");
         let server_js = standalone_dir.join("server.js");
+        let local_node = standalone_dir.join("node.exe");
 
         if server_js.exists() {
-          let mut cmd = Command::new("node");
+          let node_bin = if local_node.exists() {
+            local_node.to_string_lossy().to_string()
+          } else {
+            "node".to_string()
+          };
+
+          let mut cmd = Command::new(node_bin);
           cmd.arg(&server_js);
           cmd.current_dir(&standalone_dir);
           cmd.env("PORT", "3001");
