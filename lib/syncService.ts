@@ -24,7 +24,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
     }
 
     const supabaseUrl = config.supabase_url || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || config.supabase_anon_key || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    const supabaseKey = config.supabase_service_role_key || process.env.SUPABASE_SERVICE_ROLE_KEY || config.supabase_anon_key || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     const lastSyncStr = config.supabase_last_sync;
 
     if (!supabaseUrl || !supabaseKey) {
