@@ -31,24 +31,38 @@ export default function PinLoginModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingUsers, setIsFetchingUsers] = useState(true);
   const [isShaking, setIsShaking] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupStep, setSetupStep] = useState(0); // 0: new pin, 1: confirm pin
+  const [setupPin, setSetupPin] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
 
-    const fetchUsers = async () => {
+    const fetchUsersAndConfig = async () => {
       setIsFetchingUsers(true);
       try {
-        const res = await fetch("/api/users");
-        if (!res.ok) throw new Error();
-        const data = await res.json();
+        const [usersRes, configRes] = await Promise.all([
+          fetch("/api/users"),
+          fetch("/api/config")
+        ]);
+        if (!usersRes.ok || !configRes.ok) throw new Error();
+        
+        const data = await usersRes.json();
+        const config = await configRes.json();
+        
         setUsers(data);
+
+        if (config.admin_pin_setup !== "true" && data.length === 1 && data[0].name === "Administrador") {
+          setNeedsSetup(true);
+          setSelectedUser(data[0]);
+        }
       } catch {
-        toast.error("Error al cargar usuarios de seguridad.");
+        toast.error("Error al cargar datos de seguridad.");
       } finally {
         setIsFetchingUsers(false);
       }
     };
-    fetchUsers();
+    fetchUsersAndConfig();
   }, [isOpen]);
 
   // Escuchar teclado físico (Teclado numérico / Numpad USB / números superiores)
@@ -78,8 +92,66 @@ export default function PinLoginModal({
       const newPin = pin + num;
       setPin(newPin);
       if (newPin.length === 4) {
-        verifyPin(newPin);
+        if (needsSetup) {
+          handleSetupFlow(newPin);
+        } else {
+          verifyPin(newPin);
+        }
       }
+    }
+  };
+
+  const handleSetupFlow = (enteredPin: string) => {
+    if (setupStep === 0) {
+      setSetupPin(enteredPin);
+      setSetupStep(1);
+      setPin("");
+    } else {
+      if (enteredPin === setupPin) {
+        saveSetupPin(enteredPin);
+      } else {
+        toast.error("Los PINs no coinciden. Intentá nuevamente.");
+        setIsShaking(true);
+        setTimeout(() => setIsShaking(false), 500);
+        setSetupStep(0);
+        setSetupPin("");
+        setPin("");
+      }
+    }
+  };
+
+  const saveSetupPin = async (finalPin: string) => {
+    if (!selectedUser) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/users/${selectedUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: finalPin }),
+      });
+      if (!res.ok) throw new Error("Error al configurar PIN.");
+
+      await fetch("/api/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_pin_setup: "true" }),
+      });
+
+      toast.success("¡PIN configurado correctamente!");
+      setNeedsSetup(false);
+      
+      onLoginSuccess(selectedUser);
+      setSelectedUser(null);
+      setPin("");
+    } catch (err: any) {
+      toast.error(err.message || "Error al configurar PIN");
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      setSetupStep(0);
+      setSetupPin("");
+      setPin("");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -130,11 +202,15 @@ export default function PinLoginModal({
           <div className="bg-primary/10 text-primary p-3 rounded-full mb-3 shadow-inner">
             <Lock size={28} className="animate-pulse" />
           </div>
-          <h2 className="text-2xl font-bold uppercase tracking-tight">Acceso de Seguridad</h2>
+          <h2 className="text-2xl font-bold uppercase tracking-tight">
+            {needsSetup ? "Crear PIN de Administrador" : "Acceso de Seguridad"}
+          </h2>
           <p className="text-xs text-foreground-muted mt-1.5 max-w-[280px]">
-            {selectedUser 
-              ? `Ingresá el código PIN de 4 dígitos para ${selectedUser.name}` 
-              : "Seleccioná tu cuenta para iniciar sesión en ClinPOS"}
+            {needsSetup 
+              ? (setupStep === 0 ? "Creá un código PIN de 4 dígitos para tu cuenta" : "Confirmá el código PIN que acabás de ingresar")
+              : selectedUser 
+                ? `Ingresá el código PIN de 4 dígitos para ${selectedUser.name}` 
+                : "Seleccioná tu cuenta para iniciar sesión en ClinPOS"}
           </p>
         </div>
 
@@ -181,13 +257,15 @@ export default function PinLoginModal({
         {/* CONTENIDO 2: Numpad / Teclado PIN */}
         {selectedUser && (
           <div className="w-full space-y-6 flex flex-col items-center">
-            {/* Botón de Atrás */}
-            <button
-              onClick={() => { setSelectedUser(null); setPin(""); }}
-              className="flex items-center gap-1 text-xs text-foreground-muted hover:text-foreground self-start font-semibold transition-colors"
-            >
-              <ChevronLeft size={14} /> Elegir otro usuario
-            </button>
+            {/* Botón de Atrás (solo si no es setup) */}
+            {!needsSetup && (
+              <button
+                onClick={() => { setSelectedUser(null); setPin(""); }}
+                className="flex items-center gap-1 text-xs text-foreground-muted hover:text-foreground self-start font-semibold transition-colors"
+              >
+                <ChevronLeft size={14} /> Elegir otro usuario
+              </button>
+            )}
 
             {/* Display de Puntos PIN */}
             <div className={`flex gap-4 justify-center items-center h-12 w-full transition-transform ${isShaking ? "animate-shake" : ""}`}>

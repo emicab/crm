@@ -46,6 +46,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   supabase_url: OFFICIAL_SUPABASE_URL,
   supabase_anon_key: OFFICIAL_SUPABASE_KEY,
   supabase_last_sync: '',
+  admin_pin_setup: 'false',
 };
 
 const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey'];
