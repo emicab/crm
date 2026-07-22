@@ -1,7 +1,10 @@
 use std::fs;
+use std::os::windows::process::CommandExt;
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use tauri::Manager;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 struct ServerState(Mutex<Option<Child>>);
 
@@ -63,9 +66,9 @@ pub fn run() {
           cmd.arg(&server_js);
           cmd.current_dir(&standalone_dir);
           cmd.env("PORT", "3001");
-          cmd.env("HOSTNAME", "127.0.0.1");
           cmd.env("NODE_ENV", "production");
           cmd.env("DATABASE_URL", db_url);
+          cmd.creation_flags(CREATE_NO_WINDOW);
 
           if let Ok(child) = cmd.spawn() {
             if let Ok(mut state) = app.state::<ServerState>().0.lock() {
@@ -77,7 +80,7 @@ pub fn run() {
         let app_handle = app.handle().clone();
         std::thread::spawn(move || {
           let port = 3001;
-          let target_url = format!("http://127.0.0.1:{}", port);
+          let target_url = format!("http://localhost:{}", port);
 
           for _ in 0..120 {
             if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
