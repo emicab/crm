@@ -21,14 +21,25 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivationSuccess
         setIsLoading(true);
         setMessage('');
 
-        const result = await window.licenseAPI.activate(licenseKey);
-        setIsLoading(false);
+        try {
+            const res = await fetch('/api/license/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ licenseKey })
+            });
+            const data = await res.json();
+            
+            setIsLoading(false);
 
-        if (result.success) {
-            setMessage(result.message);
-            setTimeout(onActivationSuccess, 1500);
-        } else {
-            setMessage(`Error: ${result.message}`);
+            if (res.ok) {
+                setMessage(data.message || 'Licencia activada con éxito');
+                setTimeout(onActivationSuccess, 1500);
+            } else {
+                setMessage(`Error: ${data.message || 'Error al activar'}`);
+            }
+        } catch (error) {
+            setIsLoading(false);
+            setMessage('Error: No se pudo conectar con el servidor.');
         }
     };
 

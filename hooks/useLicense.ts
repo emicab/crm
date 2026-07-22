@@ -17,15 +17,16 @@ export function useLicense(): LicenseState {
 
   useEffect(() => {
     const check = async () => {
-      if (typeof window !== 'undefined' && window.licenseAPI) {
-        try {
-          const result = await window.licenseAPI.check();
-          setTier((result as any).tier === 'free' ? 'free' : 'pro');
-        } catch {
-          setTier('pro');
+      try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+          const config = await res.json();
+          setTier(config.app_plan === 'pro' || config.unlocked_plan_pro === 'true' ? 'pro' : 'free');
+        } else {
+          setTier('free');
         }
-      } else {
-        setTier('pro');
+      } catch {
+        setTier('free');
       }
       setIsLoading(false);
     };

@@ -13,16 +13,27 @@ const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
     const checkLicense = async () => {
-        if (window.licenseAPI) {
-            setIsLoading(true);
-            const status = await window.licenseAPI.check();
-            setIsLicensed(status.isActivated);
-            setIsFree((status as any).tier === 'free');
-            setIsLoading(false);
-        } else {
-            console.warn('licenseAPI no está lista, reintentando en 100ms...');
-            setTimeout(checkLicense, 100);
+        setIsLoading(true);
+        try {
+            const res = await fetch('/api/config');
+            if (res.ok) {
+                const config = await res.json();
+                const hasLicense = !!config.license_key && config.license_key.trim() !== '';
+                const isFreeMode = localStorage.getItem('free_mode_active') === 'true';
+                
+                setIsLicensed(hasLicense);
+                setIsFree(!hasLicense && isFreeMode);
+            } else {
+                console.warn('API returned non-OK status');
+                setTimeout(checkLicense, 1000);
+                return;
+            }
+        } catch (e) {
+            console.warn('API no está lista, reintentando en 500ms...', e);
+            setTimeout(checkLicense, 500);
+            return;
         }
+        setIsLoading(false);
     };
 
     useEffect(() => {
@@ -30,10 +41,8 @@ const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
     }, []);
 
     const handleContinueFree = async () => {
-        if (window.licenseAPI && (window.licenseAPI as any).setFreeMode) {
-            await (window.licenseAPI as any).setFreeMode();
-            checkLicense();
-        }
+        localStorage.setItem('free_mode_active', 'true');
+        checkLicense();
     };
 
     if (isLoading) {
