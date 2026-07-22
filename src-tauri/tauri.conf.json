@@ -26,6 +26,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": [
+      "../.next/standalone/**/*",
+      "../prisma/crm_template.db",
+      "../prisma/schema.prisma"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
