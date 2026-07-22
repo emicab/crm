@@ -23,17 +23,8 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       config[s.key] = s.value;
     }
 
-    const FALLBACK_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzcwMzg4NywiZXhwIjoyMDk5Mjc5ODg3fQ.CdGy6jjP5pfF6hnlGHrVV3PAWCnJqvQ4AxGTesnnStQ";
-
     const supabaseUrl = config.supabase_url || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    let supabaseKey = config.supabase_service_role_key || process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseKey) {
-      if (config.supabase_anon_key && config.supabase_anon_key.includes("service_role")) {
-        supabaseKey = config.supabase_anon_key;
-      } else {
-        supabaseKey = FALLBACK_SERVICE_KEY;
-      }
-    }
+    const supabaseKey = config.supabase_service_role_key || process.env.SUPABASE_SERVICE_ROLE_KEY || config.supabase_anon_key || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     const lastSyncStr = config.supabase_last_sync;
 
     if (!supabaseUrl || !supabaseKey) {
