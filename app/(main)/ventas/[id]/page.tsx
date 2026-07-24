@@ -777,8 +777,8 @@ const SaleDetailPage = () => {
 
             <div className="mb-2 text-xs border-b border-black pb-2">
                 <p><strong>Cliente:</strong> {sale.client ? `${sale.client.firstName} ${sale.client.lastName || ''}`.trim() : 'Consumidor Final'}</p>
-                {sale.client?.documentNumber && <p><strong>DNI/CUIT:</strong> {sale.client.documentNumber}</p>}
-                {sale.invoice?.clientCuit && sale.invoice.clientCuit !== sale.client?.documentNumber && <p><strong>CUIT Factura:</strong> {sale.invoice.clientCuit}</p>}
+                {sale.client?.cuit && <p><strong>DNI/CUIT:</strong> {sale.client.cuit}</p>}
+                {sale.invoice?.clientCuit && sale.invoice.clientCuit !== sale.client?.cuit && <p><strong>CUIT Factura:</strong> {sale.invoice.clientCuit}</p>}
                 <p><strong>Vendedor:</strong> {sale.seller?.name || 'Mostrador'}</p>
                 <p><strong>Cond. Pago:</strong> {getPaymentTypeDisplay(sale.paymentType)}</p>
             </div>
@@ -797,7 +797,7 @@ const SaleDetailPage = () => {
                             <td className="py-1 align-top">{item.quantity}</td>
                             <td className="py-1 align-top pr-1">
                                 {item.product?.name || 'Producto eliminado'}
-                                {Number(item.discountPercent) > 0 && <span className="block text-[10px]">(-{item.discountPercent}%)</span>}
+                                {Number((item as any).discountPercent) > 0 && <span className="block text-[10px]">(-{(item as any).discountPercent}%)</span>}
                             </td>
                             <td className="py-1 align-top text-right">${parseFloat(String(item.subtotal)).toLocaleString('es-AR', {minimumFractionDigits:2})}</td>
                         </tr>
