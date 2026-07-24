@@ -159,6 +159,7 @@ export interface Brand {
     saleDate: string; // O Date
     totalAmount: number; // Prisma Decimal se convierte a string/number
     paymentType: PaymentTypeEnum;
+    status: string; // PENDING | COMPLETED | CANCELLED
     notes?: string | null;
     clientId?: number | null;
     client?: Client | null;
