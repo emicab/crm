@@ -1,13 +1,98 @@
 use std::fs::{self, File};
 use std::os::windows::process::CommandExt;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{Manager, State};
 use keyring::Entry;
 use rand::Rng;
+use rusqlite::Connection;
 use serde::Serialize;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+// ── Auto-migration system ──────────────────────────────────────────────
+struct Migration {
+    version: i32,
+    name: &'static str,
+    sql: &'static str,
+}
+
+/// All schema migrations for the production database.
+/// When adding new columns/tables to schema.prisma, also add a Migration entry here
+/// so that existing production databases get updated automatically on app startup.
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "add_sale_status",
+        sql: r#"ALTER TABLE "Sale" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'COMPLETED'"#,
+    },
+];
+
+fn run_migrations(db_path: &Path) {
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[Migrations] Failed to open database: {}", e);
+            return;
+        }
+    };
+
+    // Create the migrations tracking table if it doesn't exist
+    if let Err(e) = conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS _app_migrations (
+            version INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )"
+    ) {
+        eprintln!("[Migrations] Failed to create tracking table: {}", e);
+        return;
+    }
+
+    for migration in MIGRATIONS {
+        // Check if already applied
+        let already_applied: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM _app_migrations WHERE version = ?1",
+                [migration.version],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if already_applied {
+            continue;
+        }
+
+        println!("[Migrations] Applying v{}: {} ...", migration.version, migration.name);
+
+        match conn.execute_batch(migration.sql) {
+            Ok(_) => {
+                // Record migration as applied
+                let _ = conn.execute(
+                    "INSERT INTO _app_migrations (version, name) VALUES (?1, ?2)",
+                    rusqlite::params![migration.version, migration.name],
+                );
+                println!("[Migrations] ✓ v{} applied successfully", migration.version);
+            }
+            Err(e) => {
+                // If the error is "duplicate column", the migration was already
+                // applied manually — record it and move on.
+                let err_msg = e.to_string();
+                if err_msg.contains("duplicate column") || err_msg.contains("already exists") {
+                    let _ = conn.execute(
+                        "INSERT INTO _app_migrations (version, name) VALUES (?1, ?2)",
+                        rusqlite::params![migration.version, migration.name],
+                    );
+                    println!("[Migrations] ✓ v{} already applied (recorded)", migration.version);
+                } else {
+                    eprintln!("[Migrations] ✗ v{} failed: {}", migration.version, e);
+                }
+            }
+        }
+    }
+}
+// ── End auto-migration system ──────────────────────────────────────────
 
 struct ServerState(Mutex<Option<Child>>);
 
@@ -133,6 +218,9 @@ pub fn run() {
         if !target_db.exists() && template_db.exists() {
           let _ = fs::copy(&template_db, &target_db);
         }
+
+        // Run auto-migrations before starting the server
+        run_migrations(&target_db);
 
         let db_url = format!("file:{}", target_db.to_string_lossy().replace('\\', "/"));
 
