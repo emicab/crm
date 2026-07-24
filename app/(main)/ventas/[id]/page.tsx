@@ -30,6 +30,7 @@ import { motion, AnimatePresence } from "motion/react";
 interface SaleItemDetail extends Omit<SaleItem, "product"> {
     product: Product | null;
     subtotal: number;
+    discountPercent?: number | string | null;
 }
 interface SaleDetail
     extends Omit<Sale, "items" | "totalAmount" | "priceAtSale"> {
@@ -797,7 +798,7 @@ const SaleDetailPage = () => {
                             <td className="py-1 align-top">{item.quantity}</td>
                             <td className="py-1 align-top pr-1">
                                 {item.product?.name || 'Producto eliminado'}
-                                {Number((item as any).discountPercent) > 0 && <span className="block text-[10px]">(-{(item as any).discountPercent}%)</span>}
+                                {Number(item.discountPercent) > 0 && <span className="block text-[10px]">(-{item.discountPercent}%)</span>}
                             </td>
                             <td className="py-1 align-top text-right">${parseFloat(String(item.subtotal)).toLocaleString('es-AR', {minimumFractionDigits:2})}</td>
                         </tr>
