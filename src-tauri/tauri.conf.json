@@ -26,6 +26,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "resources": [
       "../app_standalone/**/*",
@@ -51,7 +52,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/emicab/crm/releases/latest/download/updater.json"
+        "https://github.com/emicab/crm/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENENDIwNzlBNTlDNUQ1MTMKUldRVDFjVlptZ2RDemF5WXNuM0VqZ3N0aS80RTY3YTczTFZHSjQ3ditCU3k2ajRzcFArNncvcU8K"
     }
