@@ -3,6 +3,7 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { useSaleState } from "@/hooks/useSaleState";
 import { SaleInputSection } from "./subcomponents/SaleInputSection";
@@ -16,6 +17,7 @@ import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 import CajaModal from "./CajaModal";
 
 const SaleForm = () => {
+  const router = useRouter();
   const {
     isModuleEnabled,
     formData,
@@ -68,6 +70,7 @@ const SaleForm = () => {
     handleFormChange,
     handleSelectCombo,
     handleSubmit,
+    handleSaveOrder,
     handleOpenCajaFromSale,
     config,
     invoiceType,
@@ -197,6 +200,7 @@ const SaleForm = () => {
             appliedPromotion={appliedPromotion}
             validDiscountCode={validDiscountCode}
             isLoading={isLoading}
+            onSaveOrder={handleSaveOrder}
           />
 
           {/* Quick-Add Panel */}
@@ -278,12 +282,11 @@ const SaleForm = () => {
 
             <div className="space-y-1">
               <h3 className="text-lg font-bold text-foreground">
-                ¡Venta Registrada!
+                {(lastCreatedSale as any).status === 'PENDING' ? "¡Pedido Guardado!" : "¡Venta Registrada!"}
               </h3>
               <p className="text-xs text-foreground-muted">
-                El comprobante de venta N°{" "}
-                <strong>#{lastCreatedSale.id}</strong> se ha registrado con
-                éxito.
+                El {(lastCreatedSale as any).status === 'PENDING' ? "pedido" : "comprobante de venta"} N°{" "}
+                <strong>#{lastCreatedSale.id}</strong> se ha {(lastCreatedSale as any).status === 'PENDING' ? "guardado" : "registrado"} con éxito.
               </p>
             </div>
 
@@ -368,6 +371,13 @@ const SaleForm = () => {
             </div>
 
             <div className="pt-4 border-t border-border flex justify-end gap-2 text-xs">
+              <Button
+                variant="outline"
+                className="rounded-xl border-emerald-600/30 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => router.push(`/ventas/${lastCreatedSale.id}`)}
+              >
+                Ver Detalles
+              </Button>
               <Button
                 variant="outline"
                 className="rounded-xl"

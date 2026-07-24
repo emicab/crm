@@ -14,6 +14,7 @@ interface SaleTotalsPanelProps {
   appliedPromotion: any;
   validDiscountCode: { code: string; percent: number } | null;
   isLoading: boolean;
+  onSaveOrder: () => void;
 }
 
 export const SaleTotalsPanel: React.FC<SaleTotalsPanelProps> = ({
@@ -23,6 +24,7 @@ export const SaleTotalsPanel: React.FC<SaleTotalsPanelProps> = ({
   appliedPromotion,
   validDiscountCode,
   isLoading,
+  onSaveOrder,
 }) => {
   return (
     <div className="bg-slate-900 border border-slate-800 text-slate-100 p-5 rounded-2xl shadow-xl space-y-4 relative overflow-hidden">
@@ -100,7 +102,7 @@ export const SaleTotalsPanel: React.FC<SaleTotalsPanelProps> = ({
       </div>
 
       {/* Gran Botón de Ejecutar Cobro (F2) */}
-      <div className="pt-2">
+      <div className="pt-2 flex flex-col gap-2">
         <button
           type="submit"
           disabled={isLoading || items.length === 0}
@@ -114,6 +116,18 @@ export const SaleTotalsPanel: React.FC<SaleTotalsPanelProps> = ({
             <>
               <Ticket size={16} /> F2 - Registrar Venta
             </>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onSaveOrder}
+          disabled={isLoading || items.length === 0}
+          className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800/50 disabled:text-slate-600 text-slate-300 font-bold rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 text-xs uppercase tracking-wide border border-slate-700"
+        >
+          {isLoading ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <>F3 - Guardar Pedido</>
           )}
         </button>
       </div>

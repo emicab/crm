@@ -22,7 +22,10 @@ import {
   Percent,
   AlertTriangle,
   ChevronDown,
+  RefreshCcw,
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { check } from "@tauri-apps/plugin-updater";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -159,7 +162,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}
   `;
 
-  // Process nav groups with Pro lock indicators
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const checkForUpdates = async () => {
+    try {
+      setIsCheckingUpdate(true);
+      const update = await check();
+      if (update) {
+        toast.success(`Actualización ${update.version} encontrada. Descargando...`);
+        await update.downloadAndInstall();
+        toast.success("¡Actualización instalada! Por favor, cierra y vuelve a abrir la aplicación para aplicar los cambios.");
+      } else {
+        toast.success("La aplicación está en su última versión.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "No se pudo buscar actualizaciones en este momento.");
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  // Filtrar los grupos según módulos activos y rol de usuarios
   const filteredGroups = navGroups.map((group) => {
     const processedItems = group.items.map((item) => {
       const isEnabled = !item.moduleId || isModuleEnabled(item.moduleId);
@@ -285,9 +308,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         )}
 
         <div className="p-4 border-t border-border space-y-2 text-center">
-          <p className="text-[11px] font-semibold text-foreground-muted">
-            ClinPOS v{pkg.version}
-          </p>
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-[11px] font-semibold text-foreground-muted">
+              ClinPOS v{pkg.version}
+            </p>
+            <button
+              onClick={checkForUpdates}
+              disabled={isCheckingUpdate}
+              className="text-[10px] font-bold text-primary hover:text-primary-dark transition-colors flex items-center gap-1 bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded-full cursor-pointer disabled:opacity-50"
+              title="Buscar actualizaciones"
+            >
+              <RefreshCcw size={10} className={isCheckingUpdate ? "animate-spin" : ""} />
+              Actualizar
+            </button>
+          </div>
           {storageMode === "safe" && (
             <div className="flex items-center justify-center gap-1.5 text-[9px] text-foreground-muted/70 font-semibold mb-1">
               <span className={`h-1.5 w-1.5 rounded-full ${

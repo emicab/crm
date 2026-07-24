@@ -23,8 +23,10 @@ export default function ConfigBackupTab({
   const handleExportBackup = async () => {
     setIsBackingUp(true);
     try {
-      if (typeof window !== 'undefined' && (window as any).electronAPI?.backupDatabase) {
-        const res = await (window as any).electronAPI.backupDatabase();
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const res = await invoke<{ success: boolean; path?: string; error?: string; canceled?: boolean }>('backup_database');
+        
         if (res.success) {
           toast.success(`Copia de seguridad exportada en: ${res.path}`);
         } else if (!res.canceled) {
@@ -47,8 +49,10 @@ export default function ConfigBackupTab({
 
     setIsRestoring(true);
     try {
-      if (typeof window !== 'undefined' && (window as any).electronAPI?.restoreDatabase) {
-        const res = await (window as any).electronAPI.restoreDatabase();
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const res = await invoke<{ success: boolean; message?: string; error?: string; canceled?: boolean }>('restore_database');
+        
         if (res.success) {
           toast.success(res.message || 'Base de datos restaurada con éxito.');
           setTimeout(() => {

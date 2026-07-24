@@ -19,87 +19,6 @@ import ConfigBackupTab from "@/components/configuracion/tabs/ConfigBackupTab";
 import ConfigArcaTab from "@/components/configuracion/tabs/ConfigArcaTab";
 import ConfigPaymentModal from "@/components/configuracion/modals/ConfigPaymentModal";
 
-// Ajustes preestablecidos por rubro de negocio
-const PROFILE_PRESETS: Record<
-  string,
-  { name: string; desc: string; modules: Record<string, boolean> }
-> = {
-  kiosco: {
-    name: "Kiosco / Almacén",
-    desc: "Venta rápida por unidad, fiado a clientes frecuentes y control de gastos.",
-    modules: {
-      clientes: true,
-      vendedores: false,
-      compras: false,
-      gastos: true,
-      combos_promociones: false,
-      venta_fraccionada: false,
-      analiticas: false,
-      cuenta_corriente: true,
-      roles: false,
-    },
-  },
-  fiambreria: {
-    name: "Fiambrería / Granel",
-    desc: "Carga de peso exacto (gramos), stock e inventario y cuenta corriente.",
-    modules: {
-      clientes: true,
-      vendedores: false,
-      compras: true,
-      gastos: true,
-      combos_promociones: false,
-      venta_fraccionada: true,
-      analiticas: false,
-      cuenta_corriente: true,
-      roles: false,
-    },
-  },
-  gastronomia: {
-    name: "Pizzería / Gastronomía",
-    desc: "Venta de combos (promociones), gastos diarios y notas/comandados de cocina.",
-    modules: {
-      clientes: false,
-      vendedores: false,
-      compras: false,
-      gastos: true,
-      combos_promociones: true,
-      venta_fraccionada: false,
-      analiticas: false,
-      cuenta_corriente: false,
-      roles: false,
-    },
-  },
-  ferreteria: {
-    name: "Ferretería / Corralón",
-    desc: "Proveedores, stock por códigos, control multi-vendedor y cobro fiado.",
-    modules: {
-      clientes: true,
-      vendedores: true,
-      compras: true,
-      gastos: true,
-      combos_promociones: false,
-      venta_fraccionada: false,
-      analiticas: false,
-      cuenta_corriente: true,
-      roles: false,
-    },
-  },
-  general: {
-    name: "Comercio General",
-    desc: "Perfil balanceado con acceso a todas las herramientas básicas de venta y stock.",
-    modules: {
-      clientes: true,
-      vendedores: true,
-      compras: true,
-      gastos: true,
-      combos_promociones: true,
-      venta_fraccionada: true,
-      analiticas: true,
-      cuenta_corriente: true,
-      roles: true,
-    },
-  },
-};
 
 export default function ConfiguracionPage() {
   const { refresh: refreshModules } = useModules();
@@ -289,7 +208,6 @@ export default function ConfiguracionPage() {
           handleChange={handleChange}
           handleSave={handleSave}
           isSaving={isSaving}
-          profilePresets={PROFILE_PRESETS}
         />
       )}
 

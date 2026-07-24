@@ -56,3 +56,5 @@ next-env.d.ts
 /app/generated/prisma
 dist_electron
 /electron-dist
+
+~/*.tauri

@@ -13,7 +13,6 @@ interface ConfigRubroPlanTabProps {
   handleChange: (key: string, value: string) => void;
   handleSave: () => void;
   isSaving: boolean;
-  profilePresets: Record<string, { name: string; desc: string; modules: Record<string, boolean> }>;
 }
 
 export default function ConfigRubroPlanTab({
@@ -21,7 +20,6 @@ export default function ConfigRubroPlanTab({
   handleChange,
   handleSave,
   isSaving,
-  profilePresets,
 }: ConfigRubroPlanTabProps) {
   const { refresh: refreshModules } = useModules();
   const [licenseKeyInput, setLicenseKeyInput] = useState('');
@@ -69,61 +67,11 @@ export default function ConfigRubroPlanTab({
 
   return (
     <div className="space-y-8">
-      {/* SECCIÓN 1: Selección de Rubro */}
-      <section className="bg-muted p-6 rounded-xl shadow space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <LayoutDashboard size={20} className="text-primary" /> Paso 1: Rubro de tu Comercio
-          </h2>
-          <p className="text-xs text-foreground-muted mt-1">
-            Elegí el rubro que mejor represente tu negocio. ClinPOS activará automáticamente las herramientas diseñadas para tu día a día.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-          {Object.entries(profilePresets).map(([key, preset]) => {
-            const isSelected = currentProfileKey === key;
-            return (
-              <div
-                key={key}
-                onClick={() => {
-                  handleChange('business_profile', key);
-                  // Aplicar módulos por defecto del rubro
-                  Object.entries(preset.modules).forEach(([modKey, modVal]) => {
-                    handleChange(`module_${modKey}`, modVal ? 'true' : 'false');
-                  });
-                  toast.success(`Rubro cambiado a: ${preset.name}`);
-                }}
-                className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
-                  isSelected
-                    ? 'border-primary bg-primary/5 ring-2 ring-primary/40 shadow-sm'
-                    : 'border-border bg-background hover:border-foreground-muted'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-sm text-foreground">{preset.name}</h3>
-                    {isSelected && <CheckCircle2 size={16} className="text-primary" />}
-                  </div>
-                  <p className="text-xs text-foreground-muted mt-1 leading-relaxed">
-                    {preset.desc}
-                  </p>
-                </div>
-
-                <div className="text-[11px] font-semibold text-primary pt-1 border-t border-border/40">
-                  {isSelected ? '✓ Rubro Activo' : 'Seleccionar Rubro →'}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
       {/* SECCIÓN 2: Plan de Suscripción */}
       <section className="bg-muted p-6 rounded-xl shadow space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <ShieldCheck size={20} className="text-primary" /> Paso 2: Plan de Suscripción ClinPOS
+            <ShieldCheck size={20} className="text-primary" /> Plan de Suscripción ClinPOS
           </h2>
           <p className="text-xs text-foreground-muted mt-1">
             Compará y seleccioná la modalidad de servicio adecuada para tu negocio.

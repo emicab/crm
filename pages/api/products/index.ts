@@ -45,7 +45,7 @@ export default async function handler(
 
     try {
       // 1. Obtener productos aplicando filtros base (marca, categoría, proveedor)
-      let products = await prisma.product.findMany({
+      let products: any[] = await prisma.product.findMany({
         where: whereClause,
         include: {
           brand: true,
@@ -56,6 +56,21 @@ export default async function handler(
           name: 'asc',
         },
       });
+
+      // Calcular stock reservado (pedidos pendientes)
+      const pendingWhere: any = { sale: { status: 'PENDING' } };
+      const pendingSalesAggregate = await prisma.saleItem.groupBy({
+        by: ['productId'],
+        _sum: { quantity: true },
+        where: pendingWhere
+      });
+      const reservedMap = new Map();
+      pendingSalesAggregate.forEach(agg => reservedMap.set(agg.productId, agg._sum?.quantity || 0));
+
+      products = products.map(p => ({
+         ...p,
+         reservedQuantity: reservedMap.get(p.id) || 0
+      }));
 
       // Helper para normalizar texto (pasar a minúsculas y remover acentos/diacríticos)
       const normalizeText = (text: string) => {

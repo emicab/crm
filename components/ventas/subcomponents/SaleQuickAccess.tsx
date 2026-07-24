@@ -37,7 +37,11 @@ export const SaleQuickAccess: React.FC<SaleQuickAccessProps> = ({
           </div>
         ) : (
           displayProducts.slice(0, 24).map((prod) => {
+            const reservedQuantity = (prod as any).reservedQuantity || 0;
+            const availableStock = prod.quantityStock - reservedQuantity;
             const isOutOfStock = prod.quantityStock <= 0;
+            const isReservedOut = !isOutOfStock && availableStock <= 0;
+
             return (
               <button
                 key={prod.id}
@@ -46,8 +50,11 @@ export const SaleQuickAccess: React.FC<SaleQuickAccessProps> = ({
                 className={`flex flex-col justify-between p-2.5 rounded-xl text-left shadow-sm hover:shadow-md transition-all active:scale-[0.96] cursor-pointer min-h-[85px] border ${
                   isOutOfStock
                     ? "bg-red-50/40 hover:bg-red-100/30 border-red-200 hover:border-red-300/80 opacity-80"
+                    : isReservedOut
+                    ? "bg-amber-50/40 hover:bg-amber-100/30 border-amber-200 hover:border-amber-300/80"
                     : "bg-muted hover:bg-white border-transparent hover:border-primary/50"
                 }`}
+                title={isReservedOut ? `Producto reservado en pedido guardado (${reservedQuantity} u.)` : ""}
               >
                 <span
                   className={`text-[10px] font-bold line-clamp-2 leading-tight ${
@@ -58,13 +65,17 @@ export const SaleQuickAccess: React.FC<SaleQuickAccessProps> = ({
                 </span>
                 <span
                   className={`text-xs font-extrabold mt-1.5 flex items-center justify-between w-full ${
-                    isOutOfStock ? "text-red-500" : "text-primary"
+                    isOutOfStock ? "text-red-500" : isReservedOut ? "text-amber-600" : "text-primary"
                   }`}
                 >
                   <span>{formatCurrency(prod.priceSale)}</span>
                   {isOutOfStock ? (
                     <span className="text-[8px] font-bold text-red-500 bg-red-100/60 px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0">
                       Sin Stock
+                    </span>
+                  ) : isReservedOut ? (
+                    <span className="text-[8px] font-bold text-amber-600 bg-amber-100/60 px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0" title="Reservado en pedidos guardados">
+                      Reservado
                     </span>
                   ) : (
                     <span className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors">

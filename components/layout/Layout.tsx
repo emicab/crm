@@ -87,14 +87,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="md:flex h-screen bg-background text-foreground">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div className="print:hidden">
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      </div>
 
-      <div className="flex flex-1 flex-col min-w-0">
-        <Header onMenuClick={() => setIsSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+      <div className="flex flex-1 flex-col min-w-0 print:block">
+        <div className="print:hidden">
+          <Header onMenuClick={() => setIsSidebarOpen(true)} />
+        </div>
+        <main className="flex-1 overflow-y-auto p-6 md:p-8 print:p-0 print:overflow-visible">
           {isAccessAllowed ? children : <AccessDeniedView />}
         </main>
-        <KbdFooter />
+        <div className="print:hidden">
+          <KbdFooter />
+        </div>
       </div>
     </div>
   );

@@ -33,6 +33,7 @@ interface CreateSaleInput {
   invoiceType?: 'A' | 'B' | 'C' | 'NONE';
   clientCuit?: string;
   clientName?: string;
+  status?: 'COMPLETED' | 'PENDING';
 }
 
 export default async function handler(
@@ -250,10 +251,13 @@ export default async function handler(
             ...(clientId && { client: { connect: { id: clientId } } }),
             seller: { connect: { id: sellerId } },
             ...(openRegister && { cashRegister: { connect: { id: openRegister.id } } }),
+            status: (req.body.status === 'PENDING' ? 'PENDING' : 'COMPLETED') as any,
           },
         });
 
-        if (isAccountSale && clientId) {
+        const isPending = req.body.status === 'PENDING';
+
+        if (!isPending && isAccountSale && clientId) {
           let balanceRecord = await tx.accountBalance.findUnique({
             where: { clientId },
           });
@@ -277,7 +281,7 @@ export default async function handler(
           });
         }
 
-        if (openRegister) {
+        if (!isPending && openRegister) {
           const cashAmount = paymentType === 'CASH' ? calculatedTotalAmount : new Decimal(0);
           const otherAmount = paymentType !== 'CASH' ? calculatedTotalAmount : new Decimal(0);
           if (cashAmount.greaterThan(0)) {
@@ -311,7 +315,7 @@ export default async function handler(
           if (!product) {
             throw new Error(`Producto con ID ${item.productId} no encontrado.`);
           }
-          if (Number(product.quantityStock) < item.quantity) {
+          if (!isPending && Number(product.quantityStock) < item.quantity) {
             throw new Error(`Stock insuficiente para el producto "${product.name}". Disponible: ${product.quantityStock}, Solicitado: ${item.quantity}.`);
           }
 
@@ -337,27 +341,31 @@ export default async function handler(
             },
           });
 
-          const updateResult = await tx.product.updateMany({
-            where: {
-              id: item.productId,
-              quantityStock: { gte: item.quantity }
-            },
-            data: {
-              quantityStock: { decrement: item.quantity }
+          if (!isPending) {
+            const updateResult = await tx.product.updateMany({
+              where: {
+                id: item.productId,
+                quantityStock: { gte: item.quantity }
+              },
+              data: {
+                quantityStock: { decrement: item.quantity }
+              }
+            });
+            if (updateResult.count === 0) {
+              throw new Error(`Stock insuficiente o modificado concurrentemente para el producto "${product.name}".`);
             }
-          });
-          if (updateResult.count === 0) {
-            throw new Error(`Stock insuficiente o modificado concurrentemente para el producto "${product.name}".`);
           }
 
-          // Alerta de stock mínimo con log local y mock email
-          const updatedProduct = await tx.product.findUnique({
-            where: { id: item.productId },
-            select: { id: true, name: true, quantityStock: true, stockMinAlert: true }
-          });
-          if (updatedProduct && updatedProduct.stockMinAlert !== null && updatedProduct.quantityStock < updatedProduct.stockMinAlert) {
-            console.warn(`[STOCK ALERT] El producto "${updatedProduct.name}" (ID: ${updatedProduct.id}) ha quedado por debajo del mínimo de alerta de stock (${updatedProduct.stockMinAlert}). Stock actual: ${updatedProduct.quantityStock}`);
-            console.log(`[MOCK EMAIL] Enviado correo ficticio a: administracion@empresa.com | Asunto: Alerta de Stock Mínimo - ${updatedProduct.name} | Contenido: El producto "${updatedProduct.name}" tiene ${updatedProduct.quantityStock} unidades disponibles (Umbral mínimo: ${updatedProduct.stockMinAlert}).`);
+          // Alerta de stock mínimo con log local y mock email (solo si no es pendiente)
+          if (!isPending) {
+            const updatedProduct = await tx.product.findUnique({
+              where: { id: item.productId },
+              select: { id: true, name: true, quantityStock: true, stockMinAlert: true }
+            });
+            if (updatedProduct && updatedProduct.stockMinAlert !== null && updatedProduct.quantityStock < updatedProduct.stockMinAlert) {
+              console.warn(`[STOCK ALERT] El producto "${updatedProduct.name}" (ID: ${updatedProduct.id}) ha quedado por debajo del mínimo de alerta de stock (${updatedProduct.stockMinAlert}). Stock actual: ${updatedProduct.quantityStock}`);
+              console.log(`[MOCK EMAIL] Enviado correo ficticio a: administracion@empresa.com | Asunto: Alerta de Stock Mínimo - ${updatedProduct.name} | Contenido: El producto "${updatedProduct.name}" tiene ${updatedProduct.quantityStock} unidades disponibles (Umbral mínimo: ${updatedProduct.stockMinAlert}).`);
+            }
           }
         }
         return tx.sale.findUnique({
@@ -366,13 +374,13 @@ export default async function handler(
         });
       });
 
-      // Intentar generar factura electrónica si corresponde y está habilitada
+      // Intentar generar factura electrónica si corresponde y está habilitada (y no es pedido)
       let invoice = null;
       let arcaError = null;
 
       try {
         const arcaConfig = await getArcaConfig();
-        if (arcaConfig.enabled && invoiceType && invoiceType !== 'NONE') {
+        if (req.body.status !== 'PENDING' && arcaConfig.enabled && invoiceType && invoiceType !== 'NONE') {
           invoice = await createElectronicInvoice(
             result!.id,
             invoiceType as any,

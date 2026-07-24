@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import type { Sale } from "@/types";
 import Button from "@/components/ui/Button";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
-import { Loader2, AlertCircle, Eye, Trash2, Download, Printer } from "lucide-react";
+import { Loader2, AlertCircle, Eye, Trash2, Download, Printer, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
@@ -22,6 +22,7 @@ const SalesHistoryTable = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Sale | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'COMPLETED' | 'PENDING'>('COMPLETED');
   const printRef = useRef<HTMLDivElement>(null);
 
   const fetchSales = useCallback(async () => {
@@ -131,6 +132,24 @@ const SalesHistoryTable = () => {
 
 
 
+  const handleCompleteOrder = async (sale: Sale) => {
+    try {
+      const response = await fetch(`/api/ventas/${sale.id}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentType: sale.paymentType })
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "No se pudo completar el pedido.");
+      }
+      toast.success(`Pedido #${sale.id} completado con éxito.`);
+      fetchSales();
+    } catch (error: any) {
+      toast.error(error.message || "Ocurrió un error al completar el pedido.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -180,7 +199,28 @@ const SalesHistoryTable = () => {
 
       <div className="bg-muted p-4 sm:p-6 rounded-lg shadow" ref={printRef}>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 print-hidden">
-          <h2 className="text-lg font-semibold text-foreground">Historial de Ventas</h2>
+          <div className="flex gap-4 border-b border-border w-full sm:w-auto">
+            <button
+              className={`pb-2 px-2 text-sm font-semibold transition-colors ${
+                activeTab === 'COMPLETED'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-foreground-muted hover:text-foreground'
+              }`}
+              onClick={() => setActiveTab('COMPLETED')}
+            >
+              Completadas
+            </button>
+            <button
+              className={`pb-2 px-2 text-sm font-semibold transition-colors ${
+                activeTab === 'PENDING'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-foreground-muted hover:text-foreground'
+              }`}
+              onClick={() => setActiveTab('PENDING')}
+            >
+              Pedidos Pendientes
+            </button>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleExportCSV}>
               <Download size={14} className="mr-1.5" /> Exportar CSV
@@ -227,7 +267,7 @@ const SalesHistoryTable = () => {
               </tr>
             </thead>
             <tbody>
-              {!loading && sales.length === 0 ? (
+              {!loading && sales.filter((s: any) => (s.status || 'COMPLETED') === activeTab).length === 0 ? (
                 <tr>
                   <td
                     colSpan={10}
@@ -237,7 +277,7 @@ const SalesHistoryTable = () => {
                   </td>
                 </tr>
               ) : (
-                sales.map((sale) => (
+                sales.filter((s: any) => (s.status || 'COMPLETED') === activeTab).map((sale) => (
                   <tr
                     key={sale.id}
                     className="border-b border-border last:border-b-0 hover:bg-background transition-colors"
@@ -275,6 +315,16 @@ const SalesHistoryTable = () => {
                     </td>
                     <td className="p-3 sm:p-4 text-sm text-center">
                       <div className="flex justify-center items-center space-x-1">
+                        {activeTab === 'PENDING' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleCompleteOrder(sale)}
+                            title="Completar pedido"
+                          >
+                            <CheckCircle size={16} className="text-green-500" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"

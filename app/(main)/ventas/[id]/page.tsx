@@ -180,53 +180,23 @@ const SaleDetailPage = () => {
     }, [saleId]);
 
     const handlePrintOrSavePDF = async () => {
-        // Llama a la función expuesta por el preload script
-        if (window.electronAPI) {
-            toast.loading("Generando PDF...", { id: "pdf-toast" });
-            const result = await window.electronAPI.saveSaleAsPDF();
-            toast.dismiss("pdf-toast");
-
-            if (result.success) {
-                toast.success(`PDF guardado exitosamente en: ${result.path}`);
-            } else if (result.error !== "Cancelled") {
-                toast.error(`Error al generar PDF: ${result.error}`);
-            }
-        } else {
-            console.error(
-                "La API de Electron no está disponible. Asegúrate de que estás en un entorno Electron con el preload script cargado."
-            );
-            toast.error(
-                "La función de impresión solo está disponible en la aplicación de escritorio."
-            );
+        // En Tauri, la forma nativa y robusta de imprimir o guardar como PDF 
+        // sin dependencias de backend pesadas es delegarlo al diálogo del sistema.
+        if (typeof window !== "undefined") {
+            window.print();
+            toast.success("Mostrando opciones de impresión / Guardar como PDF");
         }
     };
 
     const triggerWhatsAppSend = async (phone: string) => {
-        if (window.electronAPI) {
-            toast.loading("Preparando para compartir...", {
-                id: "whatsapp-toast",
-            });
-            const result = await window.electronAPI.saveSaleAsPDF();
-            toast.dismiss("whatsapp-toast");
-
-            if (result.success && result.path) {
-                toast.success(
-                    `PDF guardado. Ahora abre WhatsApp para enviarlo manualmente desde: ${result.path}`,
-                    { duration: 6000 }
-                );
-                // Abre WhatsApp en el navegador por defecto
-                const whatsappUrl = `https://wa.me/${phone.replace(
-                    /\D/g,
-                    ""
-                )}`; // Limpia el número de teléfono
-                window.open(whatsappUrl, "_blank");
-            } else if (result.error !== "Cancelled") {
-                toast.error(`Error al generar PDF: ${result.error}`);
-            }
-        } else {
-            toast.error(
-                "La función de compartir solo está disponible en la aplicación de escritorio."
-            );
+        // En lugar de generar el PDF para mandarlo por Whatsapp,
+        // simplemente mostramos el diálogo nativo, ya que Whatsapp Desktop / Web no
+        // acepta adjuntar un PDF directamente por comando de link de esta forma local
+        // de todas formas, así que la mejor experiencia es guardar y adjuntar manual.
+        if (typeof window !== "undefined") {
+            window.print();
+            toast.success("Guardá la venta como PDF y enviala usando WhatsApp Web/Desktop.");
+            window.open(`https://wa.me/${phone}?text=Hola!%20Te%20adjunto%20el%20recibo%20de%20tu%20compra.%20Muchas%20gracias!`, '_blank');
         }
     };
 
@@ -327,7 +297,16 @@ const SaleDetailPage = () => {
     }
 
     return (
-        <div className='max-w-4xl mx-auto'>
+        <>
+        <style>{`
+          @media print {
+            @page { margin: 0; }
+            body { background-color: white; }
+          }
+        `}</style>
+
+        {/* --- VISTA NORMAL (Oculta al imprimir) --- */}
+        <div className='max-w-4xl mx-auto print:hidden'>
             <div className='flex justify-between items-center mb-6'>
                 <Button
                     variant='outline'
@@ -777,6 +756,83 @@ const SaleDetailPage = () => {
                 )}
             </AnimatePresence>
         </div>
+
+        {/* --- VISTA DE IMPRESIÓN (Ticket 80mm) --- */}
+        <div className="hidden print:block w-[80mm] mx-auto bg-white text-black font-mono text-sm leading-tight pb-8">
+            <div className="text-center border-b border-black pb-2 mb-2">
+                <h2 className="text-xl font-bold uppercase">{config.empresaNombre || "CLINPOS"}</h2>
+                <p className="text-xs">{config.empresaDireccion || "Dirección no configurada"}</p>
+                <p className="text-xs">{config.empresaTelefono || ""}</p>
+                {config.arcaCuit && <p className="text-xs mt-1">CUIT: {config.arcaCuit}</p>}
+                {config.condicionIva && <p className="text-xs">{config.condicionIva}</p>}
+                <p className="text-xs mt-2">--------------------------------</p>
+                <h3 className="font-bold text-base mt-1">
+                    {sale.invoice ? `FACTURA ${sale.invoice.invoiceType}` : (sale.status === 'PENDING' ? 'PEDIDO DE VENTA' : 'TICKET DE VENTA')}
+                </h3>
+                <p className="text-xs">
+                    Nro: {sale.invoice ? `${String(sale.invoice.pointOfSale).padStart(4, '0')}-${String(sale.invoice.invoiceNumber).padStart(8, '0')}` : String(sale.id).padStart(8, '0')}
+                </p>
+                <p className="text-xs">Fecha: {formatDate(sale.saleDate)}</p>
+            </div>
+
+            <div className="mb-2 text-xs border-b border-black pb-2">
+                <p><strong>Cliente:</strong> {sale.client ? `${sale.client.firstName} ${sale.client.lastName || ''}`.trim() : 'Consumidor Final'}</p>
+                {sale.client?.documentNumber && <p><strong>DNI/CUIT:</strong> {sale.client.documentNumber}</p>}
+                {sale.invoice?.clientCuit && sale.invoice.clientCuit !== sale.client?.documentNumber && <p><strong>CUIT Factura:</strong> {sale.invoice.clientCuit}</p>}
+                <p><strong>Vendedor:</strong> {sale.seller?.name || 'Mostrador'}</p>
+                <p><strong>Cond. Pago:</strong> {getPaymentTypeDisplay(sale.paymentType)}</p>
+            </div>
+
+            <table className="w-full text-xs text-left mb-2">
+                <thead>
+                    <tr className="border-b border-black/50">
+                        <th className="py-1">Cant</th>
+                        <th className="py-1">Producto</th>
+                        <th className="py-1 text-right">Monto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {sale.items.map((item) => (
+                        <tr key={item.id}>
+                            <td className="py-1 align-top">{item.quantity}</td>
+                            <td className="py-1 align-top pr-1">
+                                {item.product?.name || 'Producto eliminado'}
+                                {Number(item.discountPercent) > 0 && <span className="block text-[10px]">(-{item.discountPercent}%)</span>}
+                            </td>
+                            <td className="py-1 align-top text-right">${parseFloat(String(item.subtotal)).toLocaleString('es-AR', {minimumFractionDigits:2})}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+
+            <div className="border-t border-black pt-2 mb-4 text-right">
+                <p className="text-lg font-bold">TOTAL: {formatCurrency(sale.totalAmount)}</p>
+            </div>
+
+            {sale.invoice?.cae && (
+                <div className="text-center text-xs mt-4 pt-2 border-t border-black border-dashed">
+                    <p className="font-bold">Comprobante Autorizado por AFIP</p>
+                    <p>CAE: {sale.invoice.cae}</p>
+                    <p>Vto. CAE: {formatDate(sale.invoice.caeExpiration)}</p>
+                    {invoiceQrDataUrl && (
+                        <div className="mt-2 flex justify-center">
+                            <img src={invoiceQrDataUrl} alt="QR AFIP" className="w-32 h-32" />
+                        </div>
+                    )}
+                </div>
+            )}
+            
+            {!sale.invoice?.cae && (
+                <div className="text-center text-[10px] mt-4 pt-2 border-t border-black border-dashed">
+                    <p>DOCUMENTO NO VÁLIDO COMO FACTURA</p>
+                </div>
+            )}
+
+            <div className="text-center text-xs mt-6">
+                <p>¡Gracias por su compra!</p>
+            </div>
+        </div>
+        </>
     );
 };
 

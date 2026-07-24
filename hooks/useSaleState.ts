@@ -758,8 +758,8 @@ export const useSaleState = () => {
     setTimeout(() => productInputRef.current?.focus(), 50);
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const executeSale = async (e?: React.FormEvent<HTMLFormElement>, isOrder: boolean = false) => {
+    if (e) e.preventDefault();
     setIsLoading(true);
     if (!formData.paymentType) {
       toast.error("Seleccioná un tipo de pago.");
@@ -837,6 +837,7 @@ export const useSaleState = () => {
       ],
       invoiceType,
       ...(invoiceType === 'A' && { clientCuit: clientCuit.trim(), clientName: clientName.trim() }),
+      status: isOrder ? 'PENDING' : 'COMPLETED',
     };
     try {
       const response = await fetch("/api/ventas", {
@@ -855,6 +856,8 @@ export const useSaleState = () => {
         toast.error(`Venta registrada pero falló la facturación: ${data.arcaError}`, { duration: 6000 });
       } else if (data.invoice) {
         toast.success(`¡Venta y Factura ${data.invoice.invoiceType} #${data.invoice.invoiceNumber} registradas!`);
+      } else if (isOrder) {
+        toast.success("¡Pedido guardado exitosamente!");
       } else {
         toast.success("¡Venta registrada exitosamente!");
       }
@@ -881,12 +884,22 @@ export const useSaleState = () => {
       toast.error(
         err instanceof Error
           ? err.message
-          : "Ocurrió un error al registrar la venta.",
+          : "Ocurrió un error al procesar la operación.",
       );
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    await executeSale(e, false);
+  };
+
+  const handleSaveOrder = async () => {
+    await executeSale(undefined, true);
+  };
+
+  const handlePrintLastSale = async () => { };
 
   const handleOpenCajaFromSale = async (
     sellerId: string,
@@ -975,8 +988,10 @@ export const useSaleState = () => {
     handleItemDetailChange,
     handleRemoveItem,
     handleFormChange,
-    handleSelectCombo,
     handleSubmit,
+    handleSaveOrder,
+    handlePrintLastSale,
+    handleSelectCombo,
     handleOpenCajaFromSale,
     config,
     invoiceType,
