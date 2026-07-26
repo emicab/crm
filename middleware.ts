@@ -6,9 +6,11 @@ export function middleware(request: NextRequest) {
   if (process.env.NODE_ENV === 'production') {
     const appSecret = process.env.APP_SECRET;
     
-    // Si la clave secreta está definida en el entorno, validamos la cabecera
+    // Si la clave secreta está definida en el entorno, validamos la cabecera, cookie o query param
     if (appSecret) {
-      const incomingSecret = request.headers.get('x-app-secret');
+      const incomingSecretHeader = request.headers.get('x-app-secret');
+      const incomingSecretCookie = request.cookies.get('app_auth_token')?.value;
+      const urlToken = request.nextUrl.searchParams.get('_token');
       const { pathname } = request.nextUrl;
 
       // Permitir assets estáticos necesarios para renderizar páginas de error o la app
@@ -22,7 +24,26 @@ export function middleware(request: NextRequest) {
         return NextResponse.next();
       }
 
-      if (incomingSecret !== appSecret) {
+      // Si el token de Tauri viene por query string y es válido,
+      // lo guardamos en una cookie para las próximas peticiones
+      if (urlToken === appSecret) {
+        // Hacemos una redirección limpia para quitar el _token de la URL
+        const url = request.nextUrl.clone();
+        url.searchParams.delete('_token');
+        const response = NextResponse.redirect(url);
+        
+        response.cookies.set('app_auth_token', appSecret, {
+          httpOnly: true,
+          secure: false, // Localhost
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 60 * 60 * 24 * 365, // 1 año
+        });
+        return response;
+      }
+
+      // Si no tenemos el query string, validamos usando la cookie o el header (este último por retrocompatibilidad/debug)
+      if (incomingSecretHeader !== appSecret && incomingSecretCookie !== appSecret) {
         const clientIp = request.headers.get('x-forwarded-for') || 'desconocido';
         console.warn(`[Security] Bloqueado intento de acceso externo a ${pathname} desde ${clientIp}`);
         
