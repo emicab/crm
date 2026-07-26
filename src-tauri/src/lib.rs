@@ -258,6 +258,13 @@ pub fn run() {
             }
         };
 
+        // Generate a random APP_SECRET to protect the local server from browser access
+        let app_secret: String = {
+            let mut rng = rand::thread_rng();
+            const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            (0..48).map(|_| { let idx = rng.gen_range(0..CHARSET.len()); CHARSET[idx] as char }).collect()
+        };
+
         if server_js.exists() {
           let node_bin = if local_node.exists() {
             local_node.to_string_lossy().to_string()
@@ -281,13 +288,6 @@ pub fn run() {
           cmd.env("NODE_ENV", "production");
           cmd.env("DATABASE_URL", db_url);
           cmd.env("CLINPOS_ENCRYPTION_SECRET", encryption_secret);
-
-          // Generate a random APP_SECRET to protect the local server from browser access
-          let app_secret: String = {
-              let mut rng = rand::thread_rng();
-              const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-              (0..48).map(|_| { let idx = rng.gen_range(0..CHARSET.len()); CHARSET[idx] as char }).collect()
-          };
           cmd.env("APP_SECRET", &app_secret);
 
           cmd.creation_flags(CREATE_NO_WINDOW);
@@ -299,6 +299,7 @@ pub fn run() {
               *state = Some(child);
             }
           }
+        }
 
           // Store app_secret for the webview navigation
           let secret_for_nav = app_secret.clone();
