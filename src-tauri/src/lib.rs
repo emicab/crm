@@ -273,6 +273,7 @@ pub fn run() {
           let server_js_clean = server_js.to_string_lossy().replace("\\\\?\\", "");
           let standalone_dir_clean = standalone_dir.to_string_lossy().replace("\\\\?\\", "");
 
+
           let mut cmd = Command::new(node_bin_clean);
           cmd.arg(server_js_clean);
           cmd.current_dir(standalone_dir_clean);
@@ -280,6 +281,15 @@ pub fn run() {
           cmd.env("NODE_ENV", "production");
           cmd.env("DATABASE_URL", db_url);
           cmd.env("CLINPOS_ENCRYPTION_SECRET", encryption_secret);
+
+          // Generate a random APP_SECRET to protect the local server from browser access
+          let app_secret: String = {
+              let mut rng = rand::thread_rng();
+              const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+              (0..48).map(|_| { let idx = rng.gen_range(0..CHARSET.len()); CHARSET[idx] as char }).collect()
+          };
+          cmd.env("APP_SECRET", &app_secret);
+
           cmd.creation_flags(CREATE_NO_WINDOW);
           cmd.stdout(Stdio::from(log_file));
           cmd.stderr(Stdio::from(err_file));
@@ -289,23 +299,27 @@ pub fn run() {
               *state = Some(child);
             }
           }
-        }
 
-        let app_handle = app.handle().clone();
-        std::thread::spawn(move || {
-          let port = 3001;
-          let target_url = format!("http://localhost:{}", port);
+          // Store app_secret for the webview navigation
+          let secret_for_nav = app_secret.clone();
 
-          for _ in 0..120 {
-            if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
-              if let Some(window) = app_handle.get_webview_window("main") {
-                let _ = window.navigate(target_url.parse().unwrap());
+          let app_handle = app.handle().clone();
+          std::thread::spawn(move || {
+            let port = 3001;
+            // Navigate with secret as query param; middleware will set a cookie
+            let target_url = format!("http://localhost:{}?_token={}", port, secret_for_nav);
+
+            for _ in 0..120 {
+              if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                  let url: tauri::Url = target_url.parse().unwrap();
+                  let _ = window.navigate(url);
+                }
+                break;
               }
-              break;
+              std::thread::sleep(std::time::Duration::from_millis(250));
             }
-            std::thread::sleep(std::time::Duration::from_millis(250));
-          }
-        });
+          });
       }
 
       Ok(())

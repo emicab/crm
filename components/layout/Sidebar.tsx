@@ -26,7 +26,6 @@ import {
   Ticket,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { check } from "@tauri-apps/plugin-updater";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -173,6 +172,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const checkForUpdates = async () => {
     try {
       setIsCheckingUpdate(true);
+      // Dynamic import to avoid SSR crash (window.__TAURI_INTERNALS__ doesn't exist on server)
+      const { check } = await import('@tauri-apps/plugin-updater');
       const update = await check();
       if (update) {
         toast.success(`Actualización ${update.version} encontrada. Descargando...`);
@@ -182,8 +183,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         toast.success("La aplicación está en su última versión.");
       }
     } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "No se pudo buscar actualizaciones en este momento.");
+      console.error("Update error:", err);
+      const errMsg = typeof err === 'string' ? err : (err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err)));
+      toast.error(`Error: ${errMsg}`);
     } finally {
       setIsCheckingUpdate(false);
     }

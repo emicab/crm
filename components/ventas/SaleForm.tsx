@@ -2,7 +2,6 @@
 
 import React from "react";
 import { Loader2 } from "lucide-react";
-import { open } from "@tauri-apps/plugin-shell";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
@@ -359,7 +358,12 @@ const SaleForm = () => {
                       ? `${lastCreatedSale.client.firstName} ${lastCreatedSale.client.lastName || ""}`.trim()
                       : "Cliente";
                     const message = `Hola ${clientName}! Te adjuntamos el detalle de tu compra N° #${lastCreatedSale.id} por un total de $${parseFloat(lastCreatedSale.totalAmount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}. ¡Muchas gracias por elegirnos!`;
-                    open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`);
+                    // Dynamic import to avoid SSR crash
+                    import('@tauri-apps/plugin-shell').then(({ open }) => {
+                      open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`);
+                    }).catch(() => {
+                      window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                    });
                   }}
                   className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl active:scale-[0.97] transition-all cursor-pointer border-0"
                 >
