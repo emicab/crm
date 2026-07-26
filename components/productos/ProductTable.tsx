@@ -14,6 +14,7 @@ import BatchSupplierModal from './BatchSupplierModal';
 import ProductMobileCard from './ProductMobileCard';
 import ProductFilters from './ProductFilters';
 import SelectedBar from './SelectedBar';
+import CSVImportModal from './CSVImportModal';
 
 const ProductTable = () => {
   const router = useRouter();
@@ -44,7 +45,8 @@ const ProductTable = () => {
   const [totalProducts, setTotalProducts] = useState(0);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { handleExportCSV, handleImportCSV } = useProductCSV(() => fetchProducts(page));
+  const { handleExportCSV } = useProductCSV(() => fetchProducts(page));
+  const [isCSVModalOpen, setIsCSVModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchFilterOptions = async () => {
@@ -238,6 +240,12 @@ const ProductTable = () => {
         onSupplierCreated={(newSupplier) => setSuppliers(prev => [...prev, newSupplier].sort((a, b) => a.name.localeCompare(b.name)))}
       />
 
+      <CSVImportModal 
+        isOpen={isCSVModalOpen}
+        onClose={() => setIsCSVModalOpen(false)}
+        onSuccess={() => fetchProducts(1)}
+      />
+
       <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
         <ProductFilters
           filters={filters}
@@ -247,7 +255,7 @@ const ProductTable = () => {
           onChange={handleFilterChange}
           onClear={handleClearFilters}
           onExportCSV={() => handleExportCSV(products)}
-          onImportCSV={handleImportCSV}
+          onImportCSV={() => setIsCSVModalOpen(true)}
         />
         {error && (
           <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md my-4">

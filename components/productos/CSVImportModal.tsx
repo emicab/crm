@@ -1,0 +1,255 @@
+import React, { useState, useRef } from 'react';
+import Papa from 'papaparse';
+import toast from 'react-hot-toast';
+import { Upload, X, CheckCircle, AlertCircle, FileText } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import Select from '@/components/ui/Select';
+
+interface CSVImportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const SYSTEM_FIELDS = [
+  { key: 'name', label: 'Nombre / Descripción (*)', required: true },
+  { key: 'sku', label: 'SKU / Código', required: false },
+  { key: 'description', label: 'Observaciones / Notas', required: false },
+  { key: 'pricePurchase', label: 'Precio de Compra / Costo', required: false },
+  { key: 'priceSale', label: 'Precio de Venta (*)', required: true },
+  { key: 'quantityStock', label: 'Stock / Cantidad (*)', required: true },
+  { key: 'stockMinAlert', label: 'Alerta Stock Mínimo', required: false },
+  { key: 'brandName', label: 'Marca', required: false },
+  { key: 'categoryName', label: 'Categoría / Rubro', required: false },
+];
+
+const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, onSuccess }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvData, setCsvData] = useState<any[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+    
+    setFile(selectedFile);
+    
+    Papa.parse(selectedFile, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (results.meta.fields) {
+          setCsvHeaders(results.meta.fields);
+          setCsvData(results.data);
+          autoMapFields(results.meta.fields);
+        } else {
+          toast.error("No se pudieron detectar las cabeceras del CSV.");
+        }
+      },
+      error: (error) => {
+        toast.error(`Error al leer CSV: ${error.message}`);
+      }
+    });
+  };
+
+  const autoMapFields = (headers: string[]) => {
+    const initialMapping: Record<string, string> = {};
+    const lowerHeaders = headers.map(h => h.toLowerCase().trim());
+    
+    const findHeader = (keywords: string[]) => {
+        for (const kw of keywords) {
+            const index = lowerHeaders.findIndex(h => h.includes(kw));
+            if (index !== -1) return headers[index];
+        }
+        return '';
+    };
+
+    SYSTEM_FIELDS.forEach(field => {
+      let matched = '';
+      switch(field.key) {
+          case 'name': matched = findHeader(['nombre', 'descripción', 'descripcion', 'producto']); break;
+          case 'sku': matched = findHeader(['sku', 'código', 'codigo']); break;
+          case 'description': matched = findHeader(['observación', 'observacion', 'nota']); break;
+          case 'pricePurchase': matched = findHeader(['compra', 'costo']); break;
+          case 'priceSale': matched = findHeader(['venta', 'precio']); break;
+          case 'quantityStock': matched = findHeader(['stock', 'cantidad']); break;
+          case 'stockMinAlert': matched = findHeader(['mínimo', 'minimo', 'alerta']); break;
+          case 'brandName': matched = findHeader(['marca']); break;
+          case 'categoryName': matched = findHeader(['categoría', 'categoria', 'rubro']); break;
+      }
+      if (matched) initialMapping[field.key] = matched;
+    });
+
+    setMapping(initialMapping);
+  };
+
+  const handleMappingChange = (systemKey: string, csvHeader: string) => {
+    setMapping(prev => ({
+      ...prev,
+      [systemKey]: csvHeader
+    }));
+  };
+
+  const handleImport = async () => {
+    // Validate required fields
+    const missing = SYSTEM_FIELDS.filter(f => f.required && !mapping[f.key]);
+    if (missing.length > 0) {
+      toast.error(`Faltan mapear campos obligatorios: ${missing.map(m => m.label).join(', ')}`);
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    // Transform data
+    const productsToImport = csvData.map(row => {
+      const product: any = {};
+      SYSTEM_FIELDS.forEach(field => {
+        const csvCol = mapping[field.key];
+        if (csvCol && row[csvCol] !== undefined) {
+          product[field.key] = String(row[csvCol]).trim();
+        }
+      });
+      return product;
+    }).filter(p => p.name); // Ignore completely empty parsed rows without name
+
+    try {
+      const res = await fetch('/api/products/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: productsToImport })
+      });
+
+      const result = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(result.message || 'Error al importar productos');
+      }
+
+      toast.success(result.message, { duration: 5000 });
+      onSuccess();
+      handleClose();
+    } catch (err: any) {
+      toast.error(err.message || 'Error inesperado durante la importación');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isProcessing) {
+      setFile(null);
+      setCsvHeaders([]);
+      setCsvData([]);
+      setMapping({});
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-background w-full max-w-2xl rounded-lg shadow-xl border border-border flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <h2 className="text-lg font-semibold text-foreground">Importar Productos desde CSV</h2>
+          <button onClick={handleClose} disabled={isProcessing} className="text-muted-foreground hover:text-foreground">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto space-y-6">
+        
+        {/* Step 1: File Selection */}
+        {!file && (
+          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-border rounded-lg bg-muted/30">
+            <Upload size={48} className="text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">Seleccioná tu archivo CSV</h3>
+            <p className="text-sm text-foreground-muted mb-4 text-center">
+              El archivo debe contener cabeceras en la primera fila.
+            </p>
+            <Button onClick={() => fileInputRef.current?.click()}>
+              Buscar Archivo
+            </Button>
+            <input 
+              type="file" 
+              accept=".csv" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
+          </div>
+        )}
+
+        {/* Step 2: Mapping */}
+        {file && csvHeaders.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-primary/10 border border-primary/20 rounded-md">
+              <div className="flex items-center gap-3">
+                <FileText className="text-primary" />
+                <div>
+                  <p className="font-medium text-foreground">{file.name}</p>
+                  <p className="text-xs text-foreground-muted">{csvData.length} filas detectadas</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setFile(null)} disabled={isProcessing}>
+                Cambiar archivo
+              </Button>
+            </div>
+
+            <div className="bg-background border border-border rounded-md overflow-hidden">
+              <div className="grid grid-cols-2 bg-muted p-3 border-b border-border">
+                <div className="font-semibold text-sm text-foreground">Campo del Sistema</div>
+                <div className="font-semibold text-sm text-foreground">Columna de tu CSV</div>
+              </div>
+              <div className="divide-y divide-border max-h-[60vh] overflow-y-auto">
+                {SYSTEM_FIELDS.map(field => (
+                  <div key={field.key} className="grid grid-cols-2 p-3 items-center gap-4">
+                    <div className="text-sm font-medium flex items-center gap-2">
+                      {field.label}
+                      {field.required && !mapping[field.key] && (
+                        <AlertCircle size={14} className="text-destructive" />
+                      )}
+                      {field.required && mapping[field.key] && (
+                        <CheckCircle size={14} className="text-success" />
+                      )}
+                    </div>
+                    <div>
+                      <Select
+                        value={mapping[field.key] || ''}
+                        onChange={(e) => handleMappingChange(field.key, e.target.value)}
+                        disabled={isProcessing}
+                      >
+                        <option value="">-- Ignorar este campo --</option>
+                        {csvHeaders.map(header => (
+                          <option key={header} value={header}>{header}</option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-border mt-4">
+              <Button variant="outline" onClick={handleClose} disabled={isProcessing}>
+                Cancelar
+              </Button>
+              <Button onClick={handleImport} disabled={isProcessing}>
+                {isProcessing ? 'Procesando...' : 'Confirmar e Importar'}
+              </Button>
+            </div>
+          </div>
+        )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CSVImportModal;

@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   ChevronDown,
   RefreshCcw,
+  Ticket,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { check } from "@tauri-apps/plugin-updater";
@@ -60,10 +61,16 @@ const navGroups: NavGroup[] = [
       { href: "/productos", label: "Productos", icon: <Package size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
       { href: "/stock", label: "Carga de Stock", icon: <Barcode size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
       { href: "/stock/alertas", label: "Alertas de Stock", icon: <AlertTriangle size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/combos", label: "Combos", icon: <ShoppingBag size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/promociones", label: "Promociones", icon: <Percent size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
       { href: "/categorias", label: "Categorías", icon: <Tag size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
       { href: "/marcas", label: "Marcas", icon: <Tag size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+    ],
+  },
+  {
+    title: "Marketing",
+    items: [
+      { href: "/combos", label: "Combos", icon: <ShoppingBag size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/promociones", label: "Promociones", icon: <Percent size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      { href: "/codigos-descuento", label: "Códigos de Descuento", icon: <Ticket size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
     ],
   },
   {

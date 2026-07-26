@@ -15,7 +15,7 @@ interface ProductFiltersProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   onClear: () => void;
   onExportCSV: () => void;
-  onImportCSV: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onImportCSV: () => void;
 }
 
 const ProductFilters: React.FC<ProductFiltersProps> = ({
@@ -30,10 +30,9 @@ const ProductFilters: React.FC<ProductFiltersProps> = ({
         <Button onClick={onExportCSV} variant="outline" size="sm" className="text-xs">
           Exportar CSV
         </Button>
-        <label className="flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border border-input bg-background hover:bg-muted text-foreground transition-colors cursor-pointer">
+        <Button onClick={onImportCSV} variant="outline" size="sm" className="text-xs">
           Importar CSV
-          <input type="file" accept=".csv" onChange={onImportCSV} className="hidden" />
-        </label>
+        </Button>
       </div>
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

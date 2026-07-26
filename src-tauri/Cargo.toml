@@ -28,4 +28,5 @@ rand = "0.8.5"
 chrono = "0.4.38"
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-updater = "2.2.0"
+tauri-plugin-shell = "2.2.0"
 rusqlite = { version = "0.31", features = ["bundled"] }
