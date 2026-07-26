@@ -1,0 +1,11 @@
+{
+  "version": "1.5.15",
+  "notes": "Nueva actualización automática de ClinPOS.",
+  "pub_date": "2026-07-26T01:06:06.558Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRVDFjVlptZ2RDemEraVBiUUhhYVNTMC9iY1FDbGVvR3JPTERjdnJiSlFtUlhsa2ROSjdJc05rYy9wMFFmUGhOU1NVNUVQQm1QVWxVV0NRR3IvSWNKOHJ1RzFHQm12T3drPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg1MDI3OTYxCWZpbGU6Q2xpblBPU18xLjUuMTVfeDY0LXNldHVwLmV4ZQpDb1VuOXRvWlkzdXhZSE9IKy9NSmRrcUlEMzBtbnlTdzlNVGFXU1IyNUIzTUF3MVMwcWgyZmN0eDB6cFJCT0gvWlp0bk5INlBadDBOV21URm9tcjNCZz09Cg==",
+      "url": "https://github.com/emicab/crm/releases/download/v1.5.15/ClinPOS_1.5.15_x64-setup.exe"
+    }
+  }
+}

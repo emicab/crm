@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ClinPOS",
-  "version": "1.5.15",
+  "version": "1.5.16",
   "identifier": "com.emidev.clinpos",
   "build": {
     "frontendDist": "../dist_tauri",
@@ -52,7 +52,8 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/emicab/crm/releases/latest/download/latest.json"
+        "https://github.com/emicab/crm/releases/latest/download/latest.json",
+        "https://github.com/emicab/crm/releases/latest/download/updater.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENENDIwNzlBNTlDNUQ1MTMKUldRVDFjVlptZ2RDemF5WXNuM0VqZ3N0aS80RTY3YTczTFZHSjQ3ditCU3k2ajRzcFArNncvcU8K"
     }
