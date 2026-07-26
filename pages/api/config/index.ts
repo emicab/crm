@@ -47,9 +47,14 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   supabase_anon_key: OFFICIAL_SUPABASE_KEY,
   supabase_last_sync: '',
   admin_pin_setup: 'false',
+  smtpHost: '',
+  smtpPort: '587',
+  smtpUser: '',
+  smtpPass: '',
+  smtpFromName: 'Mi Negocio - Ventas',
 };
 
-const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey'];
+const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey', 'smtpPass'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {

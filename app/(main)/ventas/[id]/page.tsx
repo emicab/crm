@@ -17,6 +17,7 @@ import {
     Percent,
     UserPlus,
     MessageSquare,
+    Mail,
     X,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -26,6 +27,7 @@ import { formatDate } from "@/lib/formatDate";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "motion/react";
+import { PrintTemplate } from "@/components/ventas/PrintTemplate";
 
 interface SaleItemDetail extends Omit<SaleItem, "product"> {
     product: Product | null;
@@ -62,6 +64,10 @@ const SaleDetailPage = () => {
     const [error, setError] = useState<string | null>(null);
     const [showPhoneModal, setShowPhoneModal] = useState(false);
     const [manualPhone, setManualPhone] = useState("");
+    const [printFormat, setPrintFormat] = useState<"ticket" | "a4">("ticket");
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [emailDest, setEmailDest] = useState("");
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
     const [config, setConfig] = useState<Record<string, string>>({});
     const [invoiceQrDataUrl, setInvoiceQrDataUrl] = useState<string | null>(null);
 
@@ -180,24 +186,94 @@ const SaleDetailPage = () => {
         }
     }, [saleId]);
 
-    const handlePrintOrSavePDF = async () => {
-        // En Tauri, la forma nativa y robusta de imprimir o guardar como PDF 
-        // sin dependencias de backend pesadas es delegarlo al diálogo del sistema.
+    const handlePrintOrSavePDF = async (format: 'ticket' | 'a4') => {
         if (typeof window !== "undefined") {
-            window.print();
-            toast.success("Mostrando opciones de impresión / Guardar como PDF");
+            toast.success("Generando PDF de manera interna... aguarde un instante.");
+            
+            try {
+                // Dinámicamente importamos html-to-image y jsPDF para evitar errores de SSR
+                const htmlToImage = await import('html-to-image');
+                const { jsPDF } = await import('jspdf');
+
+                // Aplicar formato para que React renderice el template oculto correctamente
+                setPrintFormat(format);
+                
+                // Darle un instante a React para re-renderizar el div oculto con el nuevo formato
+                setTimeout(async () => {
+                  const element = document.getElementById('print-template-content');
+                  if (!element) {
+                      toast.error("Error: no se encontró la plantilla de impresión.");
+                      return;
+                  }
+                  
+                  // Generamos la captura usando el motor nativo (soporta colores oklch nativamente sin crashear)
+                  const imgData = await htmlToImage.toJpeg(element, { 
+                      quality: 1.0, 
+                      pixelRatio: 2,
+                      backgroundColor: '#ffffff'
+                  });
+                  
+                  // Calculamos la altura dinámica para el ticket
+                  const pdf = new jsPDF({
+                      orientation: 'portrait',
+                      unit: 'mm',
+                      format: format === 'a4' ? 'a4' : [80, (element.offsetHeight * 80) / element.offsetWidth]
+                  });
+
+                  const pdfWidth = format === 'a4' ? pdf.internal.pageSize.getWidth() : 80;
+                  const pdfHeight = (element.offsetHeight * pdfWidth) / element.offsetWidth;
+                  
+                  pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                  pdf.save(`Venta_${saleId}_${format}.pdf`);
+                  
+                  toast.success(`¡Venta_${saleId}_${format}.pdf se descargó exitosamente en su carpeta de Descargas!`, { duration: 5000 });
+                }, 300);
+
+            } catch (err) {
+                console.error(err);
+                toast.error("Error al generar el PDF de manera interna.");
+            }
         }
     };
 
     const triggerWhatsAppSend = async (phone: string) => {
-        // En lugar de generar el PDF para mandarlo por Whatsapp,
-        // simplemente mostramos el diálogo nativo, ya que Whatsapp Desktop / Web no
-        // acepta adjuntar un PDF directamente por comando de link de esta forma local
-        // de todas formas, así que la mejor experiencia es guardar y adjuntar manual.
         if (typeof window !== "undefined") {
-            window.print();
             toast.success("Guardá la venta como PDF y enviala usando WhatsApp Web/Desktop.");
-            window.open(`https://wa.me/${phone}?text=Hola!%20Te%20adjunto%20el%20recibo%20de%20tu%20compra.%20Muchas%20gracias!`, '_blank');
+            const clientName = sale?.client
+                ? `${sale.client.firstName} ${sale.client.lastName || ""}`.trim()
+                : "Cliente";
+            const message = `Hola ${clientName}! 👋\n\nTe adjuntamos el detalle de tu compra N° #${sale?.id} por un total de $${parseFloat(String(sale?.totalAmount)).toLocaleString("es-AR", { minimumFractionDigits: 2 })}.\n\n¡Muchas gracias por elegirnos!`;
+            
+            const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+            try {
+                const { open } = await import('@tauri-apps/plugin-shell');
+                await open(url);
+            } catch (err) {
+                window.open(url, '_blank');
+            }
+        }
+    };
+
+    const handleSendEmail = async () => {
+        if (!emailDest) {
+            toast.error("Ingresá un email válido");
+            return;
+        }
+        setIsSendingEmail(true);
+        try {
+            const res = await fetch(`/api/ventas/${saleId}/send-email`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ to: emailDest }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Error al enviar email");
+            toast.success("Email enviado correctamente");
+            setShowEmailModal(false);
+        } catch (err: any) {
+            toast.error(err.message);
+        } finally {
+            setIsSendingEmail(false);
         }
     };
 
@@ -544,20 +620,38 @@ const SaleDetailPage = () => {
 
                 <div className='mt-8 flex justify-end space-x-3'>
                     {/* --- NUEVOS BOTONES DE ACCIÓN --- */}
+                    {/* --- NUEVOS BOTONES DE ACCIÓN --- */}
                     <div className='flex space-x-2'>
                         <Button
                             variant='outline'
-                            onClick={handlePrintOrSavePDF}
+                            onClick={() => handlePrintOrSavePDF('ticket')}
                         >
                             <Printer size={16} className='mr-2' />
-                            Imprimir / Guardar PDF
+                            Ticket 80mm
+                        </Button>
+                        <Button
+                            variant='outline'
+                            onClick={() => handlePrintOrSavePDF('a4')}
+                        >
+                            <Printer size={16} className='mr-2' />
+                            A4 / PDF
                         </Button>
                         <Button
                             variant='whatsapp'
                             onClick={handleShareOnWhatsApp}
                         >
                             <MessageSquare size={16} className='mr-2' />
-                            Compartir por WhatsApp
+                            WhatsApp
+                        </Button>
+                        <Button
+                            variant='outline'
+                            onClick={() => {
+                                setEmailDest(sale?.client?.email || "");
+                                setShowEmailModal(true);
+                            }}
+                        >
+                            <Mail size={16} className='mr-2' />
+                            Email
                         </Button>
                     </div>
                 </div>
@@ -638,6 +732,88 @@ const SaleDetailPage = () => {
                                     className="w-full sm:w-auto"
                                 >
                                     Cancelar
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Modal para enviar Email */}
+            <AnimatePresence>
+                {showEmailModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                        onClick={() => !isSendingEmail && setShowEmailModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                            animate={{ scale: 1, y: 0, opacity: 1 }}
+                            exit={{ scale: 0.9, y: 20, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 overflow-hidden relative"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600" />
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                    <Mail className="text-blue-500" size={24} /> Enviar Comprobante por Email
+                                </h3>
+                                <button
+                                    onClick={() => setShowEmailModal(false)}
+                                    disabled={isSendingEmail}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Ingresá el correo electrónico al cual deseas enviar el comprobante de esta venta.
+                            </p>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Email del destinatario
+                                    </label>
+                                    <input
+                                        type="email"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-black"
+                                        placeholder="ejemplo@correo.com"
+                                        value={emailDest}
+                                        onChange={(e) => setEmailDest(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleSendEmail();
+                                        }}
+                                        disabled={isSendingEmail}
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+                            <div className="mt-8 flex justify-end space-x-3">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowEmailModal(false)}
+                                    disabled={isSendingEmail}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    onClick={handleSendEmail}
+                                    disabled={!emailDest || isSendingEmail}
+                                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
+                                >
+                                    {isSendingEmail ? (
+                                        <>
+                                            <Loader2 size={18} className="mr-2 animate-spin" />
+                                            Enviando...
+                                        </>
+                                    ) : (
+                                        "Enviar Email"
+                                    )}
                                 </Button>
                             </div>
                         </motion.div>
@@ -758,80 +934,14 @@ const SaleDetailPage = () => {
             </AnimatePresence>
         </div>
 
-        {/* --- VISTA DE IMPRESIÓN (Ticket 80mm) --- */}
-        <div className="hidden print:block w-[80mm] mx-auto bg-white text-black font-mono text-sm leading-tight pb-8">
-            <div className="text-center border-b border-black pb-2 mb-2">
-                <h2 className="text-xl font-bold uppercase">{config.empresaNombre || "CLINPOS"}</h2>
-                <p className="text-xs">{config.empresaDireccion || "Dirección no configurada"}</p>
-                <p className="text-xs">{config.empresaTelefono || ""}</p>
-                {config.arcaCuit && <p className="text-xs mt-1">CUIT: {config.arcaCuit}</p>}
-                {config.condicionIva && <p className="text-xs">{config.condicionIva}</p>}
-                <p className="text-xs mt-2">--------------------------------</p>
-                <h3 className="font-bold text-base mt-1">
-                    {sale.invoice ? `FACTURA ${sale.invoice.invoiceType}` : (sale.status === 'PENDING' ? 'PEDIDO DE VENTA' : 'TICKET DE VENTA')}
-                </h3>
-                <p className="text-xs">
-                    Nro: {sale.invoice ? `${String(sale.invoice.pointOfSale).padStart(4, '0')}-${String(sale.invoice.invoiceNumber).padStart(8, '0')}` : String(sale.id).padStart(8, '0')}
-                </p>
-                <p className="text-xs">Fecha: {formatDate(sale.saleDate)}</p>
-            </div>
-
-            <div className="mb-2 text-xs border-b border-black pb-2">
-                <p><strong>Cliente:</strong> {sale.client ? `${sale.client.firstName} ${sale.client.lastName || ''}`.trim() : 'Consumidor Final'}</p>
-                {sale.client?.cuit && <p><strong>DNI/CUIT:</strong> {sale.client.cuit}</p>}
-                {sale.invoice?.clientCuit && sale.invoice.clientCuit !== sale.client?.cuit && <p><strong>CUIT Factura:</strong> {sale.invoice.clientCuit}</p>}
-                <p><strong>Vendedor:</strong> {sale.seller?.name || 'Mostrador'}</p>
-                <p><strong>Cond. Pago:</strong> {getPaymentTypeDisplay(sale.paymentType)}</p>
-            </div>
-
-            <table className="w-full text-xs text-left mb-2">
-                <thead>
-                    <tr className="border-b border-black/50">
-                        <th className="py-1">Cant</th>
-                        <th className="py-1">Producto</th>
-                        <th className="py-1 text-right">Monto</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {sale.items.map((item) => (
-                        <tr key={item.id}>
-                            <td className="py-1 align-top">{item.quantity}</td>
-                            <td className="py-1 align-top pr-1">
-                                {item.product?.name || 'Producto eliminado'}
-                                {Number(item.discountPercent) > 0 && <span className="block text-[10px]">(-{item.discountPercent}%)</span>}
-                            </td>
-                            <td className="py-1 align-top text-right">${parseFloat(String(item.subtotal)).toLocaleString('es-AR', {minimumFractionDigits:2})}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-
-            <div className="border-t border-black pt-2 mb-4 text-right">
-                <p className="text-lg font-bold">TOTAL: {formatCurrency(sale.totalAmount)}</p>
-            </div>
-
-            {sale.invoice?.cae && (
-                <div className="text-center text-xs mt-4 pt-2 border-t border-black border-dashed">
-                    <p className="font-bold">Comprobante Autorizado por AFIP</p>
-                    <p>CAE: {sale.invoice.cae}</p>
-                    <p>Vto. CAE: {formatDate(sale.invoice.caeExpiration)}</p>
-                    {invoiceQrDataUrl && (
-                        <div className="mt-2 flex justify-center">
-                            <img src={invoiceQrDataUrl} alt="QR AFIP" className="w-32 h-32" />
-                        </div>
-                    )}
-                </div>
-            )}
-            
-            {!sale.invoice?.cae && (
-                <div className="text-center text-[10px] mt-4 pt-2 border-t border-black border-dashed">
-                    <p>DOCUMENTO NO VÁLIDO COMO FACTURA</p>
-                </div>
-            )}
-
-            <div className="text-center text-xs mt-6">
-                <p>¡Gracias por su compra!</p>
-            </div>
+        {/* --- VISTA OCULTA PARA GENERACIÓN PDF --- */}
+        <div className={`fixed -left-[9999px] top-0 bg-white z-[-1] ${printFormat === 'a4' ? 'w-[210mm]' : 'w-[80mm]'}`}>
+            <PrintTemplate 
+                format={printFormat}
+                sale={sale}
+                config={config}
+                invoiceQrDataUrl={invoiceQrDataUrl}
+            />
         </div>
         </>
     );

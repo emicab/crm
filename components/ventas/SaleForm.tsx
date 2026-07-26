@@ -357,7 +357,18 @@ const SaleForm = () => {
                     const clientName = lastCreatedSale.client
                       ? `${lastCreatedSale.client.firstName} ${lastCreatedSale.client.lastName || ""}`.trim()
                       : "Cliente";
-                    const message = `Hola ${clientName}! Te adjuntamos el detalle de tu compra N° #${lastCreatedSale.id} por un total de $${parseFloat(lastCreatedSale.totalAmount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}. ¡Muchas gracias por elegirnos!`;
+                    
+                    let message = `Hola ${clientName}! 👋\n\nTe adjuntamos el detalle de tu compra N° #${lastCreatedSale.id}:\n\n`;
+                    lastCreatedSale.items.forEach((item: any) => {
+                        message += `- ${item.quantity}x ${item.product?.name || 'Producto'} ($${parseFloat(item.priceAtSale).toLocaleString("es-AR", { minimumFractionDigits: 2 })})\n`;
+                    });
+                    
+                    if (lastCreatedSale.discountCodeApplied) {
+                        message += `\nDescuento aplicado: ${lastCreatedSale.discountCodeApplied}`;
+                    }
+                    
+                    message += `\n\n*TOTAL: $${parseFloat(lastCreatedSale.totalAmount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}*\n\n¡Muchas gracias por elegirnos!`;
+
                     // Dynamic import to avoid SSR crash
                     import('@tauri-apps/plugin-shell').then(({ open }) => {
                       open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`);

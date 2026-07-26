@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Building, Percent, CreditCard, Save } from 'lucide-react';
+import { Building, Percent, CreditCard, Save, Mail } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -131,6 +131,80 @@ export default function ConfigGeneralTab({
           />
         </div>
       </section>
+
+      <div className="bg-background rounded-xl p-6 border border-border shadow-sm">
+        <h2 className="text-xl font-semibold mb-6 text-foreground flex items-center">
+          <Mail className="mr-3 text-primary" size={24} />
+          Envío de Emails (SMTP)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-foreground-muted mb-2">
+              Servidor SMTP
+            </label>
+            <input
+              type="text"
+              name="smtpHost"
+              placeholder="ej. smtp.gmail.com"
+              value={form.smtpHost || ''}
+              onChange={(e) => handleChange('smtpHost', e.target.value)}
+              className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground-muted mb-2">
+              Puerto SMTP
+            </label>
+            <input
+              type="text"
+              name="smtpPort"
+              placeholder="ej. 587 o 465"
+              value={form.smtpPort || ''}
+              onChange={(e) => handleChange('smtpPort', e.target.value)}
+              className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground-muted mb-2">
+              Usuario SMTP (Email)
+            </label>
+            <input
+              type="email"
+              name="smtpUser"
+              placeholder="tu-correo@gmail.com"
+              value={form.smtpUser || ''}
+              onChange={(e) => handleChange('smtpUser', e.target.value)}
+              className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground-muted mb-2">
+              Contraseña SMTP
+            </label>
+            <input
+              type="password"
+              name="smtpPass"
+              placeholder="Contraseña o App Password"
+              value={form.smtpPass || ''}
+              onChange={(e) => handleChange('smtpPass', e.target.value)}
+              className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-foreground-muted mb-2">
+              Nombre de Remitente
+            </label>
+            <input
+              type="text"
+              name="smtpFromName"
+              placeholder="Ej. Mi Negocio - Ventas"
+              value={form.smtpFromName || ''}
+              onChange={(e) => handleChange('smtpFromName', e.target.value)}
+              className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={isSaving}>

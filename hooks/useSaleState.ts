@@ -184,6 +184,15 @@ export const useSaleState = () => {
           }));
         }
 
+        // Apply default payment type from config if not already set in persisted cart
+        const defaultPT = configData.defaultPaymentType;
+        if (defaultPT) {
+          setFormData((prev) => ({
+            ...prev,
+            paymentType: prev.paymentType || (defaultPT as PaymentTypeEnum),
+          }));
+        }
+
         if (showCombos) {
           setCombos(
             combosData
@@ -761,6 +770,14 @@ export const useSaleState = () => {
   const executeSale = async (e?: React.FormEvent<HTMLFormElement>, isOrder: boolean = false) => {
     if (e) e.preventDefault();
     setIsLoading(true);
+
+    if (!hasOpenCaja && !isOrder) {
+      toast.error("Debes tener una caja abierta para registrar una venta.");
+      setShowCajaModal(true);
+      setIsLoading(false);
+      return;
+    }
+
     if (!formData.paymentType) {
       toast.error("Seleccioná un tipo de pago.");
       setIsLoading(false);
@@ -775,13 +792,9 @@ export const useSaleState = () => {
     const activeSellerId = isModuleEnabled("vendedores")
       ? formData.sellerId
       : "1";
-    if (!activeSellerId) {
-      if (!hasOpenCaja) {
-        setShowCajaModal(true);
-        setIsLoading(false);
-        return;
-      }
-      toast.error("La caja abierta no tiene un vendedor asignado.");
+    
+    if (!activeSellerId && isModuleEnabled("vendedores")) {
+      toast.error("Debes seleccionar un vendedor.");
       setIsLoading(false);
       return;
     }
