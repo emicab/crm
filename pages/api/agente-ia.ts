@@ -2,8 +2,6 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../lib/prisma';
 import { decryptText } from '../../lib/encryption';
 import { GoogleGenAI } from '@google/genai';
-// @ts-expect-error: node:sqlite lacks typescript definitions in current node types
-import { DatabaseSync } from 'node:sqlite';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
@@ -547,6 +545,8 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
             if (dbPath === "./dev.db" || dbPath === "dev.db") {
               dbPath = "./prisma/dev.db";
             }
+            // @ts-expect-error: eval avoids webpack resolving the native module at build time
+            const { DatabaseSync } = eval("require('node:sqlite')");
             const safeDb = new DatabaseSync(dbPath, { readOnly: true });
             
             const rawData = safeDb.prepare(consulta_sql).all();
