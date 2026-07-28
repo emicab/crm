@@ -164,7 +164,14 @@ const PurchaseForm = () => {
       `\nTotal: ${formatCurrency(purchase.totalAmount)}`,
       '\nSaludos!',
     ].join('\n');
-    window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+    
+    const url = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+    
+    import('@tauri-apps/plugin-shell').then(({ open }) => {
+      open(url);
+    }).catch(() => {
+      window.open(url, '_blank');
+    });
   };
 
   const markAsOrdered = async () => {

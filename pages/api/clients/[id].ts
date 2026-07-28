@@ -82,21 +82,23 @@ export default async function handler(
     }
   } else if (req.method === 'DELETE') {
     try {
-      // Verificar si el cliente tiene ventas asociadas
-      const salesCount = await prisma.sale.count({
+      // 1. Desvincular ventas asociadas (quedan en el historial pero sin cliente)
+      await prisma.sale.updateMany({
+        where: { clientId: id },
+        data: { clientId: null },
+      });
+
+      // 2. Eliminar balance de cuenta corriente y movimientos asociados
+      await prisma.accountBalance.deleteMany({
         where: { clientId: id },
       });
 
-      if (salesCount > 0) {
-        return res.status(409).json({ // 409 Conflict
-          message: `No se puede eliminar el cliente porque tiene ${salesCount} venta(s) asociada(s).`
-        });
-      }
-      
+      // 3. Eliminar el cliente
       await prisma.client.delete({
         where: { id },
       });
-      res.status(204).end(); // No Content
+
+      res.status(200).json({ message: "Cliente eliminado correctamente." });
     } catch (error: any) {
       handleApiError(res, error, `deleting client ${id}`);
     }

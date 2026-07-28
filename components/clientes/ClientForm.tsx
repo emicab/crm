@@ -8,6 +8,8 @@ import Input from '@/components/ui/Input';
 import { Loader2, AlertCircle } from 'lucide-react';
 import type { Client } from '@/types'; 
 
+import toast from 'react-hot-toast';
+
 interface ClientFormData {
   firstName: string;
   lastName: string;
@@ -36,6 +38,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialClientData }) => {
     businessName: '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -59,6 +62,30 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialClientData }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
     setError(null);
     setSuccessMessage(null);
+  };
+
+  const handleDelete = async () => {
+    if (!initialClientData) return;
+    if (!confirm(`¿Estás seguro de que deseas eliminar al cliente "${initialClientData.firstName} ${initialClientData.lastName || ''}"?`)) return;
+
+    setIsDeleting(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/clients/${initialClientData.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al eliminar el cliente.');
+      }
+      toast.success('Cliente eliminado correctamente.');
+      router.push('/clientes');
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || 'Ocurrió un error al eliminar el cliente.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -165,14 +192,29 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialClientData }) => {
         />
       </div>
 
-      <div className="flex justify-end pt-4">
-        <Button type="button" variant="outline" onClick={() => router.push('/clientes')} className="mr-3" disabled={isLoading}>
-          Cancelar
-        </Button>
-        <Button type="submit" variant="primary" disabled={isLoading}>
-          {isLoading ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
-          {isLoading ? loadingButtonText : submitButtonText}
-        </Button>
+      <div className="flex justify-between items-center pt-4">
+        {initialClientData ? (
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isLoading || isDeleting}
+          >
+            {isDeleting ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
+            {isDeleting ? "Eliminando..." : "Eliminar Cliente"}
+          </Button>
+        ) : (
+          <div />
+        )}
+        <div className="flex items-center">
+          <Button type="button" variant="outline" onClick={() => router.push('/clientes')} className="mr-3" disabled={isLoading || isDeleting}>
+            Cancelar
+          </Button>
+          <Button type="submit" variant="primary" disabled={isLoading || isDeleting}>
+            {isLoading ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
+            {isLoading ? loadingButtonText : submitButtonText}
+          </Button>
+        </div>
       </div>
     </form>
   );

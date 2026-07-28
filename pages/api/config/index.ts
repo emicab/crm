@@ -52,9 +52,10 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   smtpUser: '',
   smtpPass: '',
   smtpFromName: 'Mi Negocio - Ventas',
+  geminiApiKey: '',
 };
 
-const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey', 'smtpPass'];
+const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey', 'smtpPass', 'geminiApiKey'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {

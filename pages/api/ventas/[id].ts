@@ -124,10 +124,8 @@ export default async function handler(
 
   } else if (req.method === 'DELETE') {
     try {
-      // Usamos una transacción para asegurar que la reposición de stock y la eliminación
-      // de la venta ocurran juntas, o ninguna de las dos.
       const result = await prisma.$transaction(async (tx) => {
-        // 1. Encontrar la venta y sus ítems para saber qué stock reponer
+        // 1. Encontrar la venta y sus ítems
         const saleToDelete = await tx.sale.findUnique({
           where: { id: id },
           include: {
@@ -141,14 +139,44 @@ export default async function handler(
         });
 
         if (!saleToDelete) {
-          // Si la venta no se encuentra, la transacción fallará.
           throw new Prisma.PrismaClientKnownRequestError('Venta no encontrada para eliminar.', {
-            code: 'P2025', // Código de Prisma para "Registro no encontrado"
+            code: 'P2025',
             clientVersion: Prisma.prismaVersion.client,
           });
         }
 
-        // 2. Reponer (incrementar) el stock de cada producto vendido
+        // 2. Revertir saldo de Cuenta Corriente si estuvo vinculada a un cliente
+        if (saleToDelete.clientId) {
+          const balanceRecord = await tx.accountBalance.findUnique({
+            where: { clientId: saleToDelete.clientId },
+          });
+
+          if (balanceRecord) {
+            await tx.accountBalance.update({
+              where: { id: balanceRecord.id },
+              data: {
+                balance: {
+                  decrement: saleToDelete.totalAmount,
+                },
+              },
+            });
+          }
+
+          // Eliminar los movimientos de cuenta corriente vinculados a esta venta
+          await tx.accountMovement.deleteMany({
+            where: { saleId: id },
+          });
+        }
+
+        // 3. Eliminar los movimientos de caja generados por esta venta
+        await tx.cashMovement.deleteMany({
+          where: {
+            sourceId: id,
+            type: 'SALE',
+          },
+        });
+
+        // 4. Reponer (incrementar) el stock de cada producto vendido
         for (const item of saleToDelete.items) {
           await tx.product.update({
             where: { id: item.productId },
@@ -160,20 +188,20 @@ export default async function handler(
           });
         }
 
-        // 3. Eliminar la venta. Los SaleItems asociados se eliminarán en cascada
-        // si la relación en el schema.prisma tiene `onDelete: Cascade`.
+        // 5. Eliminar la venta
         await tx.sale.delete({
           where: { id: id },
         });
 
-        return { message: 'Venta eliminada y stock repuesto exitosamente.' };
+        return { message: 'Venta eliminada, stock repuesto y cuenta corriente actualizada exitosamente.' };
       });
 
       res.status(200).json(result);
-
+      return;
     } catch (error: any) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        return res.status(404).json({ message: 'Venta no encontrada para eliminar.' });
+        res.status(404).json({ message: 'Venta no encontrada para eliminar.' });
+        return;
       }
       handleApiError(res, error, `deleting sale ${id}`);
     }

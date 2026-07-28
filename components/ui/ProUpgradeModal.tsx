@@ -87,7 +87,11 @@ const ProUpgradeModal: React.FC<ProUpgradeModalProps> = ({
                 });
                 const data = await res.json();
                 if (data.init_point) {
-                  window.open(data.init_point, "_blank");
+                  import('@tauri-apps/plugin-shell').then(({ open }) => {
+                    open(data.init_point);
+                  }).catch(() => {
+                    window.open(data.init_point, "_blank");
+                  });
                 }
               } catch {
                 /* fallback */

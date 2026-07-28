@@ -48,6 +48,7 @@ model Product {
   purchaseItems    PurchaseItem[]
   comboItems       ComboItem[]
   promotionConditions PromotionCondition[]
+  consignmentItems ConsignmentItem[]
 }
 
 model Client {
@@ -64,6 +65,7 @@ model Client {
   updatedAt      DateTime        @updatedAt
   Sale           Sale[]
   accountBalance AccountBalance?
+  consignments   Consignment[]
 
   @@index([firstName, lastName])
 }
@@ -340,4 +342,59 @@ model User {
   pinHash   String   // SHA-256 PIN hash
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  title     String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id          String      @id @default(cuid())
+  sessionId   String
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role        String      // user or model
+  content     String
+  suggestions String?     // Serialized JSON array of suggestions
+  createdAt   DateTime    @default(now())
+}
+
+model SavedNote {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  content     String
+  createdAt   DateTime @default(now())
+}
+
+enum ConsignmentStatus {
+  DELIVERED
+  SETTLED
+  CANCELLED
+}
+
+model Consignment {
+  id           Int                 @id @default(autoincrement())
+  clientId     Int
+  client       Client              @relation(fields: [clientId], references: [id])
+  status       ConsignmentStatus   @default(DELIVERED)
+  notes        String?
+  items        ConsignmentItem[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+model ConsignmentItem {
+  id               Int         @id @default(autoincrement())
+  consignmentId    Int
+  productId        Int
+  quantityGiven    Float
+  quantitySold     Float       @default(0)
+  quantityReturned Float       @default(0)
+  priceAtGiven     Decimal
+  consignment      Consignment @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
+  product          Product     @relation(fields: [productId], references: [id])
 }

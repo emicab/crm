@@ -182,6 +182,16 @@ async fn restore_database(app_handle: tauri::AppHandle) -> Result<RestoreResult,
     }
 }
 
+#[tauri::command]
+async fn kill_server(state: tauri::State<'_, ServerState>) -> Result<(), String> {
+    if let Ok(mut server_state) = state.0.lock() {
+        if let Some(mut child) = server_state.take() {
+            let _ = child.kill();
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -189,7 +199,7 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
     .manage(ServerState(Mutex::new(None)))
-    .invoke_handler(tauri::generate_handler![backup_database, restore_database])
+    .invoke_handler(tauri::generate_handler![backup_database, restore_database, kill_server])
     .setup(|app| {
       #[cfg(debug_assertions)]
       {

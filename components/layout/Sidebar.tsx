@@ -23,6 +23,10 @@ import {
   AlertTriangle,
   ChevronDown,
   RefreshCcw,
+  Bot,
+  Bookmark,
+  LogOut,
+  ChevronRight,
   Ticket,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -52,6 +56,7 @@ const navGroups: NavGroup[] = [
       { href: "/caja", label: "Caja", icon: <Wallet size={20} /> },
       { href: "/ventas/nueva", label: "Nueva Venta", icon: <PlusSquare size={20} /> },
       { href: "/ventas", label: "Historial Ventas", icon: <FileText size={20} /> },
+      { href: "/consignaciones", label: "Consignaciones", icon: <RefreshCcw size={20} />, moduleId: "consignaciones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
     ],
   },
   {
@@ -93,6 +98,7 @@ const navGroups: NavGroup[] = [
     title: "General",
     items: [
       { href: "/analiticas", label: "Analíticas", icon: <LayoutDashboard size={20} />, moduleId: "analiticas", allowedRoles: ["ADMIN"] },
+      { href: "/notas-ia", label: "Notas Guardadas (IA)", icon: <Bookmark size={20} />, moduleId: "analiticas", allowedRoles: ["ADMIN"] },
       { href: "/configuracion/usuarios", label: "Usuarios y Permisos", icon: <Users size={20} />, allowedRoles: ["ADMIN"] },
       { href: "/configuracion", label: "Configuración", icon: <Settings size={20} />, allowedRoles: ["ADMIN"] },
     ],
@@ -174,9 +180,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       setIsCheckingUpdate(true);
       // Dynamic import to avoid SSR crash (window.__TAURI_INTERNALS__ doesn't exist on server)
       const { check } = await import('@tauri-apps/plugin-updater');
+      const { invoke } = await import('@tauri-apps/api/core');
       const update = await check();
       if (update) {
-        toast.success(`Actualización ${update.version} encontrada. Descargando...`);
+        toast.success(`Actualización ${update.version} encontrada. Descargando e instalando...`);
+        try { await invoke('kill_server'); } catch (e) { console.error("Failed to kill server", e); }
         await update.downloadAndInstall();
         toast.success("¡Actualización instalada! Por favor, cierra y vuelve a abrir la aplicación para aplicar los cambios.");
       } else {
@@ -195,7 +203,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const filteredGroups = navGroups.map((group) => {
     const processedItems = group.items.map((item) => {
       const isEnabled = !item.moduleId || isModuleEnabled(item.moduleId);
-      const isProFeature = ['cuenta_corriente', 'analiticas'].includes(item.moduleId || '');
+      const isProFeature = ['cuenta_corriente', 'analiticas', 'consignaciones', 'agente_ia'].includes(item.moduleId || '');
       
       // If feature belongs to Pro plan and we are in basic plan, keep item visible with lock
       if (!isEnabled && isProFeature && plan === 'basico') {
@@ -281,6 +289,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                         {item.isLocked && (
                           <span className="text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded shadow-xs">
                             PRO 🔒
+                          </span>
+                        )}
+                        {item.label === "Notas Guardadas (IA)" && (
+                          <span className="text-[9px] font-extrabold uppercase bg-blue-100 text-blue-900 border border-blue-300 px-1.5 py-0.5 rounded shadow-xs ml-1">
+                            Experimental
                           </span>
                         )}
                         {item.label === "Alertas de Stock" && alertCount > 0 && (

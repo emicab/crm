@@ -1,6 +1,6 @@
 {
   "name": "clinpos",
-  "version": "1.5.22",
+  "version": "1.7.0",
   "description": "ClinPOS By EmiDev",
   "author": "Emiliano Cabanillas",
   "private": true,
@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@afipsdk/afip.js": "^1.2.3",
+    "@google/genai": "^2.13.0",
     "@prisma/client": "^6.4.0",
     "@supabase/supabase-js": "^2.110.2",
     "@tauri-apps/api": "^2.2.0",
@@ -48,7 +49,9 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.5.2",
-    "recharts": "^2.15.3"
+    "react-markdown": "^10.1.0",
+    "recharts": "^2.15.3",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

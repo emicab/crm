@@ -128,7 +128,12 @@ const PurchaseDetailPage = () => {
     if (!phone) { toast.error('El proveedor no tiene teléfono registrado.'); return; }
     const lines = purchase.items.map(i => `- ${i.product?.name || `#${i.productId}`}: ${i.quantity} x ${formatCurrency(i.purchasePrice)}`);
     const msg = `Hola ${purchase.supplier?.name || ''}, te hago el pedido:\n\n${lines.join('\n')}\n\nTotal: ${formatCurrency(purchase.totalAmount)}\n\nSaludos!`;
-    window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+    const url = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
+    import('@tauri-apps/plugin-shell').then(({ open }) => {
+      open(url);
+    }).catch(() => {
+      window.open(url, '_blank');
+    });
     updateStatus('ORDERED');
   };
 

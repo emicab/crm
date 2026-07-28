@@ -56,6 +56,66 @@ export default function ConfigGeneralTab({
         </div>
       </section>
 
+      {/* Reportes por Email */}
+      <section className="bg-muted p-6 rounded-xl shadow space-y-4">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <Mail size={20} className="text-primary" /> Reportes por Correo
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            label="Email Receptor de Reportes Diarios"
+            type="email"
+            value={form.dailyReportEmail || ''}
+            onChange={(e) => handleChange('dailyReportEmail', e.target.value)}
+            placeholder="dueño@miempresa.com"
+          />
+        </div>
+      </section>
+
+      {/* Inteligencia Artificial (Gemini) */}
+      <section className="bg-muted p-6 rounded-xl shadow space-y-4">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-primary"
+          >
+            <path d="M12 3v18" />
+            <path d="m3 12 18 0" />
+            <path d="M7 7l10 10" />
+            <path d="M17 7 7 17" />
+          </svg>
+          Inteligencia Artificial (Reportes Inteligentes)
+        </h2>
+        <div className="grid grid-cols-1 gap-4">
+          <Input
+            label="API Key de Google Gemini"
+            type="password"
+            value={form.geminiApiKey || ''}
+            onChange={(e) => handleChange('geminiApiKey', e.target.value)}
+            placeholder="AIzaSyA..."
+          />
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-xl border border-blue-200 dark:border-blue-900/50 space-y-2 mt-2">
+            <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
+              ¿Cómo obtener tu clave gratuita?
+            </p>
+            <ol className="list-decimal list-inside text-xs text-blue-800 dark:text-blue-400 space-y-1">
+              <li>Ingresá a <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="font-bold underline">Google AI Studio</a> e iniciá sesión con tu cuenta de Google.</li>
+              <li>Hacé clic en el botón azul <strong>"Create API key"</strong> (Crear clave de API).</li>
+              <li>Copiá el código largo generado (empieza con AIza...).</li>
+              <li>Pegalo en el casillero de arriba y dale a "Guardar Configuración".</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
       {/* Tasa e imprimibles */}
       <section className="bg-muted p-6 rounded-xl shadow space-y-4">
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">

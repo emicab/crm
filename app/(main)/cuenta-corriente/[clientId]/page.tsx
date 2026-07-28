@@ -262,7 +262,12 @@ export default function ClienteCuentaDetailsPage() {
                   const finalPhone = phoneVal.startsWith("54") ? phoneVal : "549" + phoneVal;
                   const formattedBalance = balanceVal.toLocaleString("es-AR", { minimumFractionDigits: 2 });
                   const message = `Hola ${client.firstName}! Te recordamos que tenés un saldo pendiente en tu Cuenta Corriente con nosotros de $${formattedBalance}. Podés pasar por nuestro local a realizar entregas cuando gustes. ¡Muchas gracias!`;
-                  window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, "_blank");
+                  const url = `https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`;
+                  import('@tauri-apps/plugin-shell').then(({ open }) => {
+                    open(url);
+                  }).catch(() => {
+                    window.open(url, "_blank");
+                  });
                 }}
                 className="w-full mt-2.5 py-2 px-3 border border-emerald-500 hover:bg-emerald-50 text-emerald-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer bg-white"
               >
