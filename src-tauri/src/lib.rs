@@ -27,6 +27,58 @@ const MIGRATIONS: &[Migration] = &[
         name: "add_sale_status",
         sql: r#"ALTER TABLE "Sale" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'COMPLETED'"#,
     },
+    Migration {
+        version: 2,
+        name: "add_consignments",
+        sql: r#"
+            CREATE TABLE IF NOT EXISTS "Consignment" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "clientId" INTEGER NOT NULL,
+                "status" TEXT NOT NULL DEFAULT 'DELIVERED',
+                "notes" TEXT,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL,
+                CONSTRAINT "Consignment_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS "ConsignmentItem" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "consignmentId" INTEGER NOT NULL,
+                "productId" INTEGER NOT NULL,
+                "quantityGiven" REAL NOT NULL,
+                "quantitySold" REAL NOT NULL DEFAULT 0,
+                "quantityReturned" REAL NOT NULL DEFAULT 0,
+                "priceAtGiven" DECIMAL NOT NULL,
+                CONSTRAINT "ConsignmentItem_consignmentId_fkey" FOREIGN KEY ("consignmentId") REFERENCES "Consignment" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT "ConsignmentItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS "SavedNote" (
+                "id" TEXT NOT NULL PRIMARY KEY,
+                "title" TEXT NOT NULL,
+                "description" TEXT,
+                "content" TEXT NOT NULL,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS "ChatSession" (
+                "id" TEXT NOT NULL PRIMARY KEY,
+                "title" TEXT NOT NULL,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS "ChatMessage" (
+                "id" TEXT NOT NULL PRIMARY KEY,
+                "sessionId" TEXT NOT NULL,
+                "role" TEXT NOT NULL,
+                "content" TEXT NOT NULL,
+                "suggestions" TEXT,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "ChatMessage_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "ChatSession" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+            );
+        "#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {
