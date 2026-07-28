@@ -398,6 +398,19 @@ pub fn run() {
         }
       }
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|app_handle, event| {
+      match event {
+        tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+          if let Ok(mut state) = app_handle.state::<ServerState>().0.lock() {
+            if let Some(mut child) = state.take() {
+              let _ = child.kill();
+              let _ = child.wait();
+            }
+          }
+        }
+        _ => {}
+      }
+    });
 }
