@@ -545,7 +545,6 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
             if (dbPath === "./dev.db" || dbPath === "dev.db") {
               dbPath = "./prisma/dev.db";
             }
-            // @ts-expect-error: eval avoids webpack resolving the native module at build time
             const { DatabaseSync } = eval("require('node:sqlite')");
             const safeDb = new DatabaseSync(dbPath, { readOnly: true });
             
