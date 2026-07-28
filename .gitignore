@@ -58,3 +58,4 @@ dist_electron
 /electron-dist
 
 ~/*.tauri
+DOCS
