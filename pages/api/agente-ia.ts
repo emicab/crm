@@ -215,13 +215,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const businessName = businessNameSetting?.value?.trim() || "tu negocio";
 
     // Obtener información de la caja/turno actual
-    const activeShift = await prisma.shift.findFirst({
+    const activeShift = await prisma.cashRegister.findFirst({
       where: { status: 'OPEN' },
-      orderBy: { startTime: 'desc' }
+      orderBy: { openDate: 'desc' }
     });
     
     const activeShiftContext = activeShift 
-      ? `\nINFORMACIÓN DE CONTEXTO ACTUAL:\n- Hay una CAJA ABIERTA (Turno Actual) con ID: ${activeShift.id}. Abierta el: ${new Date(Number(activeShift.startTime)).toLocaleString()}. Cuando el usuario pregunte por "la caja actual", "este turno", o "las ventas de hoy en caja", debes filtrar SIEMPRE por \`cashRegisterId = ${activeShift.id}\` o \`shiftId = ${activeShift.id}\` según la tabla.\n` 
+      ? `\nINFORMACIÓN DE CONTEXTO ACTUAL:\n- Hay una CAJA ABIERTA (Turno Actual) con ID: ${activeShift.id}. Abierta el: ${new Date(activeShift.openDate).toLocaleString()}. Cuando el usuario pregunte por "la caja actual", "este turno", o "las ventas de hoy en caja", debes filtrar SIEMPRE por \`cashRegisterId = ${activeShift.id}\` según la tabla.\n` 
       : `\nINFORMACIÓN DE CONTEXTO ACTUAL:\n- Actualmente NO hay ninguna caja abierta (Turno cerrado).\n`;
 
     const systemInstruction = `Eres el Asistente Copilot Autónomo de ${businessName}, integrado al software POS ClinPOS.
