@@ -148,16 +148,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const createDiscountCodeTool = {
       type: 'function',
       name: "crear_codigo_descuento",
-      description: "Crea un nuevo código de descuento (cupón promocional) en el sistema.",
+      description: "Crea un nuevo código de descuento (cupón promocional) en el sistema. NOTA: Solo admite porcentajes.",
       parameters: {
         type: 'object',
         properties: {
           codigo: { type: 'string', description: "Código en mayúsculas (ej. 'VERANO2026')" },
-          descuento: { type: 'number', description: "Valor del descuento (ej. 10 o 500)" },
-          tipo: { type: 'string', description: "'PERCENTAGE' (porcentaje) o 'FIXED_AMOUNT' (monto fijo)" },
+          descuento: { type: 'number', description: "Porcentaje de descuento (ej. 10 para 10%)" },
           usoMaximo: { type: 'number', description: "Cantidad máxima de usos permitidos (opcional)" },
         },
-        required: ["codigo", "descuento", "tipo"],
+        required: ["codigo", "descuento"],
       },
     };
 
@@ -509,13 +508,12 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
           toolResponse = { exito: true, productoActualizado: { id: updated.id, nombre: updated.name, stockMinAlert: updated.stockMinAlert } };
 
         } else if (call.name === "crear_codigo_descuento") {
-          const { codigo, descuento, tipo, usoMaximo } = call.arguments as any;
+          const { codigo, descuento, usoMaximo } = call.arguments as any;
           const codeUpper = codigo.trim().toUpperCase();
           const createdCode = await prisma.discountCode.create({
             data: {
               code: codeUpper,
-              type: tipo === "PERCENTAGE" ? "PERCENTAGE" : "FIXED_AMOUNT",
-              value: descuento,
+              discountPercent: descuento,
               maxUses: usoMaximo ? parseInt(usoMaximo) : null,
               isActive: true,
             }
