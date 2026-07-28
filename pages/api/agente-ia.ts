@@ -377,207 +377,203 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
 
     // Bucle para soportar múltiples llamadas a funciones (multi-step function calling)
     while (!finalResponse && loopCount < 5) {
-      const fcStep = currentInteraction.steps?.find((s: any) => s.type === 'function_call');
-      if (!fcStep) break;
+      const fcSteps = currentInteraction.steps?.filter((s: any) => s.type === 'function_call') || [];
+      if (fcSteps.length === 0) break;
 
       historyArr = historyArr.concat(currentInteraction.steps || []);
       
-      const call = fcStep as any; // Para evitar errores de tipos en TS con el union type 'Step'
-      let toolResponse: any = null;
+      for (const fcStep of fcSteps) {
+        const call = fcStep as any;
+        let toolResponse: any = null;
 
-      try {
-        if (call.name === "obtener_metricas_ventas") {
-          const dias = call.arguments?.dias || 7;
-          const startDate = new Date();
-          startDate.setDate(startDate.getDate() - dias);
-          
-          const sales = await prisma.sale.findMany({
-            where: { saleDate: { gte: startDate }, status: "COMPLETED" },
-            include: { items: true }
-          });
-          const totalVentas = sales.reduce((acc, s) => acc + Number(s.totalAmount), 0);
-          toolResponse = { transacciones: sales.length, ingresosBrutos: totalVentas, periodo: `${dias} dias` };
-        
-        } else if (call.name === "obtener_productos_bajo_stock") {
-          const limit = call.arguments?.limite || 10;
-          const products = await prisma.product.findMany();
-          const lowStock = products.filter(p => p.stockMinAlert !== null && p.quantityStock <= p.stockMinAlert).slice(0, limit);
-          toolResponse = { productos: lowStock.map(p => ({ id: p.id, nombre: p.name, stockActual: p.quantityStock, alertaEn: p.stockMinAlert })) };
-        
-        } else if (call.name === "obtener_productos_mas_vendidos") {
-          const dias = call.arguments?.dias || 30;
-          const limit = call.arguments?.limite || 5;
-          const startDate = new Date();
-          startDate.setDate(startDate.getDate() - dias);
-
-          const items = await prisma.saleItem.groupBy({
-            by: ["productId"],
-            where: {
-              sale: {
-                saleDate: { gte: startDate },
-                status: "COMPLETED"
-              }
-            },
-            _sum: { quantity: true },
-            orderBy: { _sum: { quantity: "desc" } },
-            take: limit
-          });
-
-          const topProducts = await Promise.all(
-            items.map(async (i) => {
-              const product = await prisma.product.findUnique({ where: { id: i.productId } });
-              return {
-                nombre: product?.name || "Desconocido",
-                cantidadVendida: i._sum.quantity || 0,
-              };
-            })
-          );
-          toolResponse = { productosMasVendidos: topProducts, periodo: `${dias} dias` };
-
-        } else if (call.name === "crear_promocion") {
-          const { nombre, descuento, tipo } = call.arguments as any;
-          if (tipo === "PERCENTAGE" && (descuento < 1 || descuento > 100)) {
-            toolResponse = { error: "El descuento en porcentaje debe estar entre 1 y 100." };
-          } else if (tipo === "FIXED_AMOUNT" && descuento <= 0) {
-            toolResponse = { error: "El descuento fijo debe ser mayor a 0." };
-          } else {
-            const promo = await prisma.promotion.create({
-              data: {
-                name: nombre,
-                type: "SET_DISCOUNT",
-                discountType: tipo === "PERCENTAGE" ? "PERCENTAGE" : "FIXED_AMOUNT",
-                discountValue: descuento,
-                status: "ACTIVE",
-                priority: 1,
-              }
-            });
-            toolResponse = { exito: true, promocionCreada: promo };
-          }
-          
-        } else if (call.name === "crear_combo") {
-          const { nombre, precio, descripcion, items } = call.arguments as any;
-          if (!items || !items.length) {
-            toolResponse = { error: "El combo debe contener al menos un producto (items)." };
-          } else if (precio <= 0) {
-            toolResponse = { error: "El precio del combo debe ser mayor a 0." };
-          } else {
-            const combo = await prisma.combo.create({
-              data: {
-                name: nombre,
-                price: precio,
-                description: descripcion || null,
-                active: true,
-                items: {
-                  create: items.map((i: any) => ({
-                    productId: parseInt(i.productoId),
-                    quantity: parseFloat(i.cantidad) || 1,
-                  }))
-                }
-              },
+        try {
+          if (call.name === "obtener_metricas_ventas") {
+            const dias = call.arguments?.dias || 7;
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - dias);
+            
+            const sales = await prisma.sale.findMany({
+              where: { saleDate: { gte: startDate }, status: "COMPLETED" },
               include: { items: true }
             });
-            toolResponse = { exito: true, comboCreado: combo };
-          }
-
-        } else if (call.name === "crear_cliente") {
-          const { nombre, apellido, telefono, email, cuit, direccion, notas } = call.arguments as any;
-          const newClient = await prisma.client.create({
-            data: {
-              firstName: nombre,
-              lastName: apellido || null,
-              phone: telefono || null,
-              email: email || null,
-              cuit: cuit || null,
-              address: direccion || null,
-              notes: notas || null,
-            }
-          });
-          toolResponse = { exito: true, clienteCreado: newClient };
-
-        } else if (call.name === "actualizar_alerta_stock") {
-          const { productoId, stockMinAlert } = call.arguments as any;
-          const updated = await prisma.product.update({
-            where: { id: parseInt(productoId) },
-            data: { stockMinAlert: parseFloat(stockMinAlert) }
-          });
-          toolResponse = { exito: true, productoActualizado: { id: updated.id, nombre: updated.name, stockMinAlert: updated.stockMinAlert } };
-
-        } else if (call.name === "crear_codigo_descuento") {
-          const { codigo, descuento, usoMaximo } = call.arguments as any;
-          const codeUpper = codigo.trim().toUpperCase();
-          const createdCode = await prisma.discountCode.create({
-            data: {
-              code: codeUpper,
-              discountPercent: descuento,
-              maxUses: usoMaximo ? parseInt(usoMaximo) : null,
-              isActive: true,
-            }
-          });
-          toolResponse = { exito: true, codigoDescuentoCreado: createdCode };
+            const totalVentas = sales.reduce((acc, s) => acc + Number(s.totalAmount), 0);
+            toolResponse = { transacciones: sales.length, ingresosBrutos: totalVentas, periodo: `${dias} dias` };
           
-        } else if (call.name === "ejecutar_consulta_sql") {
-          const { consulta_sql } = call.arguments as any;
+          } else if (call.name === "obtener_productos_bajo_stock") {
+            const limit = call.arguments?.limite || 10;
+            const products = await prisma.product.findMany();
+            const lowStock = products.filter(p => p.stockMinAlert !== null && p.quantityStock <= p.stockMinAlert).slice(0, limit);
+            toolResponse = { productos: lowStock.map(p => ({ id: p.id, nombre: p.name, stockActual: p.quantityStock, alertaEn: p.stockMinAlert })) };
           
-          const upperQuery = consulta_sql.trim().toUpperCase();
-          if (!upperQuery.startsWith("SELECT")) {
-             throw new Error("Violación de Seguridad: Solo se permiten consultas SELECT.");
-          }
+          } else if (call.name === "obtener_productos_mas_vendidos") {
+            const dias = call.arguments?.dias || 30;
+            const limit = call.arguments?.limite || 5;
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - dias);
 
-          // Allowlist estricto de tablas para proteger Setting, User, etc.
-          const TABLAS_PERMITIDAS = ['Product', 'Category', 'Brand', 'Supplier', 'Sale', 'SaleItem', 'Purchase', 'PurchaseItem', 'Client', 'Seller', 'PaymentMethod', 'Expense', 'CashMovement', 'Shift', 'Consignment', 'ConsignmentItem', 'AccountBalance', 'AccountMovement', 'DiscountCode', 'Promotion', 'Combo', 'ComboItem'];
-          
-          // Regex basica para extraer palabras que siguen a FROM o JOIN
-          const tableMatches = upperQuery.match(/(?:FROM|JOIN)\s+([a-zA-Z0-9_]+)/g);
-          if (tableMatches) {
-             for (const match of tableMatches) {
-                const tableName = match.split(/\s+/)[1];
-                // Busqueda case-insensitive en el allowlist
-                if (!TABLAS_PERMITIDAS.some(t => t.toUpperCase() === tableName)) {
-                   throw new Error(`Violación de Privacidad: La tabla '${tableName}' no está en la lista de tablas permitidas para consultas analíticas.`);
+            const items = await prisma.saleItem.groupBy({
+              by: ["productId"],
+              where: {
+                sale: {
+                  saleDate: { gte: startDate },
+                  status: "COMPLETED"
                 }
-             }
-          }
+              },
+              _sum: { quantity: true },
+              orderBy: { _sum: { quantity: "desc" } },
+              take: limit
+            });
 
-          try {
-            // Conexión aislada nativa de solo lectura para ejecutar de forma estructuralmente segura
-            let dbPath = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace("file:", "") : "./prisma/dev.db";
-            // Prisma resuelve file:./dev.db relativo a la carpeta prisma/. node:sqlite lo hace desde la raíz.
-            if (dbPath === "./dev.db" || dbPath === "dev.db") {
-              dbPath = "./prisma/dev.db";
-            }
-            const { DatabaseSync } = eval("require('node:sqlite')");
-            const safeDb = new DatabaseSync(dbPath, { readOnly: true });
-            
-            const rawData = safeDb.prepare(consulta_sql).all();
-            
-            // Límite de seguridad para evitar exceder el límite de tokens de respuesta (Payload)
-            const arrayData = Array.isArray(rawData) ? rawData : [rawData];
-            if (arrayData.length > 50) {
-               toolResponse = { nota: "Resultados truncados a los primeros 50 registros", resultados: arrayData.slice(0, 50) };
+            const topProducts = await Promise.all(
+              items.map(async (i) => {
+                const product = await prisma.product.findUnique({ where: { id: i.productId } });
+                return {
+                  nombre: product?.name || "Desconocido",
+                  cantidadVendida: i._sum.quantity || 0,
+                };
+              })
+            );
+            toolResponse = { productosMasVendidos: topProducts, periodo: `${dias} dias` };
+
+          } else if (call.name === "crear_promocion") {
+            const { nombre, descuento, tipo } = call.arguments as any;
+            if (tipo === "PERCENTAGE" && (descuento < 1 || descuento > 100)) {
+              toolResponse = { error: "El descuento en porcentaje debe estar entre 1 y 100." };
+            } else if (tipo === "FIXED_AMOUNT" && descuento <= 0) {
+              toolResponse = { error: "El descuento fijo debe ser mayor a 0." };
             } else {
-               toolResponse = { resultados: arrayData };
+              const promo = await prisma.promotion.create({
+                data: {
+                  name: nombre,
+                  type: "SET_DISCOUNT",
+                  discountType: tipo === "PERCENTAGE" ? "PERCENTAGE" : "FIXED_AMOUNT",
+                  discountValue: descuento,
+                  status: "ACTIVE",
+                  priority: 1,
+                }
+              });
+              toolResponse = { exito: true, promocionCreada: promo };
             }
-          } catch (dbErr: any) {
-             toolResponse = { error_sql: dbErr.message };
+            
+          } else if (call.name === "crear_combo") {
+            const { nombre, precio, descripcion, items } = call.arguments as any;
+            if (!items || !items.length) {
+              toolResponse = { error: "El combo debe contener al menos un producto (items)." };
+            } else if (precio <= 0) {
+              toolResponse = { error: "El precio del combo debe ser mayor a 0." };
+            } else {
+              const combo = await prisma.combo.create({
+                data: {
+                  name: nombre,
+                  price: precio,
+                  description: descripcion || null,
+                  active: true,
+                  items: {
+                    create: items.map((i: any) => ({
+                      productId: parseInt(i.productoId),
+                      quantity: parseFloat(i.cantidad) || 1,
+                    }))
+                  }
+                },
+                include: { items: true }
+              });
+              toolResponse = { exito: true, comboCreado: combo };
+            }
+
+          } else if (call.name === "crear_cliente") {
+            const { nombre, apellido, telefono, email, cuit, direccion, notas } = call.arguments as any;
+            const newClient = await prisma.client.create({
+              data: {
+                firstName: nombre,
+                lastName: apellido || null,
+                phone: telefono || null,
+                email: email || null,
+                cuit: cuit || null,
+                address: direccion || null,
+                notes: notas || null,
+              }
+            });
+            toolResponse = { exito: true, clienteCreado: newClient };
+
+          } else if (call.name === "actualizar_alerta_stock") {
+            const { productoId, stockMinAlert } = call.arguments as any;
+            const updated = await prisma.product.update({
+              where: { id: parseInt(productoId) },
+              data: { stockMinAlert: parseFloat(stockMinAlert) }
+            });
+            toolResponse = { exito: true, productoActualizado: { id: updated.id, nombre: updated.name, stockMinAlert: updated.stockMinAlert } };
+
+          } else if (call.name === "crear_codigo_descuento") {
+            const { codigo, descuento, usoMaximo } = call.arguments as any;
+            const codeUpper = codigo.trim().toUpperCase();
+            const createdCode = await prisma.discountCode.create({
+              data: {
+                code: codeUpper,
+                discountPercent: descuento,
+                maxUses: usoMaximo ? parseInt(usoMaximo) : null,
+                isActive: true,
+              }
+            });
+            toolResponse = { exito: true, codigoDescuentoCreado: createdCode };
+            
+          } else if (call.name === "ejecutar_consulta_sql") {
+            const { consulta_sql } = call.arguments as any;
+            
+            const upperQuery = consulta_sql.trim().toUpperCase();
+            if (!upperQuery.startsWith("SELECT")) {
+               throw new Error("Violación de Seguridad: Solo se permiten consultas SELECT.");
+            }
+
+            // Allowlist estricto de tablas para proteger Setting, User, etc.
+            const TABLAS_PERMITIDAS = ['Product', 'Category', 'Brand', 'Supplier', 'Sale', 'SaleItem', 'Purchase', 'PurchaseItem', 'Client', 'Seller', 'PaymentMethod', 'Expense', 'CashMovement', 'Shift', 'Consignment', 'ConsignmentItem', 'AccountBalance', 'AccountMovement', 'DiscountCode', 'Promotion', 'Combo', 'ComboItem'];
+            
+            const tableMatches = upperQuery.match(/(?:FROM|JOIN)\s+([a-zA-Z0-9_]+)/g);
+            if (tableMatches) {
+               for (const match of tableMatches) {
+                  const tableName = match.split(/\s+/)[1];
+                  if (!TABLAS_PERMITIDAS.some(t => t.toUpperCase() === tableName)) {
+                     throw new Error(`Violación de Privacidad: La tabla '${tableName}' no está en la lista de tablas permitidas para consultas analíticas.`);
+                  }
+               }
+            }
+
+            try {
+              let dbPath = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace("file:", "") : "./prisma/dev.db";
+              if (dbPath === "./dev.db" || dbPath === "dev.db") {
+                dbPath = "./prisma/dev.db";
+              }
+              const { DatabaseSync } = eval("require('node:sqlite')");
+              const safeDb = new DatabaseSync(dbPath, { readOnly: true });
+              
+              const rawData = safeDb.prepare(consulta_sql).all();
+              
+              const arrayData = Array.isArray(rawData) ? rawData : [rawData];
+              if (arrayData.length > 50) {
+                 toolResponse = { nota: "Resultados truncados a los primeros 50 registros", resultados: arrayData.slice(0, 50) };
+              } else {
+                 toolResponse = { resultados: arrayData };
+              }
+            } catch (dbErr: any) {
+               toolResponse = { error_sql: dbErr.message };
+            }
+
+          } else if (call.name === "responder_fuera_de_alcance") {
+            toolResponse = { mensaje: `Fuera de alcance — no ejecutar ninguna acción. Informa amablemente al usuario que solo puedes responder preguntas de la gestión.` };
+            
+          } else {
+            toolResponse = { error: "Función desconocida" };
           }
-
-        } else if (call.name === "responder_fuera_de_alcance") {
-          toolResponse = { mensaje: `Fuera de alcance — no ejecutar ninguna acción. Informa amablemente al usuario que solo puedes responder preguntas de la gestión de ${businessName} (ventas, stock, clientes, caja, promociones).` };
-          
-        } else {
-          toolResponse = { error: "Función desconocida" };
+        } catch (err: any) {
+          toolResponse = { error: err.message };
         }
-      } catch (err: any) {
-        toolResponse = { error: err.message };
-      }
 
-      // Enviar resultado de vuelta
-      historyArr.push({
-        type: 'function_result',
-        name: call.name,
-        call_id: call.id,
-        result: [{ type: 'text', text: JSON.stringify(toolResponse, (key, value) => typeof value === 'bigint' ? value.toString() : value) }]
-      });
+        historyArr.push({
+          type: 'function_result',
+          name: call.name,
+          call_id: call.id,
+          result: [{ type: 'text', text: JSON.stringify(toolResponse, (key, value) => typeof value === 'bigint' ? value.toString() : value) }]
+        });
+      }
 
       currentInteraction = await safeCreateInteraction({
         store: false,

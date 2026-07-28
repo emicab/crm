@@ -187,6 +187,7 @@ async fn kill_server(state: tauri::State<'_, ServerState>) -> Result<(), String>
     if let Ok(mut server_state) = state.0.lock() {
         if let Some(mut child) = server_state.take() {
             let _ = child.kill();
+            let _ = child.wait();
         }
     }
     Ok(())
@@ -340,6 +341,7 @@ pub fn run() {
         if let Ok(mut state) = window.state::<ServerState>().0.lock() {
           if let Some(mut child) = state.take() {
             let _ = child.kill();
+            let _ = child.wait();
           }
         }
       }
