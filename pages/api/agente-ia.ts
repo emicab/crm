@@ -4,7 +4,7 @@ import { decryptText } from '../../lib/encryption';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import path from 'path';
-// @ts-ignore
+// @ts-expect-error
 import { DatabaseSync } from 'node:sqlite';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
