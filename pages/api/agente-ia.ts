@@ -214,6 +214,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const businessNameSetting = await prisma.setting.findUnique({ where: { key: "businessName" } });
     const businessName = businessNameSetting?.value?.trim() || "tu negocio";
 
+    // Obtener información de la caja/turno actual
+    const activeShift = await prisma.shift.findFirst({
+      where: { status: 'OPEN' },
+      orderBy: { startTime: 'desc' }
+    });
+    
+    const activeShiftContext = activeShift 
+      ? `\nINFORMACIÓN DE CONTEXTO ACTUAL:\n- Hay una CAJA ABIERTA (Turno Actual) con ID: ${activeShift.id}. Abierta el: ${new Date(Number(activeShift.startTime)).toLocaleString()}. Cuando el usuario pregunte por "la caja actual", "este turno", o "las ventas de hoy en caja", debes filtrar SIEMPRE por \`cashRegisterId = ${activeShift.id}\` o \`shiftId = ${activeShift.id}\` según la tabla.\n` 
+      : `\nINFORMACIÓN DE CONTEXTO ACTUAL:\n- Actualmente NO hay ninguna caja abierta (Turno cerrado).\n`;
+
     const systemInstruction = `Eres el Asistente Copilot Autónomo de ${businessName}, integrado al software POS ClinPOS.
 Tienes acceso a herramientas reales (functions) para consultar métricas, ver inventario bajo, crear promociones, registrar clientes, actualizar alertas de stock, crear códigos de descuento y ejecutar SQL para analítica profunda.
 
@@ -225,6 +235,8 @@ Tu único propósito es responder preguntas sobre la gestión integral de ${busi
 - Vendedores, Turnos y Movimientos de Caja
 - Promociones, Combos y Códigos de Descuento
 - Ventas a Consignación
+
+${activeShiftContext}
 
 Si te preguntan algo que NO está relacionado con la gestión de ${businessName} (matemática, cultura general, charla casual, cualquier tema ajeno al negocio), debes usar la herramienta 'responder_fuera_de_alcance'.
 
@@ -644,6 +656,6 @@ Con base en los resultados de las herramientas anteriores, responde de forma cla
       return res.status(429).json({ error: "¡Ups! Me hiciste muchas preguntas muy rápido y me quedé sin aliento (límite de consultas gratuitas alcanzado). Por favor, esperá 1 minutito y volvé a intentarlo ⏱️" });
     }
 
-    return res.status(500).json({ error: "Ocurrió un error interno al intentar comunicarme con el motor de IA. Intenta de nuevo más tarde." });
+    return res.status(500).json({ error: "Ocurrió un error interno al intentar comunicarme con el motor de IA. Intenta de nuevo más tarde.", detalles: error?.message || String(error) });
   }
 }

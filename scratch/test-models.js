@@ -2,7 +2,7 @@ require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { GoogleGenAI } = require('@google/genai');
-const { decryptText } = require('./lib/encryption.js');
+const { decryptText } = require('../lib/encryption');
 
 async function run() {
   const setting = await prisma.setting.findUnique({ where: { key: 'geminiApiKey' } });

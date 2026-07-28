@@ -173,7 +173,7 @@ export default function ClinIAWidget() {
         }
         const errorData = await res.json();
         throw new Error(
-          errorData.error || "Error al comunicarse con el Agente",
+          errorData.detalles ? `${errorData.error} Detalle: ${errorData.detalles}` : (errorData.error || "Error al comunicarse con el Agente")
         );
       }
 
