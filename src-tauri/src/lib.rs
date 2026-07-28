@@ -273,7 +273,11 @@ pub fn run() {
         let _ = fs::create_dir_all(&app_data_dir);
 
         let target_db = app_data_dir.join("crm_prod.db");
-        let template_db = resource_dir.join("crm_template.db");
+        let template_db = if resource_dir.join("_up_").join("prisma").join("crm_template.db").exists() {
+          resource_dir.join("_up_").join("prisma").join("crm_template.db")
+        } else {
+          resource_dir.join("crm_template.db")
+        };
 
         if !target_db.exists() && template_db.exists() {
           let _ = fs::copy(&template_db, &target_db);
@@ -284,7 +288,9 @@ pub fn run() {
 
         let db_url = format!("file:{}", target_db.to_string_lossy().replace('\\', "/"));
 
-        let standalone_dir = if resource_dir.join("app_standalone").join("server.js").exists() {
+        let standalone_dir = if resource_dir.join("_up_").join("app_standalone").join("server.js").exists() {
+          resource_dir.join("_up_").join("app_standalone")
+        } else if resource_dir.join("app_standalone").join("server.js").exists() {
           resource_dir.join("app_standalone")
         } else {
           resource_dir.clone()
