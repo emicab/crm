@@ -3,11 +3,10 @@
 import React, { useState } from "react";
 import pkg from "../../package.json";
 import { 
-  Building, 
   Store, 
   ChefHat, 
   Scale, 
-  Hammer, 
+  Hammer,
   ShoppingBag, 
   Sliders 
 } from "lucide-react";

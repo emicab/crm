@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Bookmark, Search, Trash2, Download, AlertCircle, Loader2 } from "lucide-react";
+import { Bookmark, Search, Trash2, Download, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 

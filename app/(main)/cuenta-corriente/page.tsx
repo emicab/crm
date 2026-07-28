@@ -5,15 +5,11 @@ import Link from "next/link";
 import { 
   Users, 
   Search, 
-  ArrowUpRight, 
   ChevronRight, 
   TrendingUp, 
   TrendingDown, 
-  Plus, 
-  DollarSign 
 } from "lucide-react";
 import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
 import toast from "react-hot-toast";
 
 interface Account {

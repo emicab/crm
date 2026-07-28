@@ -37,7 +37,7 @@ const ActivationScreen: React.FC<ActivationScreenProps> = ({ onActivationSuccess
             } else {
                 setMessage(`Error: ${data.message || 'Error al activar'}`);
             }
-        } catch (error) {
+        } catch {
             setIsLoading(false);
             setMessage('Error: No se pudo conectar con el servidor.');
         }

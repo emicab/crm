@@ -13,11 +13,7 @@ import {
   Plus, 
   DollarSign, 
   Loader2, 
-  FileText, 
-  Wallet, 
-  CheckCircle2, 
-  TrendingUp, 
-  TrendingDown 
+  Wallet
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -96,6 +92,7 @@ export default function ClienteCuentaDetailsPage() {
     if (clientId) {
       fetchData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   const handleRegisterPayment = async (e: React.FormEvent) => {

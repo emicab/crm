@@ -2,11 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../lib/prisma';
 import { decryptText } from '../../lib/encryption';
 import { GoogleGenAI } from '@google/genai';
-import fs from 'fs';
-import path from 'path';
-// @ts-expect-error
+// @ts-expect-error: node:sqlite lacks typescript definitions in current node types
 import { DatabaseSync } from 'node:sqlite';
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
@@ -294,7 +291,7 @@ Si consideras útil sugerirle al usuario siguientes pasos o preguntas de seguimi
     });
 
     // Construir el contexto para Gemini a partir de la historia guardada
-    let contextStr = dbHistory.map((m: any) => `${m.role === 'user' ? 'Usuario' : 'Agente'}: ${m.content}`).join("\n");
+    const contextStr = dbHistory.map((m: any) => `${m.role === 'user' ? 'Usuario' : 'Agente'}: ${m.content}`).join("\n");
     const fullPrompt = `Contexto de la conversacion (ya respondido):
 ${contextStr}
 

@@ -11,7 +11,7 @@ function hashPin(pin: string): string {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "GET") {
     try {
-      let users = await prisma.user.findMany({
+      const users = await prisma.user.findMany({
         select: {
           id: true,
           name: true,

@@ -82,6 +82,7 @@ export default function PinLoginModal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, selectedUser, pin, isLoading]);
 
   // Si no está abierto el modal de PIN, no renderiza nada

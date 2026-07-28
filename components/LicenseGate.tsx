@@ -38,6 +38,7 @@ const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
 
     useEffect(() => {
         checkLicense();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleContinueFree = async () => {

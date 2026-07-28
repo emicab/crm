@@ -23,10 +23,7 @@ import {
   AlertTriangle,
   ChevronDown,
   RefreshCcw,
-  Bot,
   Bookmark,
-  LogOut,
-  ChevronRight,
   Ticket,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -54,53 +51,174 @@ const navGroups: NavGroup[] = [
     title: "Ventas y Caja",
     items: [
       { href: "/caja", label: "Caja", icon: <Wallet size={20} /> },
-      { href: "/ventas/nueva", label: "Nueva Venta", icon: <PlusSquare size={20} /> },
-      { href: "/ventas", label: "Historial Ventas", icon: <FileText size={20} /> },
-      { href: "/consignaciones", label: "Consignaciones", icon: <RefreshCcw size={20} />, moduleId: "consignaciones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      {
+        href: "/ventas/nueva",
+        label: "Nueva Venta",
+        icon: <PlusSquare size={20} />,
+      },
+      {
+        href: "/ventas",
+        label: "Historial Ventas",
+        icon: <FileText size={20} />,
+      },
+      {
+        href: "/consignaciones",
+        label: "Consignaciones",
+        icon: <RefreshCcw size={20} />,
+        moduleId: "consignaciones",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
     ],
   },
   {
     title: "Productos y Stock",
     items: [
-      { href: "/productos", label: "Productos", icon: <Package size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/stock", label: "Carga de Stock", icon: <Barcode size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/stock/alertas", label: "Alertas de Stock", icon: <AlertTriangle size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/categorias", label: "Categorías", icon: <Tag size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/marcas", label: "Marcas", icon: <Tag size={20} />, allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      {
+        href: "/productos",
+        label: "Productos",
+        icon: <Package size={20} />,
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/stock",
+        label: "Carga de Stock",
+        icon: <Barcode size={20} />,
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/stock/alertas",
+        label: "Alertas de Stock",
+        icon: <AlertTriangle size={20} />,
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/categorias",
+        label: "Categorías",
+        icon: <Tag size={20} />,
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/marcas",
+        label: "Marcas",
+        icon: <Tag size={20} />,
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
     ],
   },
   {
     title: "Marketing",
     items: [
-      { href: "/combos", label: "Combos", icon: <ShoppingBag size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/promociones", label: "Promociones", icon: <Percent size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/codigos-descuento", label: "Códigos de Descuento", icon: <Ticket size={20} />, moduleId: "combos_promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      {
+        href: "/combos",
+        label: "Combos",
+        icon: <ShoppingBag size={20} />,
+        moduleId: "combos_promociones",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/promociones",
+        label: "Promociones",
+        icon: <Percent size={20} />,
+        moduleId: "combos_promociones",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/codigos-descuento",
+        label: "Códigos de Descuento",
+        icon: <Ticket size={20} />,
+        moduleId: "combos_promociones",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
     ],
   },
   {
     title: "Compras y Gastos",
     items: [
-      { href: "/compras/nueva", label: "Nueva Compra", icon: <ArrowUpRightSquare size={20} />, moduleId: "compras", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/compras", label: "Historial Compras", icon: <History size={20} />, moduleId: "compras", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/gastos", label: "Gastos", icon: <TrendingDown size={20} />, moduleId: "gastos", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      {
+        href: "/compras/nueva",
+        label: "Nueva Compra",
+        icon: <ArrowUpRightSquare size={20} />,
+        moduleId: "compras",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/compras",
+        label: "Historial Compras",
+        icon: <History size={20} />,
+        moduleId: "compras",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/gastos",
+        label: "Gastos",
+        icon: <TrendingDown size={20} />,
+        moduleId: "gastos",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
     ],
   },
   {
     title: "Contactos",
     items: [
-      { href: "/clientes", label: "Clientes", icon: <Users size={20} />, moduleId: "clientes", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/cuenta-corriente", label: "Cuenta Corriente", icon: <Users size={20} />, moduleId: "cuenta_corriente", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/proveedores", label: "Proveedores", icon: <Truck size={20} />, moduleId: "compras", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-      { href: "/vendedores", label: "Vendedores", icon: <UserPlus size={20} />, moduleId: "vendedores", allowedRoles: ["ADMIN", "SUPERVISOR"] },
+      {
+        href: "/clientes",
+        label: "Clientes",
+        icon: <Users size={20} />,
+        moduleId: "clientes",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/cuenta-corriente",
+        label: "Cuenta Corriente",
+        icon: <Users size={20} />,
+        moduleId: "cuenta_corriente",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/proveedores",
+        label: "Proveedores",
+        icon: <Truck size={20} />,
+        moduleId: "compras",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/vendedores",
+        label: "Vendedores",
+        icon: <UserPlus size={20} />,
+        moduleId: "vendedores",
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
     ],
   },
   {
     title: "General",
     items: [
-      { href: "/analiticas", label: "Analíticas", icon: <LayoutDashboard size={20} />, moduleId: "analiticas", allowedRoles: ["ADMIN"] },
-      { href: "/notas-ia", label: "Notas Guardadas (IA)", icon: <Bookmark size={20} />, moduleId: "analiticas", allowedRoles: ["ADMIN"] },
-      { href: "/configuracion/usuarios", label: "Usuarios y Permisos", icon: <Users size={20} />, allowedRoles: ["ADMIN"] },
-      { href: "/configuracion", label: "Configuración", icon: <Settings size={20} />, allowedRoles: ["ADMIN"] },
+      {
+        href: "/analiticas",
+        label: "Analíticas",
+        icon: <LayoutDashboard size={20} />,
+        moduleId: "analiticas",
+        allowedRoles: ["ADMIN"],
+      },
+      {
+        href: "/notas-ia",
+        label: "Notas Guardadas (IA)",
+        icon: <Bookmark size={20} />,
+        moduleId: "analiticas",
+        allowedRoles: ["ADMIN"],
+      },
+      {
+        href: "/configuracion/usuarios",
+        label: "Usuarios y Permisos",
+        icon: <Users size={20} />,
+        allowedRoles: ["ADMIN"],
+      },
+      {
+        href: "/configuracion",
+        label: "Configuración",
+        icon: <Settings size={20} />,
+        allowedRoles: ["ADMIN"],
+      },
     ],
   },
 ];
@@ -112,7 +230,9 @@ function loadCollapsed(): Set<string> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return new Set(JSON.parse(raw));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return new Set();
 }
 
@@ -123,10 +243,22 @@ function saveCollapsed(groups: Set<string>) {
 import ProUpgradeModal from "@/components/ui/ProUpgradeModal";
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { isModuleEnabled, currentUser, logout, supabaseLastSync, hasSupabaseConfig, storageMode, plan, hasRolePermission } = useModules();
+  const {
+    isModuleEnabled,
+    currentUser,
+    logout,
+    supabaseLastSync,
+    hasSupabaseConfig,
+    storageMode,
+    plan,
+    hasRolePermission,
+  } = useModules();
   const [alertCount, setAlertCount] = useState(0);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(loadCollapsed);
-  const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] =
+    useState<Set<string>>(loadCollapsed);
+  const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     saveCollapsed(collapsedGroups);
@@ -135,7 +267,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     const fetchAlertCount = async () => {
       try {
-        const res = await fetch('/api/products/alert-count');
+        const res = await fetch("/api/products/alert-count");
         if (res.ok) {
           const data = await res.json();
           setAlertCount(data.count);
@@ -150,7 +282,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   }, []);
 
   const toggleGroup = (title: string) => {
-    setCollapsedGroups(prev => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(title)) {
         next.delete(title);
@@ -179,20 +311,32 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     try {
       setIsCheckingUpdate(true);
       // Dynamic import to avoid SSR crash (window.__TAURI_INTERNALS__ doesn't exist on server)
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const { invoke } = await import('@tauri-apps/api/core');
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const { invoke } = await import("@tauri-apps/api/core");
       const update = await check();
       if (update) {
-        toast.success(`Actualización ${update.version} encontrada. Descargando e instalando...`);
-        try { await invoke('kill_server'); } catch (e) { console.error("Failed to kill server", e); }
+        toast.success(
+          `Actualización ${update.version} encontrada. Descargando e instalando...`,
+        );
+        try {
+          await invoke("kill_server");
+        } catch (e) {
+          console.error("Failed to kill server", e);
+        }
         await update.downloadAndInstall();
-        toast.success("¡Actualización instalada! Por favor, cierra y vuelve a abrir la aplicación para aplicar los cambios.");
+        toast.success(
+          "¡Actualización instalada! Por favor, cierra y vuelve a abrir la aplicación para aplicar los cambios.",
+        );
       } else {
         toast.success("La aplicación está en su última versión.");
       }
     } catch (err: any) {
       console.error("Update error:", err);
-      const errMsg = typeof err === 'string' ? err : (err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err)));
+      const errMsg =
+        typeof err === "string"
+          ? err
+          : err?.message ||
+            (typeof err === "object" ? JSON.stringify(err) : String(err));
       toast.error(`Error: ${errMsg}`);
     } finally {
       setIsCheckingUpdate(false);
@@ -200,32 +344,43 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   };
 
   // Filtrar los grupos según módulos activos y rol de usuarios
-  const filteredGroups = navGroups.map((group) => {
-    const processedItems = group.items.map((item) => {
-      const isEnabled = !item.moduleId || isModuleEnabled(item.moduleId);
-      const isProFeature = ['cuenta_corriente', 'analiticas', 'consignaciones', 'agente_ia'].includes(item.moduleId || '');
-      
-      // If feature belongs to Pro plan and we are in basic plan, keep item visible with lock
-      if (!isEnabled && isProFeature && plan === 'basico') {
-        return {
-          ...item,
-          href: '/configuracion',
-          isLocked: true,
-        };
-      }
-      
-      if (!isEnabled) return null;
+  const filteredGroups = navGroups
+    .map((group) => {
+      const processedItems = group.items
+        .map((item) => {
+          const isEnabled = !item.moduleId || isModuleEnabled(item.moduleId);
+          const isProFeature = [
+            "cuenta_corriente",
+            "analiticas",
+            "consignaciones",
+            "agente_ia",
+          ].includes(item.moduleId || "");
 
-      // Filter role permissions dynamically
-      if (isModuleEnabled("roles") && currentUser) {
-        if (!hasRolePermission(currentUser.role, item.href)) return null;
-      }
+          // If feature belongs to Pro plan and we are in basic plan, keep item visible with lock
+          if (!isEnabled && isProFeature && plan === "basico") {
+            return {
+              ...item,
+              href: "/configuracion",
+              isLocked: true,
+            };
+          }
 
-      return { ...item, isLocked: false };
-    }).filter((item): item is (NavItem & { isLocked: boolean }) => item !== null);
+          if (!isEnabled) return null;
 
-    return { ...group, items: processedItems };
-  }).filter((group) => group.items.length > 0);
+          // Filter role permissions dynamically
+          if (isModuleEnabled("roles") && currentUser) {
+            if (!hasRolePermission(currentUser.role, item.href)) return null;
+          }
+
+          return { ...item, isLocked: false };
+        })
+        .filter(
+          (item): item is NavItem & { isLocked: boolean } => item !== null,
+        );
+
+      return { ...group, items: processedItems };
+    })
+    .filter((group) => group.items.length > 0);
 
   return (
     <>
@@ -280,8 +435,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                         }}
                         className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-150 ease-in-out font-medium text-sm ${
                           item.isLocked
-                            ? 'opacity-75 hover:bg-amber-50 text-amber-800 cursor-pointer'
-                            : 'hover:bg-primary-light hover:text-primary'
+                            ? "opacity-75 hover:bg-amber-50 text-amber-800 cursor-pointer"
+                            : "hover:bg-primary-light hover:text-primary"
                         }`}
                       >
                         {item.icon}
@@ -296,11 +451,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                             Experimental
                           </span>
                         )}
-                        {item.label === "Alertas de Stock" && alertCount > 0 && (
-                          <span className="bg-destructive text-destructive-foreground text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
-                            {alertCount > 99 ? '99+' : alertCount}
-                          </span>
-                        )}
+                        {item.label === "Alertas de Stock" &&
+                          alertCount > 0 && (
+                            <span className="bg-destructive text-destructive-foreground text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                              {alertCount > 99 ? "99+" : alertCount}
+                            </span>
+                          )}
                       </Link>
                     ))}
                   </div>
@@ -313,9 +469,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         {currentUser && (
           <div className="px-4 py-2.5 border-t border-border flex items-center justify-between text-xs bg-background/50">
             <div className="min-w-0">
-              <p className="font-bold text-foreground truncate">{currentUser.name}</p>
+              <p className="font-bold text-foreground truncate">
+                {currentUser.name}
+              </p>
               <p className="text-[9px] uppercase font-bold text-primary tracking-wider mt-0.5">
-                {currentUser.role === "ADMIN" ? "👑 Administrador" : currentUser.role === "SUPERVISOR" ? "⭐ Supervisor" : "🛒 Cajero"}
+                {currentUser.role === "ADMIN"
+                  ? "👑 Administrador"
+                  : currentUser.role === "SUPERVISOR"
+                    ? "⭐ Supervisor"
+                    : "🛒 Cajero"}
               </p>
             </div>
             <button
@@ -340,25 +502,42 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               className="text-[10px] font-bold text-primary hover:text-primary-dark transition-colors flex items-center gap-1 bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded-full cursor-pointer disabled:opacity-50"
               title="Buscar actualizaciones"
             >
-              <RefreshCcw size={10} className={isCheckingUpdate ? "animate-spin" : ""} />
+              <RefreshCcw
+                size={10}
+                className={isCheckingUpdate ? "animate-spin" : ""}
+              />
               Actualizar
             </button>
           </div>
           {storageMode === "safe" && (
             <div className="flex items-center justify-center gap-1.5 text-[9px] text-foreground-muted/70 font-semibold mb-1">
-              <span className={`h-1.5 w-1.5 rounded-full ${
-                !hasSupabaseConfig ? "bg-amber-400 animate-pulse" :
-                !supabaseLastSync ? "bg-amber-400 animate-pulse" :
-                (Date.now() - new Date(supabaseLastSync).getTime() < 24 * 60 * 60 * 1000) ? "bg-emerald-500" : "bg-amber-400"
-              }`} />
-              <span className="truncate max-w-[160px]" title={
-                !hasSupabaseConfig ? "Nube sin configurar" :
-                !supabaseLastSync ? "Sincronización pendiente" :
-                `Último backup: ${new Date(supabaseLastSync).toLocaleString("es-AR")}`
-              }>
-                {!hasSupabaseConfig ? "Nube sin configurar" :
-                 !supabaseLastSync ? "Sincronización pendiente" :
-                 `Nube: ${new Date(supabaseLastSync).toLocaleDateString("es-AR")} ${new Date(supabaseLastSync).toLocaleTimeString("es-AR", { hour: '2-digit', minute: '2-digit' })}`}
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  !hasSupabaseConfig
+                    ? "bg-amber-400 animate-pulse"
+                    : !supabaseLastSync
+                      ? "bg-amber-400 animate-pulse"
+                      : Date.now() - new Date(supabaseLastSync).getTime() <
+                          24 * 60 * 60 * 1000
+                        ? "bg-emerald-500"
+                        : "bg-amber-400"
+                }`}
+              />
+              <span
+                className="truncate max-w-[160px]"
+                title={
+                  !hasSupabaseConfig
+                    ? "Nube sin configurar"
+                    : !supabaseLastSync
+                      ? "Sincronización pendiente"
+                      : `Último backup: ${new Date(supabaseLastSync).toLocaleString("es-AR")}`
+                }
+              >
+                {!hasSupabaseConfig
+                  ? "Nube sin configurar"
+                  : !supabaseLastSync
+                    ? "Sincronización pendiente"
+                    : `Nube: ${new Date(supabaseLastSync).toLocaleDateString("es-AR")} ${new Date(supabaseLastSync).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`}
               </span>
             </div>
           )}

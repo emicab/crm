@@ -3,7 +3,7 @@ import prisma from '../../../../lib/prisma';
 import { Prisma, PaymentType } from '@prisma/client';
 const Decimal = Prisma.Decimal;
 import { handleApiError } from '../../../../lib/apiErrorHandler';
-import { getArcaConfig, createElectronicInvoice } from '../../../../lib/arcaService';
+// ARCA imports removed because they were unused
 import { getPaymentTypeDisplay } from '../../../../lib/displayTexts';
 
 export default async function handler(

@@ -92,6 +92,7 @@ export default function RendirConsignacionPage() {
     if (consignmentId) {
       fetchConsignment();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consignmentId]);
 
   const handleSoldChange = (itemId: number, rawVal: string, maxQty: number) => {

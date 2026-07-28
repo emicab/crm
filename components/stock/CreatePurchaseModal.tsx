@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from "react";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
-import Input from "@/components/ui/Input";
 import { X, Loader2, ShoppingCart } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { formatCurrency } from "@/lib/formatCurrency";

@@ -13,22 +13,7 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const ROUTE_PERMISSIONS = [
-  { pathPrefix: "/configuracion", allowedRoles: ["ADMIN"] },
-  { pathPrefix: "/analiticas", allowedRoles: ["ADMIN"] },
-  { pathPrefix: "/productos", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/stock", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/combos", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/promociones", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/categorias", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/marcas", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/compras", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/gastos", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/clientes", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/cuenta-corriente", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/proveedores", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { pathPrefix: "/vendedores", allowedRoles: ["ADMIN", "SUPERVISOR"] },
-];
+
 
 const AccessDeniedView = () => (
   <div className="flex flex-col items-center justify-center p-12 py-24 text-center space-y-4">
@@ -77,6 +62,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       clearInterval(interval);
       clearTimeout(initialTimeout);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, hasSupabaseConfig, showOnboarding, showPinLock]);
 
   // Validar si el rol actual puede acceder a la ruta activa

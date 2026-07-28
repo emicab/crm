@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createElectronicInvoice } from '../../../lib/arcaService';
-import { handleApiError } from '../../../lib/apiErrorHandler';
+// import { handleApiError } from '../../../lib/apiErrorHandler';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

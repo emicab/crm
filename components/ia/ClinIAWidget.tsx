@@ -5,7 +5,6 @@ import {
   Bot,
   Send,
   User,
-  Lock,
   AlertCircle,
   Loader2,
   Maximize2,
@@ -80,6 +79,7 @@ export default function ClinIAWidget() {
         })
         .catch(console.error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const loadSessions = async () => {

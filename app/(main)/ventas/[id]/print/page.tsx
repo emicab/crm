@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { formatDate } from "@/lib/formatDate";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
@@ -327,6 +327,7 @@ export default function PrintPage() {
               </div>
               {invoiceQrDataUrl && (
                 <div className="p-2 bg-white border-2 border-gray-200 rounded-xl shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={invoiceQrDataUrl}
                     alt="QR AFIP"
@@ -446,6 +447,7 @@ export default function PrintPage() {
           <p>Vto. CAE: {formatDate(sale.invoice.caeExpiration)}</p>
           {invoiceQrDataUrl && (
             <div className="mt-2 flex justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={invoiceQrDataUrl} alt="QR AFIP" className="w-32 h-32" />
             </div>
           )}

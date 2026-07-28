@@ -248,7 +248,7 @@ const SaleDetailPage = () => {
             try {
                 const { open } = await import('@tauri-apps/plugin-shell');
                 await open(url);
-            } catch (err) {
+            } catch {
                 window.open(url, '_blank');
             }
         }
@@ -550,8 +550,8 @@ const SaleDetailPage = () => {
                         </div>
                         <div className="flex flex-col items-center justify-center border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0">
                             {invoiceQrDataUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
                                 <img
-                                    // eslint-disable-next-line @next/next/no-img-element
                                     src={invoiceQrDataUrl}
                                     alt="Código QR AFIP"
                                     className="w-28 h-28"

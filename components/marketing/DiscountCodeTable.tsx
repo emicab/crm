@@ -46,6 +46,7 @@ const DiscountCodeTable = () => {
 
   useEffect(() => {
     fetchCodes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchCode]);
 
   const handleDelete = async (id: number) => {

@@ -59,7 +59,7 @@ export default function NuevaConsignacionPage() {
             }))
           );
         }
-      } catch (err: any) {
+      } catch {
         toast.error("Error al cargar datos iniciales.");
       } finally {
         setFetchingData(false);
