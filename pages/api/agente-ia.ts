@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: "API Key de Gemini no configurada." });
     }
 
-    const apiKey = decryptText(setting.value);
+    const apiKey = decryptText(setting.value).trim();
     
     if (!apiKey) {
       return res.status(401).json({ error: "API Key inválida." });
@@ -317,6 +317,8 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
     // Función auxiliar con fallback automático entre modelos de la Interactions API
     const MODELS_FALLBACK = [
       "gemini-3.5-flash-lite",
+      "gemini-2.5-flash",
+      "gemini-1.5-flash"
     ];
     const safeCreateInteraction = async (params: any) => {
       let lastError = null;
@@ -667,6 +669,17 @@ Con base en los resultados de las herramientas anteriores, responde de forma cla
       return res.status(429).json({ error: "¡Ups! Me hiciste muchas preguntas muy rápido y me quedé sin aliento (límite de consultas gratuitas alcanzado). Por favor, esperá 1 minutito y volvé a intentarlo ⏱️" });
     }
 
-    return res.status(500).json({ error: "Ocurrió un error interno al intentar comunicarme con el motor de IA. Intenta de nuevo más tarde.", detalles: error?.message || String(error) });
+    // Extraer detalles reales del error de la API si están ocultos en err.body o err.cause.body
+    let detailedMsg = error?.message || String(error);
+    try {
+      const errorBody = error?.body || error?.cause?.body;
+      if (errorBody) {
+        const parsedBody = JSON.parse(errorBody);
+        const actualMessage = parsedBody?.[0]?.error?.message || parsedBody?.error?.message;
+        if (actualMessage) detailedMsg = actualMessage;
+      }
+    } catch (_) {}
+
+    return res.status(500).json({ error: "Ocurrió un error interno al intentar comunicarme con el motor de IA. Intenta de nuevo más tarde.", detalles: detailedMsg });
   }
 }

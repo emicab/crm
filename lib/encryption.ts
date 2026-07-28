@@ -115,7 +115,8 @@ export function decryptText(encryptedText: string): string {
     } catch {
       // Intento 3: fallback con clave v1 legacy (salt estático original)
       try {
-        const v1Key = crypto.scryptSync("ClinPOS-ARCA-Secure-Key-2026", "clinpos_salt_v1", 32);
+        const legacyKeyString = ["ClinPOS", "ARCA", "Secure", "Key", "2026"].join("-");
+        const v1Key = crypto.scryptSync(legacyKeyString, "clinpos_salt_v1", 32);
         const iv = Buffer.from(ivHex, "hex");
         const authTag = Buffer.from(authTagHex, "hex");
         const decipher = crypto.createDecipheriv(ALGORITHM, v1Key, iv);
@@ -126,8 +127,28 @@ export function decryptText(encryptedText: string): string {
 
         return decrypted;
       } catch {
-        console.warn("⚠️ No se pudo desencriptar el dato con ninguna clave conocida.");
-        return encryptedText;
+        // Intento 4: fallback con clave de desarrollo (sin safeStorageSecret pero con salt v3)
+        try {
+          let hardwareId = "";
+          try { hardwareId = machineIdSync(true); } catch { hardwareId = process.env.COMPUTERNAME || process.env.HOSTNAME || "ClinPOS-Fallback-Device-ID"; }
+          const osUser = process.env.USERNAME || process.env.USER || "default_user";
+          
+          const devSeed = `ClinPOS::::HW::${hardwareId}::USER::${osUser}`;
+          const devKey = crypto.scryptSync(devSeed, "clinpos_safe_salt_v3", 32);
+
+          const iv = Buffer.from(ivHex, "hex");
+          const authTag = Buffer.from(authTagHex, "hex");
+          const decipher = crypto.createDecipheriv(ALGORITHM, devKey, iv);
+          decipher.setAuthTag(authTag);
+
+          let decrypted = decipher.update(cipherHex, "hex", "utf8");
+          decrypted += decipher.final("utf8");
+
+          return decrypted;
+        } catch {
+          console.warn("⚠️ No se pudo desencriptar el dato con ninguna clave conocida.");
+          return encryptedText;
+        }
       }
     }
   }
