@@ -1,0 +1,101 @@
+{
+  "app\\(main)\\compras\\[id]\\page.tsx -> @tauri-apps/plugin-shell": {
+    "id": 54390,
+    "files": [
+      "static/chunks/4390.25c1995eb591c012.js"
+    ]
+  },
+  "app\\(main)\\cuenta-corriente\\[clientId]\\page.tsx -> @tauri-apps/plugin-shell": {
+    "id": 54390,
+    "files": [
+      "static/chunks/4390.25c1995eb591c012.js"
+    ]
+  },
+  "app\\(main)\\ventas\\[id]\\page.tsx -> @tauri-apps/plugin-shell": {
+    "id": 54390,
+    "files": [
+      "static/chunks/4390.25c1995eb591c012.js"
+    ]
+  },
+  "app\\(main)\\ventas\\[id]\\page.tsx -> html-to-image": {
+    "id": 78064,
+    "files": [
+      "static/chunks/8064.60e2920602accca0.js"
+    ]
+  },
+  "app\\(main)\\ventas\\[id]\\page.tsx -> jspdf": {
+    "id": 26597,
+    "files": [
+      "static/chunks/2f0b94e8.9fae400113b2869a.js",
+      "static/chunks/164f4fb6.1d724338c077e463.js",
+      "static/chunks/6399.9dbce694e39ce768.js"
+    ]
+  },
+  "components\\compras\\PurchaseForm.tsx -> @tauri-apps/plugin-shell": {
+    "id": 54390,
+    "files": [
+      "static/chunks/4390.25c1995eb591c012.js"
+    ]
+  },
+  "components\\configuracion\\tabs\\ConfigBackupTab.tsx -> @tauri-apps/api/core": {
+    "id": 4273,
+    "files": [
+      "static/chunks/4273.57772e6999a587d3.js"
+    ]
+  },
+  "components\\layout\\Sidebar.tsx -> @tauri-apps/api/core": {
+    "id": 4273,
+    "files": [
+      "static/chunks/4273.57772e6999a587d3.js"
+    ]
+  },
+  "components\\layout\\Sidebar.tsx -> @tauri-apps/plugin-updater": {
+    "id": 26909,
+    "files": [
+      "static/chunks/6909.fe8e368750e96162.js"
+    ]
+  },
+  "components\\ui\\ProUpgradeModal.tsx -> @tauri-apps/plugin-shell": {
+    "id": 54390,
+    "files": [
+      "static/chunks/4390.25c1995eb591c012.js"
+    ]
+  },
+  "components\\ventas\\SaleForm.tsx -> @tauri-apps/plugin-shell": {
+    "id": 54390,
+    "files": [
+      "static/chunks/4390.25c1995eb591c012.js"
+    ]
+  },
+  "node_modules\\jspdf\\dist\\jspdf.es.min.js -> canvg": {
+    "id": 34137,
+    "files": [
+      "static/chunks/bc98253f.a20b3a3cf1b114d6.js",
+      "static/chunks/2121.c97c13f0e8dc976b.js"
+    ]
+  },
+  "node_modules\\jspdf\\dist\\jspdf.es.min.js -> dompurify": {
+    "id": 10822,
+    "files": [
+      "static/chunks/822.eb37bcd02d4dfa5f.js"
+    ]
+  },
+  "node_modules\\jspdf\\dist\\jspdf.es.min.js -> html2canvas": {
+    "id": 52699,
+    "files": [
+      "static/chunks/ad2866b8.1fc071285e350c45.js"
+    ]
+  },
+  "node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
+    "id": 90472,
+    "files": [
+      "static/chunks/472.2c08b965bd9148e2.js"
+    ]
+  },
+  "node_modules\\next\\dist\\client\\index.js -> ../pages/_error": {
+    "id": 99341,
+    "files": [
+      "static/chunks/9341.3ca6eb08eac1d97b.js"
+    ]
+  }
+}

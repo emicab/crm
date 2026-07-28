@@ -202,7 +202,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       type: 'function',
       name: "responder_fuera_de_alcance",
       description: "Usar SIEMPRE que la pregunta del usuario no tenga relación con el negocio (ventas, stock, clientes, cuenta corriente, proveedores, compras, gastos, vendedores, promociones, caja, consignaciones). Ejemplos: matemática, charla general, preguntas sobre temas externos, saludos sin contexto de negocio.",
-      parameters: { type: 'object', properties: {} },
+      parameters: { 
+        type: 'object', 
+        properties: {
+          razon: { type: 'string', description: "Breve razón de por qué está fuera de alcance" }
+        } 
+      },
     };
 
     const tools = [
@@ -317,17 +322,22 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
       let lastError = null;
       for (const modelName of MODELS_FALLBACK) {
         try {
+          if (process.env.NODE_ENV === 'production') {
+            console.error(`[AgenteIA] Payload to ${modelName}:`, JSON.stringify(params).substring(0, 500) + '...');
+          }
           const res = await client.interactions.create({
             ...params,
             model: modelName,
           });
+          
           if (modelName !== MODELS_FALLBACK[0]) {
             console.log(`[ClinIA Fallback Exitoso] Respondiendo con el modelo alternativo: ${modelName}`);
           }
           return res;
         } catch (err: any) {
-          lastError = err;
+          console.error(`[AgenteIA] Error with ${modelName}:`, err.message || err);
           console.warn(`[ClinIA Fallback] Modelo ${modelName} no pudo responder (${err?.message || "Error de API"}). Probando modelo alternativo...`);
+          lastError = err;
           continue;
         }
       }
@@ -392,7 +402,8 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
       const fcSteps = currentInteraction.steps?.filter((s: any) => s.type === 'function_call') || [];
       if (fcSteps.length === 0) break;
 
-      historyArr = historyArr.concat(currentInteraction.steps || []);
+      const validStepsToAppend = currentInteraction.steps?.filter((s: any) => s.type === 'thought' || s.type === 'function_call') || [];
+      historyArr = historyArr.concat(validStepsToAppend);
       
       for (const fcStep of fcSteps) {
         const call = fcStep as any;
