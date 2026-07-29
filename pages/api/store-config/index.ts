@@ -12,8 +12,7 @@ export default async function handler(
     try {
       const config = await prisma.storeConfig.findFirst();
       if (!config) {
-        // Return default empty config
-        return res.status(200).json({
+        res.status(200).json({
           slug: '',
           businessName: '',
           description: '',
@@ -29,14 +28,17 @@ export default async function handler(
           allowDelivery: true,
           deliveryFee: '0',
         });
+        return;
       }
 
       res.status(200).json({
         ...config,
         deliveryFee: config.deliveryFee.toString(),
       });
+      return;
     } catch (error) {
       handleApiError(res, error, "fetching store config");
+      return;
     }
   } else if (req.method === 'PUT' || req.method === 'POST') {
     try {
@@ -58,7 +60,8 @@ export default async function handler(
       } = req.body;
 
       if (!slug || !slug.trim()) {
-        return res.status(400).json({ message: 'El subdominio/slug de la tienda es obligatorio.' });
+        res.status(400).json({ message: 'El subdominio/slug de la tienda es obligatorio.' });
+        return;
       }
 
       const cleanSlug = sanitizeString(slug.trim().toLowerCase().replace(/[^a-z0-9_\-]/gi, '-'));
@@ -112,11 +115,14 @@ export default async function handler(
         ...result,
         deliveryFee: result.deliveryFee.toString(),
       });
+      return;
     } catch (error) {
       handleApiError(res, error, "saving store config");
+      return;
     }
   } else {
     res.setHeader('Allow', ['GET', 'PUT', 'POST']);
     res.status(405).end(`Method ${req.method} Not Allowed`);
+    return;
   }
 }
