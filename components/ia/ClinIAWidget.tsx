@@ -68,10 +68,10 @@ export default function ClinIAWidget() {
   useEffect(() => {
     if (isOpen && isAdmin && isPro) {
       loadSessions();
-      fetch('/api/config')
-        .then(res => res.json())
-        .then(data => {
-          if (!data.geminiApiKey || data.geminiApiKey.trim() === '') {
+      fetch("/api/config")
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.geminiApiKey || data.geminiApiKey.trim() === "") {
             setHasGeminiKey(false);
           } else {
             setHasGeminiKey(true);
@@ -125,7 +125,10 @@ export default function ClinIAWidget() {
 
   const deleteSession = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm("¿Seguro que deseas eliminar esta conversación del historial?")) return;
+    if (
+      !confirm("¿Seguro que deseas eliminar esta conversación del historial?")
+    )
+      return;
     try {
       const res = await fetch(`/api/chat-sessions?sessionId=${id}`, {
         method: "DELETE",
@@ -173,7 +176,9 @@ export default function ClinIAWidget() {
         }
         const errorData = await res.json();
         throw new Error(
-          errorData.detalles ? `${errorData.error} Detalle: ${errorData.detalles}` : (errorData.error || "Error al comunicarse con el Agente")
+          errorData.detalles
+            ? `${errorData.error} Detalle: ${errorData.detalles}`
+            : errorData.error || "Error al comunicarse con el Agente",
         );
       }
 
@@ -338,54 +343,60 @@ export default function ClinIAWidget() {
             {!hasGeminiKey ? (
               <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4 bg-muted/20">
                 <AlertCircle size={48} className="text-amber-500" />
-                <h3 className="text-lg font-medium text-foreground">API Key no configurada</h3>
+                <h3 className="text-lg font-medium text-foreground">
+                  API Key no configurada
+                </h3>
                 <p className="text-sm text-foreground-muted">
-                  Para utilizar ClinIA, necesitas configurar tu API Key de Gemini en la sección de Configuración.
+                  Para utilizar ClinIA, necesitas configurar tu API Key de
+                  Gemini en la sección de Configuración.
                 </p>
-                <a href="/configuracion" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                <a
+                  href="/configuracion"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                >
                   Ir a Configuración
                 </a>
               </div>
             ) : (
-            <div className="flex-1 flex flex-col overflow-hidden bg-muted/20">
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-70 px-4">
-                    <Bot size={48} className="text-blue-500" />
-                    <h3 className="text-lg font-medium text-foreground">
-                      ¡Hola! Soy ClinIA.
-                    </h3>
-                    <p className="text-xs text-foreground-muted">
-                      Puedo consultar tu base de datos. Preguntame por ventas de
-                      hoy o productos con poco stock.
-                    </p>
-                  </div>
-                ) : (
-                  messages.map((msg, index) => (
-                    <React.Fragment key={index}>
-                      <div
-                        className={`flex gap-2 max-w-[90%] ${msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}
-                      >
+              <div className="flex-1 flex flex-col overflow-hidden bg-muted/20">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center space-y-3 opacity-70 px-4">
+                      <Bot size={48} className="text-blue-500" />
+                      <h3 className="text-lg font-medium text-foreground">
+                        ¡Hola! Soy ClinIA.
+                      </h3>
+                      <p className="text-xs text-foreground-muted">
+                        Puedo consultar tu base de datos. Preguntame por ventas
+                        de hoy o productos con poco stock.
+                      </p>
+                    </div>
+                  ) : (
+                    messages.map((msg, index) => (
+                      <React.Fragment key={index}>
                         <div
-                          className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-indigo-600 text-white" : "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300"}`}
+                          className={`flex gap-2 max-w-[90%] ${msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}
                         >
-                          {msg.role === "user" ? (
-                            <User size={14} />
-                          ) : (
-                            <Bot size={14} />
-                          )}
-                        </div>
-                        <div className="flex flex-col gap-1">
                           <div
-                            className={`px-3 py-2.5 rounded-2xl ${msg.role === "user" ? "bg-indigo-600 text-white rounded-tr-none" : "bg-card border border-border shadow-sm rounded-tl-none text-foreground"}`}
+                            className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-indigo-600 text-white" : "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300"}`}
                           >
                             {msg.role === "user" ? (
-                              <p className="text-sm whitespace-pre-wrap">
-                                {msg.content}
-                              </p>
+                              <User size={14} />
                             ) : (
-                              <div
-                                className="prose prose-sm dark:prose-invert max-w-none 
+                              <Bot size={14} />
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <div
+                              className={`px-3 py-2.5 rounded-2xl ${msg.role === "user" ? "bg-indigo-600 text-white rounded-tr-none" : "bg-card border border-border shadow-sm rounded-tl-none text-foreground"}`}
+                            >
+                              {msg.role === "user" ? (
+                                <p className="text-sm whitespace-pre-wrap">
+                                  {msg.content}
+                                </p>
+                              ) : (
+                                <div
+                                  className="prose prose-sm dark:prose-invert max-w-none 
                                 prose-p:leading-relaxed prose-p:mb-3 
                                 prose-headings:text-blue-600 prose-headings:font-bold prose-headings:mb-3 prose-headings:mt-4 
                                 prose-table:w-full prose-table:border-collapse prose-table:my-4 prose-table:border prose-table:border-border 
@@ -394,112 +405,112 @@ export default function ClinIAWidget() {
                                 prose-tr:hover:bg-muted/50 transition-colors
                                 prose-strong:text-foreground prose-strong:font-semibold
                                 prose-li:my-1 text-sm"
-                              >
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {msg.content}
-                                </ReactMarkdown>
+                                >
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {msg.content}
+                                  </ReactMarkdown>
+                                </div>
+                              )}
+                            </div>
+                            {msg.role === "model" && (
+                              <div className="flex justify-start mt-1">
+                                <button
+                                  onClick={() => {
+                                    setNoteToSave({
+                                      index,
+                                      content: msg.content,
+                                    });
+                                    setNoteTitle(
+                                      messages.length === 2
+                                        ? messages[0].content.substring(0, 40) +
+                                            "..."
+                                        : "Nota de ClinIA",
+                                    );
+                                  }}
+                                  disabled={isSavingNote === index}
+                                  className="flex items-center gap-1.5 text-xs font-medium bg-background border border-border px-3 py-1.5 rounded-lg text-foreground hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all shadow-sm"
+                                  title="Guardar como Nota"
+                                >
+                                  {isSavingNote === index ? (
+                                    <Loader2
+                                      size={14}
+                                      className="animate-spin text-blue-600"
+                                    />
+                                  ) : (
+                                    <BookmarkPlus
+                                      size={14}
+                                      className="text-blue-500"
+                                    />
+                                  )}
+                                  Guardar resultado
+                                </button>
                               </div>
                             )}
                           </div>
-                          {msg.role === "model" && (
-                            <div className="flex justify-start mt-1">
-                              <button
-                                onClick={() => {
-                                  setNoteToSave({
-                                    index,
-                                    content: msg.content,
-                                  });
-                                  setNoteTitle(
-                                    messages.length === 2
-                                      ? messages[0].content.substring(0, 40) +
-                                          "..."
-                                      : "Nota de ClinIA",
-                                  );
-                                }}
-                                disabled={isSavingNote === index}
-                                className="flex items-center gap-1.5 text-xs font-medium bg-background border border-border px-3 py-1.5 rounded-lg text-foreground hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all shadow-sm"
-                                title="Guardar como Nota"
-                              >
-                                {isSavingNote === index ? (
-                                  <Loader2
-                                    size={14}
-                                    className="animate-spin text-blue-600"
-                                  />
-                                ) : (
-                                  <BookmarkPlus
-                                    size={14}
-                                    className="text-blue-500"
-                                  />
-                                )}
-                                Guardar resultado
-                              </button>
+                        </div>
+                        {/* Sugerencias */}
+                        {msg.role === "model" &&
+                          msg.suggestions &&
+                          msg.suggestions.length > 0 &&
+                          index === messages.length - 1 && (
+                            <div className="flex flex-wrap gap-1.5 mt-1 ml-9">
+                              {msg.suggestions.map((suggestion, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() =>
+                                    sendMessage(undefined, suggestion)
+                                  }
+                                  className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 transition-colors"
+                                >
+                                  {suggestion}
+                                </button>
+                              ))}
                             </div>
                           )}
-                        </div>
+                      </React.Fragment>
+                    ))
+                  )}
+
+                  {isLoading && (
+                    <div className="flex gap-2 max-w-[85%] mr-auto">
+                      <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-blue-100 text-blue-600">
+                        <Bot size={14} />
                       </div>
-                      {/* Sugerencias */}
-                      {msg.role === "model" &&
-                        msg.suggestions &&
-                        msg.suggestions.length > 0 &&
-                        index === messages.length - 1 && (
-                          <div className="flex flex-wrap gap-1.5 mt-1 ml-9">
-                            {msg.suggestions.map((suggestion, i) => (
-                              <button
-                                key={i}
-                                onClick={() =>
-                                  sendMessage(undefined, suggestion)
-                                }
-                                className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 transition-colors"
-                              >
-                                {suggestion}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                    </React.Fragment>
-                  ))
-                )}
-
-                {isLoading && (
-                  <div className="flex gap-2 max-w-[85%] mr-auto">
-                    <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-blue-100 text-blue-600">
-                      <Bot size={14} />
+                      <div className="px-4 py-3 rounded-2xl bg-card border border-border shadow-sm rounded-tl-none flex items-center gap-2 text-foreground-muted">
+                        <Loader2 size={14} className="animate-spin" />
+                        <span className="text-xs font-medium animate-pulse">
+                          Pensando...
+                        </span>
+                      </div>
                     </div>
-                    <div className="px-4 py-3 rounded-2xl bg-card border border-border shadow-sm rounded-tl-none flex items-center gap-2 text-foreground-muted">
-                      <Loader2 size={14} className="animate-spin" />
-                      <span className="text-xs font-medium animate-pulse">
-                        Pensando...
-                      </span>
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
 
-              {/* Input Area */}
-              <div className="p-3 bg-card border-t border-border shrink-0">
-                <form
-                  onSubmit={sendMessage}
-                  className="relative flex items-center"
-                >
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Preguntale a ClinIA..."
-                    className="w-full pl-4 pr-12 py-3 rounded-full border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm"
-                    disabled={isLoading}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!input.trim() || isLoading}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                {/* Input Area */}
+                <div className="p-3 bg-card border-t border-border shrink-0">
+                  <form
+                    onSubmit={sendMessage}
+                    className="relative flex items-center"
                   >
-                    <Send size={16} className="ml-0.5" />
-                  </button>
-                </form>
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Preguntale a ClinIA..."
+                      className="w-full pl-4 pr-12 py-3 rounded-full border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-sm"
+                      disabled={isLoading}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!input.trim() || isLoading}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      <Send size={16} className="ml-0.5" />
+                    </button>
+                  </form>
+                </div>
               </div>
-            </div>
             )}
           </div>
 

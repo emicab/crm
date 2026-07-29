@@ -19,7 +19,9 @@ import ConfigUsuariosTab from "@/components/configuracion/tabs/ConfigUsuariosTab
 import ConfigBackupTab from "@/components/configuracion/tabs/ConfigBackupTab";
 import ConfigArcaTab from "@/components/configuracion/tabs/ConfigArcaTab";
 import ConfigPromocionesTarjetasTab from "@/components/configuracion/tabs/ConfigPromocionesTarjetasTab";
+import ConfigTiendaWebTab from "@/components/configuracion/tabs/ConfigTiendaWebTab";
 import ConfigPaymentModal from "@/components/configuracion/modals/ConfigPaymentModal";
+import { ShoppingBag } from "lucide-react";
 
 
 export default function ConfiguracionPage() {
@@ -27,7 +29,7 @@ export default function ConfiguracionPage() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "promociones_tarjetas" | "usuarios" | "backup" | "arca" | "suscripciones">(
+  const [activeTab, setActiveTab] = useState<"general" | "tienda_web" | "promociones_tarjetas" | "usuarios" | "backup" | "arca" | "suscripciones">(
     "general",
   );
   const [isSyncing, setIsSyncing] = useState(false);
@@ -150,6 +152,17 @@ export default function ConfiguracionPage() {
         </button>
 
         <button
+          onClick={() => setActiveTab("tienda_web")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
+            activeTab === "tienda_web"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
+          }`}
+        >
+          <ShoppingBag size={16} /> Tienda ClinStore (Web)
+        </button>
+
+        <button
           onClick={() => setActiveTab("promociones_tarjetas")}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
             activeTab === "promociones_tarjetas"
@@ -213,6 +226,10 @@ export default function ConfiguracionPage() {
           handleSave={handleSave}
           isSaving={isSaving}
         />
+      )}
+
+      {activeTab === "tienda_web" && (
+        <ConfigTiendaWebTab />
       )}
 
       {activeTab === "promociones_tarjetas" && (

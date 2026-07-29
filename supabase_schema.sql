@@ -153,6 +153,8 @@ CREATE TABLE "Product" (
     "quantityStock" DOUBLE PRECISION NOT NULL,
     "stockMinAlert" DOUBLE PRECISION,
     "unitType" TEXT,
+    "isPublicWeb" BOOLEAN DEFAULT TRUE,
+    "webCategory" TEXT,
     "brandId" INTEGER NOT NULL,
     "categoryId" INTEGER NOT NULL,
     "supplierId" INTEGER,
@@ -342,7 +344,63 @@ CREATE TABLE "Setting" (
     PRIMARY KEY ("tenant_id", "key")
 );
 
--- 22. Deshabilitar RLS (Row Level Security) para permitir sincronización directa REST desde el POS
+-- 22. Tabla StoreConfig (Configuración de Tienda ClinStore)
+CREATE TABLE "StoreConfig" (
+    "tenant_id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "businessName" TEXT NOT NULL,
+    "description" TEXT,
+    "logoUrl" TEXT,
+    "bannerUrl" TEXT,
+    "primaryColor" TEXT DEFAULT '#2563eb',
+    "isWebActive" BOOLEAN DEFAULT FALSE,
+    "mpAccessToken" TEXT,
+    "mpPublicKey" TEXT,
+    "whatsappPhone" TEXT,
+    "minStockBuffer" DOUBLE PRECISION DEFAULT 0,
+    "allowPickup" BOOLEAN DEFAULT TRUE,
+    "allowDelivery" BOOLEAN DEFAULT TRUE,
+    "deliveryFee" NUMERIC(12, 2) DEFAULT 0,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id")
+);
+
+-- 23. Tabla WebOrder (Pedidos Web de ClinStore)
+CREATE TABLE "WebOrder" (
+    "tenant_id" TEXT NOT NULL,
+    "id" INTEGER NOT NULL,
+    "webOrderNumber" TEXT NOT NULL,
+    "clientName" TEXT NOT NULL,
+    "clientEmail" TEXT,
+    "clientPhone" TEXT NOT NULL,
+    "shippingAddress" TEXT,
+    "deliveryType" TEXT NOT NULL,
+    "paymentMethod" TEXT NOT NULL,
+    "paymentStatus" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PENDING_PREPARATION',
+    "totalAmount" NUMERIC(12, 2) NOT NULL,
+    "notes" TEXT,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id", "id")
+);
+
+-- 24. Tabla WebOrderItem (Detalle de Pedidos Web)
+CREATE TABLE "WebOrderItem" (
+    "tenant_id" TEXT NOT NULL,
+    "id" INTEGER NOT NULL,
+    "webOrderId" INTEGER NOT NULL,
+    "productId" INTEGER NOT NULL,
+    "quantity" DOUBLE PRECISION NOT NULL,
+    "unitPrice" NUMERIC(12, 2) NOT NULL,
+    "subtotal" NUMERIC(12, 2) NOT NULL,
+    PRIMARY KEY ("tenant_id", "id"),
+    FOREIGN KEY ("tenant_id", "webOrderId") REFERENCES "WebOrder" ("tenant_id", "id") ON DELETE CASCADE,
+    FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE
+);
+
+-- 25. Deshabilitar RLS (Row Level Security) para permitir sincronización directa REST desde el POS
 ALTER TABLE "Brand" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Category" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Supplier" DISABLE ROW LEVEL SECURITY;
@@ -364,3 +422,6 @@ ALTER TABLE "Expense" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "CashMovement" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "AccountMovement" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Setting" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "StoreConfig" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "WebOrder" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "WebOrderItem" DISABLE ROW LEVEL SECURITY;

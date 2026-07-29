@@ -63,6 +63,12 @@ const navGroups: NavGroup[] = [
         icon: <FileText size={20} />,
       },
       {
+        href: "/pedidos-web",
+        label: "Pedidos Web (ClinStore)",
+        icon: <ShoppingBag size={20} />,
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
         href: "/consignaciones",
         label: "Consignaciones",
         icon: <RefreshCcw size={20} />,

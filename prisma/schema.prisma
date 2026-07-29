@@ -36,6 +36,8 @@ model Product {
   quantityStock Float
   stockMinAlert Float?
   unitType      String?  // null=sin especificar, UNIT, WEIGHT, VOLUME
+  isPublicWeb   Boolean  @default(true)
+  webCategory   String?
   brandId       Int
   categoryId    Int
   supplierId    Int?
@@ -49,6 +51,7 @@ model Product {
   comboItems       ComboItem[]
   promotionConditions PromotionCondition[]
   consignmentItems ConsignmentItem[]
+  webOrderItems    WebOrderItem[]
 }
 
 model Client {
@@ -412,4 +415,62 @@ model CreditCardPromotion {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sales        Sale[]
+}
+
+enum WebOrderStatus {
+  PENDING_PAYMENT
+  PENDING_PREPARATION
+  READY_FOR_PICKUP
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model StoreConfig {
+  id              Int      @id @default(autoincrement())
+  slug            String   @unique
+  businessName    String
+  description     String?
+  logoUrl         String?
+  bannerUrl       String?
+  primaryColor    String?  @default("#2563eb")
+  isWebActive     Boolean  @default(false)
+  mpAccessToken   String?
+  mpPublicKey     String?
+  whatsappPhone   String?
+  minStockBuffer  Float    @default(0)
+  allowPickup     Boolean  @default(true)
+  allowDelivery   Boolean  @default(true)
+  deliveryFee     Decimal  @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model WebOrder {
+  id              Int            @id @default(autoincrement())
+  webOrderNumber  String         @unique
+  clientName      String
+  clientEmail     String?
+  clientPhone     String
+  shippingAddress String?
+  deliveryType    String         // "PICKUP" | "DELIVERY"
+  paymentMethod   String         // "MERCADO_PAGO" | "CASH_ON_DELIVERY"
+  paymentStatus   String         // "PENDING" | "PAID" | "REJECTED"
+  status          WebOrderStatus @default(PENDING_PREPARATION)
+  totalAmount     Decimal
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  items           WebOrderItem[]
+}
+
+model WebOrderItem {
+  id          Int      @id @default(autoincrement())
+  webOrderId  Int
+  productId   Int
+  quantity    Float
+  unitPrice   Decimal
+  subtotal    Decimal
+  webOrder    WebOrder @relation(fields: [webOrderId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
 }
