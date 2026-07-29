@@ -36,7 +36,7 @@ model Product {
   quantityStock Float
   stockMinAlert Float?
   unitType      String?  // null=sin especificar, UNIT, WEIGHT, VOLUME
-  isPublicWeb   Boolean  @default(true)
+  isPublicWeb   Boolean  @default(false)
   webCategory   String?
   brandId       Int
   categoryId    Int

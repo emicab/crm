@@ -36,6 +36,27 @@ export default async function handler(
       handleApiError(res, error, `fetching product ${id}`);
     }
   } else if (req.method === 'PUT') {
+    const { isPublicWeb, webCategory } = req.body;
+
+    // Si es una actualización rápida de visibilidad web únicamente:
+    if (isPublicWeb !== undefined && Object.keys(req.body).every((k) => ['isPublicWeb', 'webCategory'].includes(k))) {
+      try {
+        const updated = await prisma.product.update({
+          where: { id },
+          data: {
+            isPublicWeb: Boolean(isPublicWeb),
+            ...(webCategory !== undefined ? { webCategory: webCategory || null } : {}),
+          },
+          include: { brand: true, category: true, supplier: true },
+        });
+        res.status(200).json(updated);
+        return;
+      } catch (error: any) {
+        handleApiError(res, error, `updating product web status ${id}`);
+        return;
+      }
+    }
+
     const {
       pricePurchase, priceSale, quantityStock, stockMinAlert,
       brandId, categoryId, supplierId, unitType,

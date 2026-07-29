@@ -211,6 +211,44 @@ const ProductTable = () => {
     }
   };
 
+  const handleToggleWebPublic = async (productId: number, newStatus: boolean) => {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPublicWeb: newStatus }),
+      });
+      if (!res.ok) throw new Error("Error al actualizar visibilidad web.");
+
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, isPublicWeb: newStatus } : p))
+      );
+      toast.success(newStatus ? "Producto publicado en la Tienda Web 🌐" : "Producto ocultado de la Tienda Web 🚫");
+    } catch (err: any) {
+      toast.error(err.message || "Error al cambiar estado web.");
+    }
+  };
+
+  const handleBatchWebStatus = async (isPublicWeb: boolean) => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    try {
+      const res = await fetch("/api/products/batch", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, isPublicWeb }),
+      });
+
+      setProducts((prev) =>
+        prev.map((p) => (selectedIds.has(p.id) ? { ...p, isPublicWeb } : p))
+      );
+      setSelectedIds(new Set());
+      toast.success(isPublicWeb ? `${ids.length} productos publicados en Tienda Web 🌐` : `${ids.length} productos ocultados de Tienda Web 🚫`);
+    } catch (err: any) {
+      toast.error("Error al actualizar productos masivamente.");
+    }
+  };
+
   return (
     <>
       <ConfirmationModal
@@ -272,6 +310,8 @@ const ProductTable = () => {
           count={selectedIds.size}
           onClear={() => setSelectedIds(new Set())}
           onBatchUpdate={() => setIsBatchSupplierModalOpen(true)}
+          onPublishWeb={() => handleBatchWebStatus(true)}
+          onHideWeb={() => handleBatchWebStatus(false)}
         />
         <div className="overflow-x-auto">
           <table className="hidden md:table w-full text-left">
@@ -293,12 +333,13 @@ const ProductTable = () => {
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Compra</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Venta</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center w-[70px]">Stock</th>
+                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center w-[110px]">Tienda Web</th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center w-[90px]">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {!loading && products.length === 0 ? (
-                <tr><td colSpan={10} className="text-center text-foreground-muted py-8">No se encontraron productos.</td></tr>
+                <tr><td colSpan={11} className="text-center text-foreground-muted py-8">No se encontraron productos.</td></tr>
               ) : (
                 products.map((product) => (
                   <tr key={product.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
@@ -318,6 +359,19 @@ const ProductTable = () => {
                     <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.pricePurchase ?? 0)}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.priceSale)}</td>
                     <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">{product.quantityStock}{product.unitType === 'WEIGHT' ? ' kg' : product.unitType === 'VOLUME' ? ' L' : ''}</td>
+                    <td className="p-3 sm:p-4 text-sm text-center">
+                      <button
+                        onClick={() => handleToggleWebPublic(product.id, !product.isPublicWeb)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center justify-center gap-1 mx-auto transition-colors ${
+                          product.isPublicWeb
+                            ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300"
+                        }`}
+                        title="Haz clic para activar o desactivar la visibilidad en ClinStore"
+                      >
+                        {product.isPublicWeb ? "🌐 Publicado" : "🚫 Oculto"}
+                      </button>
+                    </td>
                     <td className="p-3 sm:p-4 text-sm text-center w-[90px] whitespace-nowrap">
                        <div className="flex items-center justify-center space-x-1">
                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(product.id)} title="Editar" className="h-8 w-8">

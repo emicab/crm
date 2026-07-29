@@ -25,6 +25,8 @@ export interface Brand {
     quantityStock: number;
     stockMinAlert?: number | null;
     unitType?: UnitType;
+    isPublicWeb?: boolean;
+    webCategory?: string | null;
     brandId: number;
     categoryId: number;
     supplierId?: number | null;

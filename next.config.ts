@@ -43,7 +43,7 @@ const nextConfig = {
       },
     ];
   },
-  webpack: (config, { nextRuntime }) => {
+  webpack: (config: any, { nextRuntime }: any) => {
     if (nextRuntime === 'edge') {
       config.devtool = false;
     }
