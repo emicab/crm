@@ -140,6 +140,8 @@ const ProductTable = () => {
     setPage(1);
   };
 
+  const [isAllPagesSelected, setIsAllPagesSelected] = useState(false);
+
   const handleToggleSelect = (productId: number) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -147,14 +149,22 @@ const ProductTable = () => {
       else next.add(productId);
       return next;
     });
+    setIsAllPagesSelected(false);
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.size === products.length) {
+    if (selectedIds.size === products.length || isAllPagesSelected) {
       setSelectedIds(new Set());
+      setIsAllPagesSelected(false);
     } else {
       setSelectedIds(new Set(products.map(p => p.id)));
+      setIsAllPagesSelected(false);
     }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+    setIsAllPagesSelected(false);
   };
 
   const handleBatchUpdate = async (data: { brandId?: string; categoryId?: string; supplierId?: string }) => {
@@ -173,7 +183,7 @@ const ProductTable = () => {
         throw new Error(errorData.message || 'Error al actualizar productos.');
       }
       toast.success(`Productos actualizados con éxito (${selectedIds.size} producto(s)).`);
-      setSelectedIds(new Set());
+      handleClearSelection();
       setIsBatchSupplierModalOpen(false);
       fetchProducts(page);
     } catch (err: unknown) {
@@ -230,20 +240,26 @@ const ProductTable = () => {
   };
 
   const handleBatchWebStatus = async (isPublicWeb: boolean) => {
-    if (selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
+    if (selectedIds.size === 0 && !isAllPagesSelected) return;
     try {
+      const payload = isAllPagesSelected
+        ? { allPages: true, filters, isPublicWeb }
+        : { ids: Array.from(selectedIds), isPublicWeb };
+
       const res = await fetch("/api/products/batch", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids, isPublicWeb }),
+        body: JSON.stringify(payload),
       });
 
-      setProducts((prev) =>
-        prev.map((p) => (selectedIds.has(p.id) ? { ...p, isPublicWeb } : p))
+      const data = await res.json();
+      fetchProducts(page);
+      handleClearSelection();
+      toast.success(
+        isPublicWeb
+          ? `¡${data.count || totalProducts} productos publicados en Tienda Web 🌐!`
+          : `¡${data.count || totalProducts} productos ocultados de Tienda Web 🚫!`
       );
-      setSelectedIds(new Set());
-      toast.success(isPublicWeb ? `${ids.length} productos publicados en Tienda Web 🌐` : `${ids.length} productos ocultados de Tienda Web 🚫`);
     } catch (err: any) {
       toast.error("Error al actualizar productos masivamente.");
     }
@@ -308,7 +324,10 @@ const ProductTable = () => {
         )}
         <SelectedBar
           count={selectedIds.size}
-          onClear={() => setSelectedIds(new Set())}
+          totalCount={totalProducts}
+          isAllPagesSelected={isAllPagesSelected}
+          onSelectAllPages={() => setIsAllPagesSelected(true)}
+          onClear={handleClearSelection}
           onBatchUpdate={() => setIsBatchSupplierModalOpen(true)}
           onPublishWeb={() => handleBatchWebStatus(true)}
           onHideWeb={() => handleBatchWebStatus(false)}
@@ -320,9 +339,9 @@ const ProductTable = () => {
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-10">
                   <input
                     type="checkbox"
-                    checked={products.length > 0 && selectedIds.size === products.length}
+                    checked={isAllPagesSelected || (products.length > 0 && selectedIds.size === products.length)}
                     onChange={handleSelectAll}
-                    className="rounded border-border"
+                    className="rounded border-border cursor-pointer"
                   />
                 </th>
                 <th className="p-3 sm:p-4 text-sm font-semibold text-foreground max-w-[240px]">Nombre</th>
