@@ -51,7 +51,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const [mlCandidates, setMlCandidates] = useState<Array<{ id: string; title: string; imageUrl: string; thumbnail: string }>>([]);
   const [isMLModalOpen, setIsMLModalOpen] = useState(false);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -60,17 +60,35 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('La imagen no debe superar los 5MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('La imagen no debe superar los 10MB.');
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const dataUrl = event.target?.result as string;
-      if (dataUrl) {
+      if (!dataUrl) return;
+
+      const toastId = toast.loading('Procesando imagen...');
+      try {
+        const cloudRes = await fetch('/api/upload/cloudinary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file: dataUrl }),
+        });
+
+        const cloudData = await cloudRes.json();
+        if (cloudRes.ok && cloudData.url) {
+          setFormData(prev => ({ ...prev, imageUrl: cloudData.url }));
+          toast.success('Imagen subida a Cloudinary exitosamente.', { id: toastId });
+        } else {
+          setFormData(prev => ({ ...prev, imageUrl: dataUrl }));
+          toast.success('Imagen cargada desde tu PC (Vista previa).', { id: toastId });
+        }
+      } catch {
         setFormData(prev => ({ ...prev, imageUrl: dataUrl }));
-        toast.success('Imagen cargada desde tu PC.');
+        toast.success('Imagen cargada desde tu PC.', { id: toastId });
       }
     };
     reader.readAsDataURL(file);
