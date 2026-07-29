@@ -10,10 +10,23 @@ export default async function handler(
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const { productIds, supplierId, brandId, categoryId } = req.body;
+  const { productIds, allPages, filters, supplierId, brandId, categoryId } = req.body;
 
-  if (!Array.isArray(productIds) || productIds.length === 0) {
-    return res.status(400).json({ message: 'productIds debe ser un array no vacío.' });
+  let whereClause: any = {};
+  if (allPages) {
+    if (filters?.search) {
+      whereClause.OR = [
+        { name: { contains: filters.search } },
+        { sku: { contains: filters.search } },
+      ];
+    }
+    if (filters?.brandId) whereClause.brandId = Number(filters.brandId);
+    if (filters?.categoryId) whereClause.categoryId = Number(filters.categoryId);
+    if (filters?.supplierId) whereClause.supplierId = Number(filters.supplierId);
+  } else if (Array.isArray(productIds) && productIds.length > 0) {
+    whereClause.id = { in: productIds.map((id: any) => parseInt(id)) };
+  } else {
+    return res.status(400).json({ message: 'productIds debe ser un array no vacío o especificar allPages.' });
   }
 
   try {
@@ -62,12 +75,12 @@ export default async function handler(
       return res.status(400).json({ message: 'No se especificaron cambios válidos para actualizar.' });
     }
 
-    await prisma.product.updateMany({
-      where: { id: { in: productIds.map((id: any) => parseInt(id)) } },
+    const result = await prisma.product.updateMany({
+      where: whereClause,
       data: updateData,
     });
 
-    res.status(200).json({ message: 'Productos actualizados con éxito de forma masiva.' });
+    res.status(200).json({ message: 'Productos actualizados con éxito de forma masiva.', count: result.count });
   } catch (error) {
     console.error('Error updating batch products:', error);
     res.status(500).json({ message: 'Error al realizar la actualización masiva.' });

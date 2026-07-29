@@ -153,9 +153,12 @@ const ProductTable = () => {
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.size === products.length || isAllPagesSelected) {
+    if (isAllPagesSelected) {
       setSelectedIds(new Set());
       setIsAllPagesSelected(false);
+    } else if (selectedIds.size === products.length) {
+      setIsAllPagesSelected(true);
+      toast.success(`Se seleccionaron los ${totalProducts.toLocaleString("es-AR")} productos de todas las páginas 🚀`);
     } else {
       setSelectedIds(new Set(products.map(p => p.id)));
       setIsAllPagesSelected(false);
@@ -170,19 +173,21 @@ const ProductTable = () => {
   const handleBatchUpdate = async (data: { brandId?: string; categoryId?: string; supplierId?: string }) => {
     setIsSavingBatch(true);
     try {
+      const payload = isAllPagesSelected
+        ? { allPages: true, filters, ...data }
+        : { productIds: Array.from(selectedIds), ...data };
+
       const res = await fetch('/api/products/batch-supplier', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productIds: Array.from(selectedIds),
-          ...data,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.message || 'Error al actualizar productos.');
       }
-      toast.success(`Productos actualizados con éxito (${selectedIds.size} producto(s)).`);
+      const resJson = await res.json();
+      toast.success(`Productos actualizados con éxito (${resJson.count || selectedIds.size} producto(s)).`);
       handleClearSelection();
       setIsBatchSupplierModalOpen(false);
       fetchProducts(page);
