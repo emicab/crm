@@ -12,7 +12,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ message: "Ingrese un código de descuento válido." });
       }
 
-      // 1. Buscar cupón en base de datos
+      // 1. Buscar en la tabla DiscountCode (la que administra el POS)
+      const discountCode = await prisma.discountCode.findFirst({
+        where: { code: { equals: cleanCode } },
+      });
+
+      if (discountCode) {
+        if (!discountCode.isActive) {
+          return res.status(400).json({ message: "El código de descuento no está activo." });
+        }
+        if (discountCode.validFrom && new Date(discountCode.validFrom) > new Date()) {
+          return res.status(400).json({ message: "El código aún no es válido." });
+        }
+        if (discountCode.validUntil && new Date(discountCode.validUntil) < new Date()) {
+          return res.status(400).json({ message: "El código de descuento ha expirado." });
+        }
+        if (discountCode.maxUses && discountCode.currentUses >= discountCode.maxUses) {
+          return res.status(400).json({ message: "El código de descuento alcanzó el límite máximo de usos." });
+        }
+
+        const percent = Number(discountCode.discountPercent || 0);
+        const discountAmount = (numSubtotal * percent) / 100;
+
+        return res.status(200).json({
+          valid: true,
+          code: discountCode.code,
+          discountType: "PERCENTAGE",
+          discountValue: percent,
+          discountAmount: Math.min(numSubtotal, discountAmount),
+          message: `¡Código ${discountCode.code} (${percent}% OFF) aplicado con éxito!`,
+        });
+      }
+
+      // 2. Buscar en la tabla Coupon (para compatibilidad)
       const coupon = await prisma.coupon.findFirst({
         where: { code: { equals: cleanCode } },
       });
@@ -47,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // 2. Fallback para cupones estándar de prueba
+      // 3. Fallback para cupones estándar de prueba
       const defaultCoupons: Record<string, { type: string; val: number; min: number; msg: string }> = {
         BIENVENIDA10: { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF por Bienvenida 🎉" },
         BIENVENIDA: { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF por Bienvenida 🎉" },
@@ -55,9 +87,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         DESCUENTO: { type: "PERCENTAGE", val: 15, min: 1000, msg: "15% OFF en tu compra 🔥" },
         ENVIOGRATIS: { type: "FIXED_AMOUNT", val: 500, min: 0, msg: "Descuento equivalente al envío 🚚" },
         PROMO10: { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF Promocional ✨" },
-        PROMO: { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF Promocional ✨" },
-        "10OFF": { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF Promocional ✨" },
-        "15OFF": { type: "PERCENTAGE", val: 15, min: 1000, msg: "15% OFF Promocional ✨" },
       };
 
       if (defaultCoupons[cleanCode]) {
