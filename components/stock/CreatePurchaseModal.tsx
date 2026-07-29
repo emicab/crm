@@ -39,6 +39,7 @@ const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
   isOpen, products, suppliers, onClose, onSuccess, activePurchaseId,
 }) => {
   const [supplierId, setSupplierId] = useState("");
+  const [paymentType, setPaymentType] = useState("CASH");
   const [items, setItems] = useState<OrderItem[]>([]);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +62,7 @@ const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         }))
       );
       setSupplierId(commonSupplierId || "");
+      setPaymentType("CASH");
       setNotes("");
     }
   }, [isOpen, products, commonSupplierId]);
@@ -103,7 +105,8 @@ const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           supplierId: parseInt(supplierId),
-          status: "ORDERED",
+          status: "RECEIVED",
+          paymentType: paymentType || null,
           notes: notes.trim() || null,
           items: validItems.map(i => ({
             productId: i.productId,
@@ -116,7 +119,7 @@ const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || `Error al ${activePurchaseId ? 'actualizar' : 'crear'} la orden de compra.`);
       }
-      toast.success(activePurchaseId ? "¡Orden de compra actualizada con éxito!" : "¡Orden de compra creada exitosamente!");
+      toast.success(activePurchaseId ? "¡Orden de compra actualizada con éxito!" : "¡Compra registrada y stock actualizado con éxito!");
       onSuccess();
       onClose();
     } catch (err: unknown) {
@@ -155,17 +158,31 @@ const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
             </div>
 
             <div className="p-5 overflow-y-auto flex-1 space-y-4">
-              <Select
-                label="Proveedor *"
-                value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-                required
-              >
-                <option value="">Seleccionar proveedor...</option>
-                {(commonSupplierId ? filteredSuppliers : suppliers).map(s => (
-                  <option key={s.id} value={String(s.id)}>{s.name}</option>
-                ))}
-              </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Select
+                  label="Proveedor *"
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                  required
+                >
+                  <option value="">Seleccionar proveedor...</option>
+                  {(commonSupplierId ? filteredSuppliers : suppliers).map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </Select>
+
+                <Select
+                  label="Medio de Pago"
+                  value={paymentType}
+                  onChange={(e) => setPaymentType(e.target.value)}
+                >
+                  <option value="CASH">💵 Efectivo (Descuenta de Caja)</option>
+                  <option value="TRANSFER">🏦 Transferencia Bancaria</option>
+                  <option value="CARD">💳 Tarjeta</option>
+                  <option value="QR">📱 QR / Mercado Pago</option>
+                  <option value="">Sin especificar / A crédito</option>
+                </Select>
+              </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left">

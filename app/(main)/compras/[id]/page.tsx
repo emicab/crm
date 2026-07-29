@@ -7,6 +7,7 @@ import { Loader2, AlertCircle, ArrowLeft, Truck, ShoppingBag, FileText, CreditCa
 import Button from '@/components/ui/Button';
 import Link from 'next/link';
 import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { formatDate } from '@/lib/formatDate';
 import { getPaymentTypeDisplay } from '@/lib/displayTexts';
@@ -61,6 +62,7 @@ const PurchaseDetailPage = () => {
   const [receiveItems, setReceiveItems] = useState<ReceiveItem[]>([]);
   const [receiveSearchTerm, setReceiveSearchTerm] = useState('');
   const [receiveSearchResults, setReceiveSearchResults] = useState<Product[]>([]);
+  const [receivePaymentType, setReceivePaymentType] = useState('CASH');
 
   useEffect(() => {
     if (purchaseId) {
@@ -155,6 +157,7 @@ const PurchaseDetailPage = () => {
 
   const openReceiveModal = () => {
     if (!purchase) return;
+    setReceivePaymentType(purchase.paymentType || 'CASH');
     setReceiveItems(purchase.items.map(i => ({
       productId: i.productId,
       productName: i.product?.name || `#${i.productId}`,
@@ -207,13 +210,13 @@ const PurchaseDetailPage = () => {
       const res = await fetch(`/api/compras/${purchase.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'RECEIVED', items: itemsPayload }),
+        body: JSON.stringify({ status: 'RECEIVED', paymentType: receivePaymentType || null, items: itemsPayload }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Error al recibir');
       const updated = await res.json();
       setPurchase({ ...updated, totalAmount: parseFloat(updated.totalAmount), items: updated.items.map((i: any) => ({ ...i, purchasePrice: parseFloat(i.purchasePrice), subtotal: parseFloat(i.purchasePrice) * i.quantity })) });
       setShowReceiveModal(false);
-      toast.success('¡Compra recibida! Stock actualizado.');
+      toast.success('¡Compra recibida! Stock y movimiento de caja actualizados.');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Error al recibir la compra.');
     }
@@ -420,27 +423,39 @@ const PurchaseDetailPage = () => {
                 </tbody>
               </table>
 
-              {/* Add new product to receive */}
-              <div className="relative mb-4">
-                <div className="flex gap-2 items-center">
+              {/* Medio de pago y búsqueda */}
+              <div className="mb-4 space-y-3">
+                <Select
+                  label="Medio de Pago con el que se abonó *"
+                  value={receivePaymentType}
+                  onChange={(e) => setReceivePaymentType(e.target.value)}
+                >
+                  <option value="CASH">💵 Efectivo (Registra salida en Caja activa)</option>
+                  <option value="TRANSFER">🏦 Transferencia Bancaria</option>
+                  <option value="CARD">💳 Tarjeta</option>
+                  <option value="QR">📱 QR / Mercado Pago</option>
+                  <option value="">Sin especificar / A crédito</option>
+                </Select>
+
+                <div className="relative">
                   <Input
                     type="text"
                     placeholder="Agregar producto que no estaba en el pedido..."
                     value={receiveSearchTerm}
                     onChange={(e) => setReceiveSearchTerm(e.target.value)}
-                    className="flex-1"
+                    className="w-full"
                   />
+                  {receiveSearchResults.length > 0 && (
+                    <ul className="absolute z-10 w-full bg-background border border-border rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
+                      {receiveSearchResults.map(p => (
+                        <li key={p.id} onClick={() => handleAddReceiveProduct(p)} className="px-3 py-2 hover:bg-muted cursor-pointer text-sm flex justify-between">
+                          <span>{p.name}</span>
+                          <span className="text-foreground-muted">{formatCurrency(p.pricePurchase || 0)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                {receiveSearchResults.length > 0 && (
-                  <ul className="absolute z-10 w-full bg-background border border-border rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                    {receiveSearchResults.map(p => (
-                      <li key={p.id} onClick={() => handleAddReceiveProduct(p)} className="px-3 py-2 hover:bg-muted cursor-pointer text-sm flex justify-between">
-                        <span>{p.name}</span>
-                        <span className="text-foreground-muted">{formatCurrency(p.pricePurchase || 0)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
 
               <div className="flex justify-end gap-2">

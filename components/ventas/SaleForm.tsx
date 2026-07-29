@@ -68,6 +68,7 @@ const SaleForm = () => {
     handleItemDetailChange,
     handleRemoveItem,
     handleFormChange,
+    setFormData,
     handleSelectCombo,
     handleSubmit,
     handleSaveOrder,
@@ -169,6 +170,7 @@ const SaleForm = () => {
             clientInputRef={clientInputRef}
             isModuleEnabled={isModuleEnabled}
             handleFormChange={handleFormChange}
+            setFormData={setFormData}
             handleClientSearchChange={handleClientSearchChange}
             handleSelectClient={handleSelectClient}
             handleClearClientSelection={handleClearClientSelection}

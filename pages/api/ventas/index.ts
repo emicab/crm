@@ -30,9 +30,11 @@ interface CreateSaleInput {
   discountCodeApplied?: string;
   promotionsApplied?: PromoAppliedInput[];
   paymentMethodDiscount?: number;
+  onAccount?: boolean;
   invoiceType?: 'A' | 'B' | 'C' | 'NONE';
   clientCuit?: string;
   clientName?: string;
+  creditCardPromotionId?: number | null;
   status?: 'COMPLETED' | 'PENDING';
 }
 
@@ -119,7 +121,7 @@ export default async function handler(
       handleApiError(res, error, "fetching sales");
     }
   } else if (req.method === 'POST') {
-    const { clientId, sellerId, paymentType, items, promotionsApplied, paymentMethodDiscount, invoiceType, clientCuit, clientName } = req.body as CreateSaleInput;
+    const { clientId, sellerId, paymentType, items, promotionsApplied, paymentMethodDiscount, invoiceType, clientCuit, clientName, creditCardPromotionId } = req.body as CreateSaleInput;
     let { notes, discountCodeApplied } = req.body as CreateSaleInput;
 
     if (!sellerId || !paymentType || !items || items.length === 0) {
@@ -248,6 +250,7 @@ export default async function handler(
             notes: notes || null,
             discountCodeApplied: discountCodeApplied || null,
             promotionsApplied: promotionsAppliedJson,
+            ...(creditCardPromotionId && { creditCardPromotion: { connect: { id: creditCardPromotionId } } }),
             ...(clientId && { client: { connect: { id: clientId } } }),
             seller: { connect: { id: sellerId } },
             ...(openRegister && { cashRegister: { connect: { id: openRegister.id } } }),

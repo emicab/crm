@@ -1,10 +1,12 @@
 import React from "react";
-import { ClipboardList, User } from "lucide-react";
+import { ClipboardList, User, CreditCard, X, Tag } from "lucide-react";
+import { useState, useEffect } from "react";
 import Select from "@/components/ui/Select";
 import Input from "@/components/ui/Input";
 import { Seller, Client, PaymentTypeEnum } from "@/types";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 import { SaleFormData } from "@/hooks/useSaleState";
+import Button from "@/components/ui/Button";
 
 interface SaleMetadataSectionProps {
   formData: SaleFormData;
@@ -14,13 +16,18 @@ interface SaleMetadataSectionProps {
   selectedClient: Client | null;
   clientInputRef: React.RefObject<HTMLInputElement | null>;
   isModuleEnabled: (modId: string) => boolean;
-  handleFormChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  handleFormChange: (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
+  ) => void;
+  setFormData: React.Dispatch<React.SetStateAction<SaleFormData>>;
   handleClientSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSelectClient: (client: Client) => void;
   handleClearClientSelection: () => void;
   config: Record<string, string>;
-  invoiceType: 'A' | 'B' | 'C' | 'NONE';
-  setInvoiceType: (type: 'A' | 'B' | 'C' | 'NONE') => void;
+  invoiceType: "A" | "B" | "C" | "NONE";
+  setInvoiceType: (type: "A" | "B" | "C" | "NONE") => void;
   clientCuit: string;
   setClientCuit: (cuit: string) => void;
   clientName: string;
@@ -36,6 +43,7 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
   clientInputRef,
   isModuleEnabled,
   handleFormChange,
+  setFormData,
   handleClientSearchChange,
   handleSelectClient,
   handleClearClientSelection,
@@ -47,6 +55,29 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
   clientName,
   setClientName,
 }) => {
+  const [promotions, setPromotions] = useState<any[]>([]);
+  const [isPromosModalOpen, setIsPromosModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (formData.paymentType === PaymentTypeEnum.CARD) {
+      fetch("/api/credit-card-promotions?activeOnly=true")
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setPromotions(data);
+          }
+        })
+        .catch(() => setPromotions([]));
+    } else {
+      setPromotions([]);
+      if (formData.creditCardPromotionId) {
+        setFormData(prev => ({ ...prev, creditCardPromotionId: null }));
+      }
+    }
+  }, [formData.paymentType]);
+
+  const selectedPromotion = promotions.find(p => p.id === formData.creditCardPromotionId);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border pt-4">
       {/* Panel: Datos del Comprobante */}
@@ -77,6 +108,47 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
                 );
               })}
             </Select>
+            {formData.paymentType === PaymentTypeEnum.CARD && promotions.length > 0 && (
+              <div className="mt-2 animate-in fade-in slide-in-from-top-1">
+                {selectedPromotion ? (
+                  <div className="w-full flex flex-col p-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-300 rounded-xl shadow-sm">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5 text-blue-800 text-[10px] font-bold uppercase tracking-wider">
+                        <CreditCard size={12} />
+                        Tarjeta Seleccionada
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, creditCardPromotionId: null }))}
+                        className="text-[10px] text-red-500 font-bold hover:underline"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-blue-100">
+                      <span className="font-bold text-slate-800 text-xs">{selectedPromotion.bank}</span>
+                      <span className="text-blue-600 font-bold text-xs">{selectedPromotion.installments}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsPromosModalOpen(true)}
+                    className="w-full flex items-center justify-between p-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 hover:border-blue-300 rounded-xl transition-all shadow-sm group"
+                  >
+                    <div className="flex items-center gap-2 text-blue-800">
+                      <div className="p-1.5 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
+                        <CreditCard size={14} className="text-blue-700" />
+                      </div>
+                      <span className="text-xs font-bold uppercase tracking-wide">Ver promociones vigentes</span>
+                    </div>
+                    <div className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                      {promotions.length}
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="sm:col-span-1">
@@ -171,7 +243,8 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
                           {client.firstName} {client.lastName || ""}
                         </span>
                         <span className="text-[10px] text-foreground-muted">
-                          {client.email || "Sin email"} &middot; {client.phone || "Sin tel"}
+                          {client.email || "Sin email"} &middot;{" "}
+                          {client.phone || "Sin tel"}
                         </span>
                       </li>
                     ))}
@@ -271,7 +344,9 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
                   <Input
                     label="CUIT Cliente *"
                     value={clientCuit}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setClientCuit(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setClientCuit(e.target.value)
+                    }
                     placeholder="20123456789 (11 dígitos)"
                     className="text-xs rounded-xl h-9"
                     required
@@ -281,7 +356,9 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
                   <Input
                     label="Razón Social Cliente *"
                     value={clientName}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setClientName(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setClientName(e.target.value)
+                    }
                     placeholder="Nombre o Razón Social"
                     className="text-xs rounded-xl h-9"
                     required
@@ -289,6 +366,85 @@ export const SaleMetadataSection: React.FC<SaleMetadataSectionProps> = ({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Promociones */}
+      {isPromosModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-border flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-3 text-slate-800">
+                <div className="p-2 bg-blue-100 rounded-xl text-blue-600">
+                  <Tag size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold">Promociones con Tarjeta</h2>
+                  <p className="text-xs text-slate-500">
+                    Opciones de cuotas vigentes para ofrecer al cliente
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPromosModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto custom-scrollbar bg-slate-50/50">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {promotions.map((promo) => (
+                  <div 
+                    key={promo.id} 
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, creditCardPromotionId: promo.id }));
+                      setIsPromosModalOpen(false);
+                    }}
+                    className={`rounded-xl p-4 border shadow-sm transition-all group relative overflow-hidden cursor-pointer ${
+                      formData.creditCardPromotionId === promo.id 
+                        ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-400' 
+                        : 'bg-white border-slate-200 hover:shadow-md hover:border-blue-200'
+                    }`}
+                  >
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-blue-50 rounded-bl-full -z-0 opacity-50 group-hover:bg-blue-100 transition-colors"></div>
+                    <div className="relative z-10 flex flex-col h-full">
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="font-bold text-slate-800 text-sm">
+                          {promo.bank}
+                        </h3>
+                        <div className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                          Vigente
+                        </div>
+                      </div>
+
+                      <div className="text-blue-600 font-bold text-lg mb-2 flex items-center gap-1.5">
+                        <CreditCard size={16} />
+                        {promo.installments}
+                      </div>
+
+                      {promo.notes && (
+                        <p className="text-xs text-slate-500 mt-auto pt-3 border-t border-slate-100">
+                          {promo.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-border bg-white flex justify-end">
+              <Button
+                onClick={() => setIsPromosModalOpen(false)}
+                variant="primary"
+                className="rounded-xl px-6"
+              >
+                Cerrar
+              </Button>
+            </div>
           </div>
         </div>
       )}

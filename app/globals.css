@@ -1,8 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit&display=swap');
 @import "tailwindcss";
 
 * {
-  font-family: Outfit;
+  font-family: var(--font-outfit), sans-serif;
 }
 
 @theme {

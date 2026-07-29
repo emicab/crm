@@ -52,6 +52,10 @@ interface SaleDetail
         xmlRequest?: string | null;
         xmlResponse?: string | null;
     } | null;
+    creditCardPromotion?: {
+        bank: string;
+        installments: string;
+    } | null;
 }
 
 const SaleDetailPage = () => {
@@ -510,6 +514,20 @@ const SaleDetailPage = () => {
                             </h3>
                             <p className='text-foreground font-medium'>
                                 {sale.discountCodeApplied}
+                            </p>
+                        </div>
+                    )}
+                    {sale.creditCardPromotion && (
+                        <div>
+                            <h3 className='text-sm font-medium text-foreground-muted mb-1 flex items-center'>
+                                <CreditCard
+                                    size={16}
+                                    className='mr-2 text-primary'
+                                />
+                                Promoción Bancaria
+                            </h3>
+                            <p className='text-foreground font-medium'>
+                                {sale.creditCardPromotion.bank} - {sale.creditCardPromotion.installments}
                             </p>
                         </div>
                     )}

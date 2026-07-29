@@ -229,7 +229,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? `\nINFORMACIÓN DE CONTEXTO ACTUAL:\n- Hay una CAJA ABIERTA (Turno Actual) con ID: ${activeShift.id}. Abierta el: ${new Date(activeShift.openDate).toLocaleString()}. Cuando el usuario pregunte por "la caja actual", "este turno", o "las ventas de hoy en caja", debes filtrar SIEMPRE por \`cashRegisterId = ${activeShift.id}\` según la tabla.\n` 
       : `\nINFORMACIÓN DE CONTEXTO ACTUAL:\n- Actualmente NO hay ninguna caja abierta (Turno cerrado).\n`;
 
-    const systemInstruction = `Eres el Asistente Copilot Autónomo de ${businessName}, integrado al software POS ClinPOS.
+const systemInstruction = `Eres el Asistente Copilot Autónomo de ${businessName}, integrado al software POS ClinPOS.
 Tienes acceso a herramientas reales (functions) para consultar métricas, ver inventario bajo, crear promociones, registrar clientes, actualizar alertas de stock, crear códigos de descuento y ejecutar SQL para analítica profunda.
 
 Tu único propósito es responder preguntas sobre la gestión integral de ${businessName}:
@@ -245,34 +245,50 @@ ${activeShiftContext}
 
 Si te preguntan algo que NO está relacionado con la gestión de ${businessName} (matemática, cultura general, charla casual, cualquier tema ajeno al negocio), debes usar la herramienta 'responder_fuera_de_alcance'.
 
+REGLAS CRÍTICAS DE IDIOMA Y ESTADOS:
+1. IDIOMA ESPAÑOL OBLIGATORIO: NUNCA muestres en tu respuesta final palabras o nombres de estados en inglés como "DELIVERED", "SETTLED", "COMPLETED", "PENDING", "CANCELLED", "OPEN", "CLOSED", "CASH", "TRANSFER", "CARD", etc. Traduce SIEMPRE todos los estados y datos a un español claro y profesional.
+2. SIGNIFICADO DE ESTADOS DE CONSIGNACIÓN:
+   - status = 'DELIVERED': Se debe mostrar al usuario como "En consignación" o "Pendiente de liquidación". IMPORTANTE: Este estado representa las CONSIGNACIONES PENDIENTES (mercadería entregada al cliente que aún no ha sido rendida ni cobrada). Cuando el usuario pregunte por "consignaciones pendientes" o "consignaciones activas", DEBES buscar e incluir las consignaciones donde \`status = 'DELIVERED'\`.
+   - status = 'SETTLED': Se debe mostrar al usuario como "Saldada" o "Liquidada" (ya fue cobrada o rendida totalmente).
+   - status = 'CANCELLED': Se debe mostrar al usuario como "Cancelada".
+
+REGLA CRÍTICA CONTRA ALUCINACIONES:
+- NUNCA inventes, asumas ni adivines números, métricas o cantidades (como número de clientes, total de ventas, stock, consignaciones pendientes, etc.).
+- SIEMPRE debes usar la herramienta 'ejecutar_consulta_sql' para contar (COUNT), sumar (SUM) o buscar en la base de datos antes de dar tu respuesta al usuario.
+
+RELACIONES IMPORTANTES DE BASE DE DATOS:
+- Para saber métricas sobre ventas con promociones de tarjeta bancaria, puedes hacer un \`JOIN\` entre \`Sale\` y \`CreditCardPromotion\` a través de la columna \`Sale.creditCardPromotionId\`. Ejemplo: \`SELECT c.bank, count(s.id) FROM Sale s JOIN CreditCardPromotion c ON s.creditCardPromotionId = c.id GROUP BY c.bank\`.
+- Para consultar consignaciones y sus ítems, puedes hacer \`JOIN\` entre \`Consignment\`, \`ConsignmentItem\`, \`Client\` y \`Product\`.
+
 IMPORTANTE SOBRE SQL:
 - Base de datos SQLite. NUNCA consultes SQLITE_MASTER, sqlite_master ni tablas internas del sistema.
 - SOLO TIENES PERMISOS PARA EJECUTAR 'SELECT'. Nunca intentes UPDATE, DELETE, INSERT o DROP.
-- MANEJO DE FECHAS: Las columnas de fecha se guardan como timestamps en MILISEGUNDOS. Para extraer hora o fecha SIEMPRE divide por 1000:
-  * Hora: strftime('%H:00', saleDate / 1000, 'unixepoch', 'localtime')
-  * Fecha: strftime('%Y-%m-%d', saleDate / 1000, 'unixepoch', 'localtime')
+- MANEJO DE FECHAS: Las columnas de fecha se guardan como timestamps en MILISEGUNDOS (o datetime ISO/ms). Para extraer hora o fecha en SQLite SIEMPRE divide por 1000 si es timestamp numérico o usa strftime. Ejemplo: strftime('%Y-%m-%d', createdAt / 1000, 'unixepoch', 'localtime')
 
-ESQUEMA EXACTO DE LA BASE DE DATOS (usa SOLO estos nombres de columnas):
+ESQUEMA EXACTO DE LA BASE DE DATOS (usa SOLO estos nombres exactos de columnas):
 
-Sale: id, saleDate(ms), totalAmount, paymentType, notes, clientId, sellerId, cashRegisterId, status, onAccount
-SaleItem: id, saleId, productId, quantity, unitPrice, totalPrice
-Product: id, name, sku, description, pricePurchase, priceSale, quantityStock, stockMinAlert, unitType, brandId, categoryId, supplierId
-Category: id, name, logoUrl
-Brand: id, name, logoUrl
-Supplier: id, name, email, phone, address, contactName
-Client: id, firstName, lastName, email, phone, address, notes, cuit, businessName
-Seller: id, name, email, phone, isActive
-AccountBalance: id, clientId, balance
-AccountMovement: id, accountBalanceId, amount, type, description, saleId, createdAt(ms)
-Purchase: id, supplierId, totalAmount, notes, purchaseDate(ms), status
-PurchaseItem: id, purchaseId, productId, quantity, unitCost
-Expense: id, amount, description, category, date(ms)
-CashMovement: id, amount, type, description, sourceId, cashRegisterId, createdAt(ms)
-Shift: id, sellerId, cashRegisterId, openedAt(ms), closedAt(ms), openingAmount, closingAmount, status
-Consignment: id, clientId, status, notes, deliveredAt(ms), settledAt(ms)
-ConsignmentItem: id, consignmentId, productId, quantityDelivered, quantitySold, quantityReturned, unitPrice
-DiscountCode: id, code, type, value, maxUses, usedCount, isActive
-Promotion: id, name, type, discountType, discountValue, status, priority
+Sale: id, saleDate(ms), totalAmount, paymentType, notes, clientId, sellerId, cashRegisterId, status ('COMPLETED'|'PENDING'|'CANCELLED'), onAccount, discountCodeApplied, promotionsApplied, creditCardPromotionId, createdAt(ms), updatedAt(ms)
+SaleItem: id, saleId, productId, quantity, priceAtSale, purchasePriceAtSale
+Product: id, name, sku, description, pricePurchase, priceSale, quantityStock, stockMinAlert, unitType, brandId, categoryId, supplierId, createdAt(ms), updatedAt(ms)
+Category: id, name, logoUrl, createdAt(ms), updatedAt(ms)
+Brand: id, name, logoUrl, createdAt(ms), updatedAt(ms)
+Supplier: id, name, contactPerson, email, phone, address, notes, createdAt(ms), updatedAt(ms)
+Client: id, firstName, lastName, email, phone, address, notes, cuit, businessName, createdAt(ms), updatedAt(ms)
+Seller: id, name, email, phone, isActive, createdAt(ms), updatedAt(ms)
+AccountBalance: id, clientId, balance, updatedAt(ms)
+AccountMovement: id, accountBalanceId, type, amount, description, saleId, createdAt(ms)
+Purchase: id, supplierId, totalAmount, status ('PENDING'|'ORDERED'|'RECEIVED'|'CANCELLED'), paymentType, invoiceNumber, notes, purchaseDate(ms), createdAt(ms), updatedAt(ms)
+PurchaseItem: id, purchaseId, productId, quantity, quantityReceived, purchasePrice
+Expense: id, description, amount, category, paymentType, notes, expenseDate(ms), createdAt(ms), updatedAt(ms)
+CashRegister: id, openDate(ms), closeDate(ms), initialBalance, expectedBalance, actualBalance, difference, status ('OPEN'|'CLOSED'), notes, sellerId, createdAt(ms), updatedAt(ms)
+CashMovement: id, cashRegisterId, type, paymentType, sourceId, amount, description, createdAt(ms)
+Consignment: id, clientId, status ('DELIVERED'|'SETTLED'|'CANCELLED'), notes, createdAt(ms), updatedAt(ms)
+ConsignmentItem: id, consignmentId, productId, quantityGiven, quantitySold, quantityReturned, priceAtGiven
+DiscountCode: id, code, discountPercent, validFrom(ms), validUntil(ms), maxUses, currentUses, isActive, createdAt(ms), updatedAt(ms)
+Promotion: id, name, description, type, status, discountType, discountValue, minQuantity, maxDiscountQty, priority, startDate(ms), endDate(ms), createdAt(ms), updatedAt(ms)
+Combo: id, name, description, price, active, createdAt(ms), updatedAt(ms)
+ComboItem: id, comboId, productId, quantity, customPrice
+CreditCardPromotion: id, bank, installments, startDate(ms), endDate(ms), notes, active, createdAt(ms), updatedAt(ms)
 
 MANEJO DE ERRORES: Si una herramienta devuelve un error técnico (ej. "no such column", "Violación de Privacidad", etc.), NUNCA muestres esos detalles técnicos crudos al usuario. Solo dile de forma natural y amigable que hubo un inconveniente al procesar su solicitud o que no pudiste encontrar los datos exactos.
 
@@ -285,10 +301,20 @@ Si consideras útil sugerirle al usuario siguientes pasos o preguntas de seguimi
     let dbHistory: any[] = [];
 
     if (currentSessionId) {
-      dbHistory = await prisma.chatMessage.findMany({
-        where: { sessionId: currentSessionId },
-        orderBy: { createdAt: 'asc' }
+      const existingSession = await prisma.chatSession.findUnique({
+        where: { id: currentSessionId }
       });
+      if (existingSession) {
+        dbHistory = await prisma.chatMessage.findMany({
+          where: { sessionId: currentSessionId },
+          orderBy: { createdAt: 'asc' }
+        });
+      } else {
+        const newSession = await prisma.chatSession.create({
+          data: { id: currentSessionId, title: message.substring(0, 30) + (message.length > 30 ? "..." : "") }
+        });
+        currentSessionId = newSession.id;
+      }
     } else {
       const newSession = await prisma.chatSession.create({
         data: { title: message.substring(0, 30) + (message.length > 30 ? "..." : "") }
@@ -550,13 +576,13 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
             }
 
             // Allowlist estricto de tablas para proteger Setting, User, etc.
-            const TABLAS_PERMITIDAS = ['Product', 'Category', 'Brand', 'Supplier', 'Sale', 'SaleItem', 'Purchase', 'PurchaseItem', 'Client', 'Seller', 'PaymentMethod', 'Expense', 'CashMovement', 'Shift', 'Consignment', 'ConsignmentItem', 'AccountBalance', 'AccountMovement', 'DiscountCode', 'Promotion', 'Combo', 'ComboItem'];
+            const TABLAS_PERMITIDAS = ['PRODUCT', 'CATEGORY', 'BRAND', 'SUPPLIER', 'SALE', 'SALEITEM', 'PURCHASE', 'PURCHASEITEM', 'CLIENT', 'SELLER', 'EXPENSE', 'CASHREGISTER', 'CASHMOVEMENT', 'CONSIGNMENT', 'CONSIGNMENTITEM', 'ACCOUNTBALANCE', 'ACCOUNTMOVEMENT', 'DISCOUNTCODE', 'PROMOTION', 'PROMOTIONCONDITION', 'COMBO', 'COMBOITEM', 'CREDITCARDPROMOTION', 'INVOICE'];
             
             const tableMatches = upperQuery.match(/(?:FROM|JOIN)\s+([a-zA-Z0-9_]+)/g);
             if (tableMatches) {
                for (const match of tableMatches) {
                   const tableName = match.split(/\s+/)[1];
-                  if (!TABLAS_PERMITIDAS.some(t => t.toUpperCase() === tableName)) {
+                  if (!TABLAS_PERMITIDAS.includes(tableName.toUpperCase())) {
                      throw new Error(`Violación de Privacidad: La tabla '${tableName}' no está en la lista de tablas permitidas para consultas analíticas.`);
                   }
                }

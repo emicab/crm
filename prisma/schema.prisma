@@ -95,6 +95,8 @@ model Sale {
   updatedAt           DateTime      @updatedAt
   discountCodeApplied String?
   promotionsApplied   String?           // JSON: [{promotionId, name, type, discountAmount}]
+  creditCardPromotionId Int?
+  creditCardPromotion   CreditCardPromotion? @relation(fields: [creditCardPromotionId], references: [id])
   onAccount           Boolean           @default(false)
   seller              Seller            @relation(fields: [sellerId], references: [id])
   client              Client?           @relation(fields: [clientId], references: [id])
@@ -397,4 +399,17 @@ model ConsignmentItem {
   priceAtGiven     Decimal
   consignment      Consignment @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
   product          Product     @relation(fields: [productId], references: [id])
+}
+
+model CreditCardPromotion {
+  id           Int       @id @default(autoincrement())
+  bank         String
+  installments String
+  startDate    DateTime?
+  endDate      DateTime?
+  notes        String?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sales        Sale[]
 }

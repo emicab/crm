@@ -7,6 +7,7 @@ import {
   Users,
   Database,
   ShieldCheck,
+  CreditCard,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -17,6 +18,7 @@ import ConfigRubroPlanTab from "@/components/configuracion/tabs/ConfigRubroPlanT
 import ConfigUsuariosTab from "@/components/configuracion/tabs/ConfigUsuariosTab";
 import ConfigBackupTab from "@/components/configuracion/tabs/ConfigBackupTab";
 import ConfigArcaTab from "@/components/configuracion/tabs/ConfigArcaTab";
+import ConfigPromocionesTarjetasTab from "@/components/configuracion/tabs/ConfigPromocionesTarjetasTab";
 import ConfigPaymentModal from "@/components/configuracion/modals/ConfigPaymentModal";
 
 
@@ -25,7 +27,7 @@ export default function ConfiguracionPage() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "rubro_plan" | "usuarios" | "backup" | "arca">(
+  const [activeTab, setActiveTab] = useState<"general" | "promociones_tarjetas" | "usuarios" | "backup" | "arca" | "suscripciones">(
     "general",
   );
   const [isSyncing, setIsSyncing] = useState(false);
@@ -148,14 +150,14 @@ export default function ConfiguracionPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("rubro_plan")}
+          onClick={() => setActiveTab("promociones_tarjetas")}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
-            activeTab === "rubro_plan"
+            activeTab === "promociones_tarjetas"
               ? "border-primary text-primary font-semibold"
               : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
           }`}
         >
-          <LayoutDashboard size={16} /> Rubro y Plan
+          <CreditCard size={16} /> Promociones Tarjetas
         </button>
 
         <button
@@ -190,6 +192,17 @@ export default function ConfiguracionPage() {
         >
           <ShieldCheck size={16} /> Facturación ARCA (AFIP)
         </button>
+
+        <button
+          onClick={() => setActiveTab("suscripciones")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
+            activeTab === "suscripciones"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
+          }`}
+        >
+          <LayoutDashboard size={16} /> Suscripciones
+        </button>
       </div>
 
       {/* Content Area */}
@@ -202,13 +215,8 @@ export default function ConfiguracionPage() {
         />
       )}
 
-      {activeTab === "rubro_plan" && (
-        <ConfigRubroPlanTab
-          form={form}
-          handleChange={handleChange}
-          handleSave={handleSave}
-          isSaving={isSaving}
-        />
+      {activeTab === "promociones_tarjetas" && (
+        <ConfigPromocionesTarjetasTab />
       )}
 
       {activeTab === "usuarios" && (
@@ -232,6 +240,15 @@ export default function ConfiguracionPage() {
           handleSave={handleSave}
           isSaving={isSaving}
           onRefreshConfig={fetchConfig}
+        />
+      )}
+
+      {activeTab === "suscripciones" && (
+        <ConfigRubroPlanTab
+          form={form}
+          handleChange={handleChange}
+          handleSave={handleSave}
+          isSaving={isSaving}
         />
       )}
 

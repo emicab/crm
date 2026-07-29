@@ -23,6 +23,7 @@ export interface SaleFormData {
   notes: string;
   items: SaleItemInCart[];
   discountCode: string;
+  creditCardPromotionId: number | null;
 }
 
 const initialFormData: SaleFormData = {
@@ -32,6 +33,7 @@ const initialFormData: SaleFormData = {
   notes: "",
   items: [],
   discountCode: "",
+  creditCardPromotionId: null,
 };
 
 export const useSaleState = () => {
@@ -851,6 +853,7 @@ export const useSaleState = () => {
       invoiceType,
       ...(invoiceType === 'A' && { clientCuit: clientCuit.trim(), clientName: clientName.trim() }),
       status: isOrder ? 'PENDING' : 'COMPLETED',
+      creditCardPromotionId: formData.creditCardPromotionId,
     };
     try {
       const response = await fetch("/api/ventas", {
@@ -1001,6 +1004,7 @@ export const useSaleState = () => {
     handleItemDetailChange,
     handleRemoveItem,
     handleFormChange,
+    setFormData,
     handleSubmit,
     handleSaveOrder,
     handlePrintLastSale,

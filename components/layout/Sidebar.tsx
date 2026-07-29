@@ -27,6 +27,7 @@ import {
   Ticket,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -256,6 +257,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [alertCount, setAlertCount] = useState(0);
   const [collapsedGroups, setCollapsedGroups] =
     useState<Set<string>>(loadCollapsed);
+  const [appVersion, setAppVersion] = useState(pkg.version);
   const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(
     null,
   );
@@ -263,6 +265,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     saveCollapsed(collapsedGroups);
   }, [collapsedGroups]);
+
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
+          const { getVersion } = await import("@tauri-apps/api/app");
+          const version = await getVersion();
+          setAppVersion(version);
+        }
+      } catch (err) {
+        console.error("Failed to fetch Tauri version", err);
+      }
+    };
+    fetchVersion();
+  }, []);
 
   useEffect(() => {
     const fetchAlertCount = async () => {
@@ -307,26 +324,39 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   `;
 
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<any>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const checkSilent = async () => {
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const update = await check();
+        if (mounted && update) {
+          setAvailableUpdate(update);
+        }
+      } catch (e) {
+        // silently ignore error on mount
+      }
+    };
+    // Delay check slightly to avoid blocking initial render
+    const timer = setTimeout(checkSilent, 3000);
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, []);
+
   const checkForUpdates = async () => {
     try {
       setIsCheckingUpdate(true);
-      // Dynamic import to avoid SSR crash (window.__TAURI_INTERNALS__ doesn't exist on server)
       const { check } = await import("@tauri-apps/plugin-updater");
-      const { invoke } = await import("@tauri-apps/api/core");
       const update = await check();
       if (update) {
-        toast.success(
-          `Actualización ${update.version} encontrada. Descargando e instalando...`,
-        );
-        try {
-          await invoke("kill_server");
-        } catch (e) {
-          console.error("Failed to kill server", e);
-        }
-        await update.downloadAndInstall();
-        toast.success(
-          "¡Actualización instalada! Por favor, cierra y vuelve a abrir la aplicación para aplicar los cambios.",
-        );
+        setAvailableUpdate(update);
+        setIsUpdateModalOpen(true);
       } else {
         toast.success("La aplicación está en su última versión.");
       }
@@ -340,6 +370,37 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       toast.error(`Error: ${errMsg}`);
     } finally {
       setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!availableUpdate) return;
+    try {
+      setIsInstallingUpdate(true);
+      toast.success(
+        `Descargando e instalando versión ${availableUpdate.version}... aguarda un momento.`,
+      );
+      const { invoke } = await import("@tauri-apps/api/core");
+      try {
+        await invoke("kill_server");
+      } catch (e) {
+        console.error("Failed to kill server", e);
+      }
+      await availableUpdate.downloadAndInstall();
+      toast.success(
+        "¡Actualización instalada! Por favor, cierra y vuelve a abrir la aplicación para aplicar los cambios.",
+      );
+      setIsUpdateModalOpen(false);
+    } catch (err: any) {
+      console.error("Install error:", err);
+      const errMsg =
+        typeof err === "string"
+          ? err
+          : err?.message ||
+            (typeof err === "object" ? JSON.stringify(err) : String(err));
+      toast.error(`Error al instalar: ${errMsg}`);
+    } finally {
+      setIsInstallingUpdate(false);
     }
   };
 
@@ -491,10 +552,31 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
         )}
 
+        {availableUpdate && (
+          <div className="mx-4 mb-3 p-3 bg-primary/10 border border-primary/30 rounded-xl shadow-sm">
+            <p className="text-xs font-bold text-primary mb-1 flex items-center">
+              <span className="relative flex h-2 w-2 mr-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              ¡Actualización disponible!
+            </p>
+            <p className="text-[10px] text-foreground-muted mb-3 font-medium leading-tight">
+              La versión <span className="font-bold text-foreground">v{availableUpdate.version}</span> está lista para ser instalada.
+            </p>
+            <button
+              onClick={() => setIsUpdateModalOpen(true)}
+              className="w-full py-1.5 bg-primary hover:bg-primary-dark text-primary-foreground text-[10px] font-bold rounded-lg shadow-sm transition-colors cursor-pointer"
+            >
+              Ver e Instalar
+            </button>
+          </div>
+        )}
+
         <div className="p-4 border-t border-border space-y-2 text-center">
           <div className="flex items-center justify-center gap-2">
             <p className="text-[11px] font-semibold text-foreground-muted">
-              ClinPOS v{pkg.version}
+              ClinPOS v{appVersion}
             </p>
             <button
               onClick={checkForUpdates}
@@ -549,6 +631,30 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         onClose={() => setLockedFeatureModal(null)}
         featureName={lockedFeatureModal || undefined}
       />
+
+      <ConfirmationModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        onConfirm={handleInstallUpdate}
+        title="Actualización Disponible"
+        confirmText="Descargar e Instalar"
+        isLoading={isInstallingUpdate}
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-foreground">
+            Hay una nueva versión de <strong>ClinPOS (v{availableUpdate?.version})</strong> disponible para ti.
+          </p>
+          <p className="text-foreground-muted">
+            ¿Deseas descargar e instalar esta actualización ahora? La aplicación se reiniciará una vez completado el proceso.
+          </p>
+          {availableUpdate?.body && (
+            <div className="mt-4 p-3 bg-muted rounded-md text-xs border border-border overflow-y-auto max-h-32">
+              <strong className="block mb-1 text-foreground">Notas de la versión:</strong>
+              <div className="whitespace-pre-wrap">{availableUpdate.body}</div>
+            </div>
+          )}
+        </div>
+      </ConfirmationModal>
     </>
   );
 };

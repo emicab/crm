@@ -35,6 +35,11 @@ const nextConfig = {
       },
     ];
   },
+  webpack: (config, { nextRuntime }) => {
+    if (nextRuntime === 'edge') {
+      config.devtool = false;
+    }
+    return config;
+  },
 };
-
-module.exports = nextConfig;
+export default nextConfig;
