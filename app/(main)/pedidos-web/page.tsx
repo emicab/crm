@@ -89,41 +89,67 @@ export default function PedidosWebPage() {
     );
   });
 
+  const handleUpdateOrderStatus = async (
+    orderId: number,
+    newStatus: string,
+    newPaymentStatus?: string
+  ) => {
+    try {
+      const res = await fetch(`/api/web-orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus, paymentStatus: newPaymentStatus }),
+      });
+      if (!res.ok) throw new Error("Error al actualizar el estado del pedido.");
+      const updated = await res.json();
+
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: updated.status, paymentStatus: updated.paymentStatus } : o))
+      );
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder((prev) => (prev ? { ...prev, status: updated.status, paymentStatus: updated.paymentStatus } : null));
+      }
+      toast.success("¡Estado del pedido actualizado correctamente! 🚀");
+    } catch (err: any) {
+      toast.error(err.message || "Error al actualizar estado.");
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "PENDING_PREPARATION":
         return (
-          <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+          <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
             <Clock size={12} /> En Preparación
           </span>
         );
       case "READY_FOR_PICKUP":
         return (
-          <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+          <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
             <CheckCircle2 size={12} /> Listo para Retiro
           </span>
         );
       case "SHIPPED":
         return (
-          <span className="bg-purple-100 text-purple-800 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+          <span className="bg-purple-100 text-purple-800 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
             <Truck size={12} /> En Envío
           </span>
         );
       case "DELIVERED":
         return (
-          <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1">
+          <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
             <CheckCircle2 size={12} /> Entregado
           </span>
         );
       case "CANCELLED":
         return (
-          <span className="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-medium font-medium">
+          <span className="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-semibold">
             Cancelado
           </span>
         );
       default:
         return (
-          <span className="bg-gray-100 text-gray-800 text-xs px-2.5 py-1 rounded-full font-medium">
+          <span className="bg-gray-100 text-gray-800 text-xs px-2.5 py-1 rounded-full font-semibold">
             {status}
           </span>
         );
@@ -258,7 +284,17 @@ export default function PedidosWebPage() {
                       )}
                     </td>
                     <td className="p-3 text-center">
-                      {getStatusBadge(order.status)}
+                      <select
+                        value={order.status}
+                        onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                        className="text-xs font-semibold p-1.5 rounded-lg border border-border bg-background cursor-pointer focus:ring-2 focus:ring-blue-500/50"
+                      >
+                        <option value="PENDING_PREPARATION">⏳ En Preparación</option>
+                        <option value="READY_FOR_PICKUP">📦 Listo para Retiro</option>
+                        <option value="SHIPPED">🚚 En Envío</option>
+                        <option value="DELIVERED">✅ Entregado</option>
+                        <option value="CANCELLED">❌ Cancelado</option>
+                      </select>
                     </td>
                     <td className="p-3 text-right font-bold text-foreground">
                       {formatCurrency(parseFloat(order.totalAmount))}
@@ -325,6 +361,57 @@ export default function PedidosWebPage() {
                 )}
               </div>
 
+              {/* Botones de Cambio Rápido de Estado */}
+              <div className="bg-background p-3 rounded-xl border border-border space-y-2">
+                <label className="block text-xs font-bold text-foreground">Cambiar Estado del Pedido:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, "READY_FOR_PICKUP")}
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors ${
+                      selectedOrder.status === "READY_FOR_PICKUP"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "border-border text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    📦 Listo p/ Retiro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, "SHIPPED")}
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors ${
+                      selectedOrder.status === "SHIPPED"
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "border-border text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    🚚 En Envío
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, "DELIVERED", "PAID")}
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors ${
+                      selectedOrder.status === "DELIVERED"
+                        ? "bg-emerald-600 text-white border-emerald-600"
+                        : "border-border text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    ✅ Entregado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, "CANCELLED")}
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors ${
+                      selectedOrder.status === "CANCELLED"
+                        ? "bg-red-600 text-white border-red-600"
+                        : "border-border text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    ❌ Cancelar
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <h4 className="font-bold text-xs uppercase tracking-wider text-foreground-muted mb-2">
                   Productos Solicitados
@@ -369,8 +456,7 @@ export default function PedidosWebPage() {
               <Button
                 variant="primary"
                 onClick={() => {
-                  toast.success("¡Pedido marcado en preparación!");
-                  setSelectedOrder(null);
+                  toast.success("¡Imprimiendo ticket de empaque!");
                 }}
               >
                 Imprimir Ticket de Empaque 🖨️
