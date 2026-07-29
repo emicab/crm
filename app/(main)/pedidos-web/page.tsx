@@ -100,9 +100,17 @@ export default function PedidosWebPage() {
             Gestión y preparación de pedidos realizados por clientes desde tu tienda online pública.
           </p>
         </div>
-        <Button variant="outline" onClick={fetchOrders} className="flex items-center gap-2">
-          <RefreshCcw size={16} /> Actualizar Pedidos
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={fetchOrders} className="flex items-center gap-2">
+            <RefreshCcw size={16} /> Actualizar Pedidos
+          </Button>
+          <a
+            href="/configuracion?tab=tienda_web"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition-colors flex items-center gap-2 shadow-sm"
+          >
+            <Settings size={16} /> Configurar Tienda Web
+          </a>
+        </div>
       </div>
 
       {/* Main Container */}
