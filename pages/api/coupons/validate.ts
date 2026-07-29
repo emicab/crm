@@ -5,16 +5,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === "POST") {
     try {
       const { code, subtotal } = req.body;
-      const cleanCode = (code || "").trim().toUpperCase();
+      const cleanCode = (code || "").replace(/\s+/g, "").toUpperCase();
       const numSubtotal = parseFloat(subtotal) || 0;
 
       if (!cleanCode) {
-        return res.status(400).json({ message: "Ingrese un código de descuento válidez." });
+        return res.status(400).json({ message: "Ingrese un código de descuento válido." });
       }
 
       // 1. Buscar cupón en base de datos
-      const coupon = await prisma.coupon.findUnique({
-        where: { code: cleanCode },
+      const coupon = await prisma.coupon.findFirst({
+        where: { code: { equals: cleanCode } },
       });
 
       if (coupon) {
@@ -50,9 +50,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // 2. Fallback para cupones estándar de prueba
       const defaultCoupons: Record<string, { type: string; val: number; min: number; msg: string }> = {
         BIENVENIDA10: { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF por Bienvenida 🎉" },
+        BIENVENIDA: { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF por Bienvenida 🎉" },
         DESCUENTO15: { type: "PERCENTAGE", val: 15, min: 1000, msg: "15% OFF en tu compra 🔥" },
+        DESCUENTO: { type: "PERCENTAGE", val: 15, min: 1000, msg: "15% OFF en tu compra 🔥" },
         ENVIOGRATIS: { type: "FIXED_AMOUNT", val: 500, min: 0, msg: "Descuento equivalente al envío 🚚" },
         PROMO10: { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF Promocional ✨" },
+        PROMO: { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF Promocional ✨" },
+        "10OFF": { type: "PERCENTAGE", val: 10, min: 0, msg: "10% OFF Promocional ✨" },
+        "15OFF": { type: "PERCENTAGE", val: 15, min: 1000, msg: "15% OFF Promocional ✨" },
       };
 
       if (defaultCoupons[cleanCode]) {
