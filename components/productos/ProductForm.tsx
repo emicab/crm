@@ -235,7 +235,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
 
       if (!initialProductData) {
         setFormData({
-            name: '', sku: '', description: '', pricePurchase: '', priceSale: '',
+            name: '', sku: '', description: '', imageUrl: '', pricePurchase: '', priceSale: '',
             quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
             unitType: '',
         });
