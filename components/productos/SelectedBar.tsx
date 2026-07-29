@@ -2,7 +2,7 @@
 
 import React from "react";
 import Button from "@/components/ui/Button";
-import { X, Edit } from "lucide-react";
+import { X, Edit, Globe, EyeOff } from "lucide-react";
 
 interface SelectedBarProps {
   count: number;
@@ -59,9 +59,9 @@ const SelectedBar: React.FC<SelectedBarProps> = ({
             variant="outline"
             size="sm"
             onClick={onPublishWeb}
-            className="border-emerald-600 text-emerald-700 hover:bg-emerald-100 bg-white font-semibold"
+            className="border-emerald-600 text-emerald-700 hover:bg-emerald-100 bg-white font-semibold flex items-center gap-1"
           >
-            🌐 Publicar en Web
+            <Globe size={14} className="text-emerald-600" /> Publicar en Web
           </Button>
         )}
         {onHideWeb && (
@@ -69,9 +69,9 @@ const SelectedBar: React.FC<SelectedBarProps> = ({
             variant="outline"
             size="sm"
             onClick={onHideWeb}
-            className="border-gray-400 text-gray-700 hover:bg-gray-100 bg-white font-semibold"
+            className="border-gray-400 text-gray-700 hover:bg-gray-100 bg-white font-semibold flex items-center gap-1"
           >
-            🚫 Ocultar de Web
+            <EyeOff size={14} className="text-gray-600" /> Ocultar de Web
           </Button>
         )}
         <Button

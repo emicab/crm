@@ -14,6 +14,9 @@ import {
   CheckCircle2,
   Clock,
   Settings,
+  Package,
+  XCircle,
+  Printer,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -109,7 +112,7 @@ export default function PedidosWebPage() {
       if (selectedOrder && selectedOrder.id === orderId) {
         setSelectedOrder((prev) => (prev ? { ...prev, status: updated.status, paymentStatus: updated.paymentStatus } : null));
       }
-      toast.success("¡Estado del pedido actualizado correctamente! 🚀");
+      toast.success("Estado del pedido actualizado correctamente.");
     } catch (err: any) {
       toast.error(err.message || "Error al actualizar estado.");
     }
@@ -126,7 +129,7 @@ export default function PedidosWebPage() {
       case "READY_FOR_PICKUP":
         return (
           <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
-            <CheckCircle2 size={12} /> Listo para Retiro
+            <Package size={12} /> Listo para Retiro
           </span>
         );
       case "SHIPPED":
@@ -143,8 +146,8 @@ export default function PedidosWebPage() {
         );
       case "CANCELLED":
         return (
-          <span className="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-semibold">
-            Cancelado
+          <span className="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
+            <XCircle size={12} /> Cancelado
           </span>
         );
       default:
@@ -162,12 +165,10 @@ export default function PedidosWebPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <ShoppingBag className="text-blue-600" size={28} /> Pedidos Web
-            (ClinStore)
+            <ShoppingBag className="text-blue-600" size={28} /> Pedidos Web (ClinStore)
           </h1>
           <p className="text-foreground-muted text-sm mt-1">
-            Gestión y preparación de pedidos realizados por clientes desde tu
-            tienda online pública.
+            Gestión y preparación de pedidos realizados por clientes desde tu tienda online pública.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -227,8 +228,7 @@ export default function PedidosWebPage() {
               No hay pedidos web registrados aún
             </p>
             <p className="text-xs">
-              Los pedidos realizados en ClinStore aparecerán automáticamente en
-              esta pantalla.
+              Los pedidos realizados en ClinStore aparecerán automáticamente en esta pantalla.
             </p>
           </div>
         ) : (
@@ -273,13 +273,11 @@ export default function PedidosWebPage() {
                     <td className="p-3 text-foreground-muted">
                       {order.deliveryType === "DELIVERY" ? (
                         <span className="flex items-center gap-1 text-xs">
-                          <Truck size={14} className="text-purple-600" /> Envo a
-                          Domicilio
+                          <Truck size={14} className="text-purple-600" /> Envío a Domicilio
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 text-xs">
-                          <MapPin size={14} className="text-blue-600" /> Retiro
-                          en Local
+                          <MapPin size={14} className="text-blue-600" /> Retiro en Local
                         </span>
                       )}
                     </td>
@@ -289,11 +287,11 @@ export default function PedidosWebPage() {
                         onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
                         className="text-xs font-semibold p-1.5 rounded-lg border border-border bg-background cursor-pointer focus:ring-2 focus:ring-blue-500/50"
                       >
-                        <option value="PENDING_PREPARATION">⏳ En Preparación</option>
-                        <option value="READY_FOR_PICKUP">📦 Listo para Retiro</option>
-                        <option value="SHIPPED">🚚 En Envío</option>
-                        <option value="DELIVERED">✅ Entregado</option>
-                        <option value="CANCELLED">❌ Cancelado</option>
+                        <option value="PENDING_PREPARATION">En Preparación</option>
+                        <option value="READY_FOR_PICKUP">Listo para Retiro</option>
+                        <option value="SHIPPED">En Envío</option>
+                        <option value="DELIVERED">Entregado</option>
+                        <option value="CANCELLED">Cancelado</option>
                       </select>
                     </td>
                     <td className="p-3 text-right font-bold text-foreground">
@@ -342,7 +340,7 @@ export default function PedidosWebPage() {
                 onClick={() => setSelectedOrder(null)}
                 className="text-white hover:bg-white/10"
               >
-                ✕
+                <XCircle size={18} />
               </Button>
             </div>
 
@@ -368,46 +366,46 @@ export default function PedidosWebPage() {
                   <button
                     type="button"
                     onClick={() => handleUpdateOrderStatus(selectedOrder.id, "READY_FOR_PICKUP")}
-                    className={`p-2 rounded-lg text-xs font-bold border transition-colors ${
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
                       selectedOrder.status === "READY_FOR_PICKUP"
                         ? "bg-blue-600 text-white border-blue-600"
                         : "border-border text-foreground hover:bg-muted"
                     }`}
                   >
-                    📦 Listo p/ Retiro
+                    <Package size={14} /> Listo p/ Retiro
                   </button>
                   <button
                     type="button"
                     onClick={() => handleUpdateOrderStatus(selectedOrder.id, "SHIPPED")}
-                    className={`p-2 rounded-lg text-xs font-bold border transition-colors ${
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
                       selectedOrder.status === "SHIPPED"
                         ? "bg-purple-600 text-white border-purple-600"
                         : "border-border text-foreground hover:bg-muted"
                     }`}
                   >
-                    🚚 En Envío
+                    <Truck size={14} /> En Envío
                   </button>
                   <button
                     type="button"
                     onClick={() => handleUpdateOrderStatus(selectedOrder.id, "DELIVERED", "PAID")}
-                    className={`p-2 rounded-lg text-xs font-bold border transition-colors ${
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
                       selectedOrder.status === "DELIVERED"
                         ? "bg-emerald-600 text-white border-emerald-600"
                         : "border-border text-foreground hover:bg-muted"
                     }`}
                   >
-                    ✅ Entregado
+                    <CheckCircle2 size={14} /> Entregado
                   </button>
                   <button
                     type="button"
                     onClick={() => handleUpdateOrderStatus(selectedOrder.id, "CANCELLED")}
-                    className={`p-2 rounded-lg text-xs font-bold border transition-colors ${
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
                       selectedOrder.status === "CANCELLED"
                         ? "bg-red-600 text-white border-red-600"
                         : "border-border text-foreground hover:bg-muted"
                     }`}
                   >
-                    ❌ Cancelar
+                    <XCircle size={14} /> Cancelar
                   </button>
                 </div>
               </div>
@@ -456,10 +454,11 @@ export default function PedidosWebPage() {
               <Button
                 variant="primary"
                 onClick={() => {
-                  toast.success("¡Imprimiendo ticket de empaque!");
+                  toast.success("Imprimiendo ticket de empaque.");
                 }}
+                className="flex items-center gap-1"
               >
-                Imprimir Ticket de Empaque 🖨️
+                <Printer size={16} /> Imprimir Ticket de Empaque
               </Button>
             </div>
           </div>

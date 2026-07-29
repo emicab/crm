@@ -158,7 +158,7 @@ const ProductTable = () => {
       setIsAllPagesSelected(false);
     } else if (selectedIds.size === products.length) {
       setIsAllPagesSelected(true);
-      toast.success(`Se seleccionaron los ${totalProducts.toLocaleString("es-AR")} productos de todas las páginas 🚀`);
+      toast.success(`Se seleccionaron los ${totalProducts.toLocaleString("es-AR")} productos de todas las páginas.`);
     } else {
       setSelectedIds(new Set(products.map(p => p.id)));
       setIsAllPagesSelected(false);
@@ -238,7 +238,7 @@ const ProductTable = () => {
       setProducts((prev) =>
         prev.map((p) => (p.id === productId ? { ...p, isPublicWeb: newStatus } : p))
       );
-      toast.success(newStatus ? "Producto publicado en la Tienda Web 🌐" : "Producto ocultado de la Tienda Web 🚫");
+      toast.success(newStatus ? "Producto publicado en la Tienda Web." : "Producto ocultado de la Tienda Web.");
     } catch (err: any) {
       toast.error(err.message || "Error al cambiar estado web.");
     }
@@ -262,8 +262,8 @@ const ProductTable = () => {
       handleClearSelection();
       toast.success(
         isPublicWeb
-          ? `¡${data.count || totalProducts} productos publicados en Tienda Web 🌐!`
-          : `¡${data.count || totalProducts} productos ocultados de Tienda Web 🚫!`
+          ? `${data.count || totalProducts} productos publicados en Tienda Web.`
+          : `${data.count || totalProducts} productos ocultados de Tienda Web.`
       );
     } catch (err: any) {
       toast.error("Error al actualizar productos masivamente.");
