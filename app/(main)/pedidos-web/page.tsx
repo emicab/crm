@@ -112,7 +112,11 @@ export default function PedidosWebPage() {
       if (selectedOrder && selectedOrder.id === orderId) {
         setSelectedOrder((prev) => (prev ? { ...prev, status: updated.status, paymentStatus: updated.paymentStatus } : null));
       }
-      toast.success("Estado del pedido actualizado correctamente.");
+      if (updated.saleId) {
+        toast.success("Pedido marcado como Entregado y registrado en Ventas y Movimientos de Caja.");
+      } else {
+        toast.success("Estado del pedido actualizado correctamente.");
+      }
     } catch (err: any) {
       toast.error(err.message || "Error al actualizar estado.");
     }
