@@ -190,6 +190,17 @@ model PromotionCondition {
   category  Category? @relation(fields: [categoryId], references: [id])
 }
 
+model Coupon {
+  id            Int       @id @default(autoincrement())
+  code          String    @unique
+  discountType  String    // PERCENTAGE | FIXED_AMOUNT
+  discountValue Decimal
+  minPurchase   Decimal   @default(0)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime?
+}
+
 model Supplier {
   id            Int     @id @default(autoincrement())
   name          String  @unique

@@ -1,53 +1,68 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '../../../lib/prisma';
-import { Prisma } from '@prisma/client';
-const Decimal = Prisma.Decimal;
-import { handleApiError } from '../../../lib/apiErrorHandler';
+import { NextApiRequest, NextApiResponse } from "next";
+import prisma from "@/lib/prisma";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method === 'GET') {
+  if (req.method === "GET") {
     try {
       const combos = await prisma.combo.findMany({
-        include: { items: { include: { product: true } } },
-        orderBy: { name: 'asc' },
-      });
-      const combosForJson = combos.map(c => ({
-        ...c,
-        price: c.price.toString(),
-      }));
-      res.status(200).json(combosForJson);
-    } catch (error: unknown) {
-      handleApiError(res, error, 'fetching combos');
-    }
-  } else if (req.method === 'POST') {
-    const { name, description, price, items } = req.body;
-
-    if (!name || !price || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: 'Nombre, precio y al menos un producto son obligatorios.' });
-    }
-
-    try {
-      const combo = await prisma.combo.create({
-        data: {
-          name,
-          description: description || null,
-          price: new Decimal(price),
+        where: { active: true },
+        include: {
           items: {
-            create: items.map((item: { productId: number; quantity: number; customPrice?: number | null }) => ({
-              productId: item.productId,
-              quantity: item.quantity || 1,
-              customPrice: item.customPrice != null ? new Decimal(item.customPrice) : null,
-            })),
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  quantityStock: true,
+                  priceSale: true,
+                },
+              },
+            },
           },
         },
-        include: { items: { include: { product: true } } },
+        orderBy: { name: "asc" },
       });
-      res.status(201).json({ ...combo, price: combo.price.toString() });
-    } catch (error: unknown) {
-      handleApiError(res, error, 'creating combo');
+
+      // Calcular el stock máximo disponible por combo según el stock de cada producto ingrediente
+      const mappedCombos = combos.map((c) => {
+        let maxComboStock = 99999;
+        const items = c.items.map((i) => {
+          const prodStock = i.product ? Number(i.product.quantityStock) : 0;
+          const reqQty = i.quantity > 0 ? i.quantity : 1;
+          const possiblePacks = Math.floor(prodStock / reqQty);
+          if (possiblePacks < maxComboStock) {
+            maxComboStock = possiblePacks;
+          }
+          return {
+            id: i.id,
+            productId: i.productId,
+            productName: i.product?.name || "Producto",
+            quantity: i.quantity,
+            priceSale: i.product ? i.product.priceSale.toString() : "0",
+          };
+        });
+
+        if (maxComboStock === 99999) maxComboStock = 0;
+
+        return {
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          priceSale: c.price.toString(),
+          isCombo: true,
+          webCategory: "Combos & Promos 🔥",
+          quantityStock: Math.max(0, maxComboStock),
+          isPublicWeb: true,
+          items,
+        };
+      });
+
+      return res.status(200).json(mappedCombos);
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message || "Error al obtener combos." });
     }
-  } else {
-    res.setHeader('Allow', ['GET', 'POST']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
   }
+
+  res.setHeader("Allow", ["GET"]);
+  return res.status(405).end(`Method ${req.method} Not Allowed`);
 }
