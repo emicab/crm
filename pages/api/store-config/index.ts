@@ -27,6 +27,7 @@ export default async function handler(
           allowPickup: true,
           allowDelivery: true,
           deliveryFee: '0',
+          minDeliveryAmount: '0',
         });
         return;
       }
@@ -34,6 +35,7 @@ export default async function handler(
       res.status(200).json({
         ...config,
         deliveryFee: config.deliveryFee.toString(),
+        minDeliveryAmount: config.minDeliveryAmount ? config.minDeliveryAmount.toString() : '0',
       });
       return;
     } catch (error) {
@@ -57,6 +59,7 @@ export default async function handler(
         allowPickup,
         allowDelivery,
         deliveryFee,
+        minDeliveryAmount,
       } = req.body;
 
       if (!slug || !slug.trim()) {
@@ -88,6 +91,7 @@ export default async function handler(
             allowPickup: allowPickup !== undefined ? Boolean(allowPickup) : true,
             allowDelivery: allowDelivery !== undefined ? Boolean(allowDelivery) : true,
             deliveryFee: parseFloat(deliveryFee) || 0,
+            minDeliveryAmount: parseFloat(minDeliveryAmount) || 0,
           },
         });
       } else {
@@ -107,6 +111,7 @@ export default async function handler(
             allowPickup: allowPickup !== undefined ? Boolean(allowPickup) : true,
             allowDelivery: allowDelivery !== undefined ? Boolean(allowDelivery) : true,
             deliveryFee: parseFloat(deliveryFee) || 0,
+            minDeliveryAmount: parseFloat(minDeliveryAmount) || 0,
           },
         });
       }
@@ -114,6 +119,7 @@ export default async function handler(
       res.status(200).json({
         ...result,
         deliveryFee: result.deliveryFee.toString(),
+        minDeliveryAmount: result.minDeliveryAmount ? result.minDeliveryAmount.toString() : '0',
       });
       return;
     } catch (error) {

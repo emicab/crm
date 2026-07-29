@@ -439,10 +439,11 @@ model StoreConfig {
   mpPublicKey     String?
   whatsappPhone   String?
   minStockBuffer  Float    @default(0)
-  allowPickup     Boolean  @default(true)
-  allowDelivery   Boolean  @default(true)
-  deliveryFee     Decimal  @default(0)
-  createdAt       DateTime @default(now())
+  allowPickup       Boolean  @default(true)
+  allowDelivery     Boolean  @default(true)
+  deliveryFee       Decimal  @default(0)
+  minDeliveryAmount Decimal  @default(0)
+  createdAt         DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 

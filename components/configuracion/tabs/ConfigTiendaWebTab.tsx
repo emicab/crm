@@ -25,6 +25,7 @@ export default function ConfigTiendaWebTab() {
     allowPickup: true,
     allowDelivery: true,
     deliveryFee: 0,
+    minDeliveryAmount: 0,
   });
 
   const fetchConfig = async () => {
@@ -48,6 +49,7 @@ export default function ConfigTiendaWebTab() {
           allowPickup: data.allowPickup !== undefined ? Boolean(data.allowPickup) : true,
           allowDelivery: data.allowDelivery !== undefined ? Boolean(data.allowDelivery) : true,
           deliveryFee: parseFloat(data.deliveryFee) || 0,
+          minDeliveryAmount: parseFloat(data.minDeliveryAmount) || 0,
         });
       }
     } catch (err) {
@@ -288,7 +290,7 @@ export default function ConfigTiendaWebTab() {
           <Smartphone size={18} className="text-emerald-600" /> Stock de Seguridad y Envíos
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input
             label="Buffer de Stock de Seguridad"
             type="number"
@@ -298,10 +300,18 @@ export default function ConfigTiendaWebTab() {
             placeholder="0"
           />
           <Input
-            label="Costo de Envío a Domicilio ($)"
+            label="Costo de Envío ($)"
             type="number"
             name="deliveryFee"
             value={String(formData.deliveryFee)}
+            onChange={handleChange}
+            placeholder="0"
+          />
+          <Input
+            label="Pedido Mínimo Envío ($)"
+            type="number"
+            name="minDeliveryAmount"
+            value={String(formData.minDeliveryAmount)}
             onChange={handleChange}
             placeholder="0"
           />

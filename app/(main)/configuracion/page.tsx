@@ -53,6 +53,13 @@ export default function ConfiguracionPage() {
 
   useEffect(() => {
     fetchConfig();
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "tienda_web" || tabParam === "general" || tabParam === "promociones_tarjetas" || tabParam === "usuarios" || tabParam === "backup" || tabParam === "arca" || tabParam === "suscripciones") {
+        setActiveTab(tabParam as any);
+      }
+    }
   }, []);
 
   const handleChange = (key: string, value: string) => {
