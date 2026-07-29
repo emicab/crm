@@ -1,20 +1,27 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import type { Product, Brand, Category, Supplier } from '@/types';
-import Button from '@/components/ui/Button';
-import { Edit3, Trash2, Loader2, AlertCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import toast from 'react-hot-toast';
-import ConfirmationModal from '../ui/ConfirmationModal';
-import { formatCurrency } from '@/lib/formatCurrency';
-import Pagination from '@/components/ui/Pagination';
-import { useProductCSV } from '@/hooks/useProductCSV';
-import BatchSupplierModal from './BatchSupplierModal';
-import ProductMobileCard from './ProductMobileCard';
-import ProductFilters from './ProductFilters';
-import SelectedBar from './SelectedBar';
-import CSVImportModal from './CSVImportModal';
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import type { Product, Brand, Category, Supplier } from "@/types";
+import Button from "@/components/ui/Button";
+import {
+  Edit3,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  EyeOff,
+  Globe,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import ConfirmationModal from "../ui/ConfirmationModal";
+import { formatCurrency } from "@/lib/formatCurrency";
+import Pagination from "@/components/ui/Pagination";
+import { useProductCSV } from "@/hooks/useProductCSV";
+import BatchSupplierModal from "./BatchSupplierModal";
+import ProductMobileCard from "./ProductMobileCard";
+import ProductFilters from "./ProductFilters";
+import SelectedBar from "./SelectedBar";
+import CSVImportModal from "./CSVImportModal";
 
 const ProductTable = () => {
   const router = useRouter();
@@ -27,17 +34,18 @@ const ProductTable = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [isBatchSupplierModalOpen, setIsBatchSupplierModalOpen] = useState(false);
+  const [isBatchSupplierModalOpen, setIsBatchSupplierModalOpen] =
+    useState(false);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [filters, setFilters] = useState({
-    search: '',
-    brandId: '',
-    categoryId: '',
-    supplierId: '',
+    search: "",
+    brandId: "",
+    categoryId: "",
+    supplierId: "",
   });
 
   const [page, setPage] = useState(1);
@@ -50,65 +58,77 @@ const ProductTable = () => {
 
   useEffect(() => {
     const fetchFilterOptions = async () => {
-        try {
-            const [brandsRes, categoriesRes, suppliersRes] = await Promise.all([
-                fetch('/api/brands'),
-                fetch('/api/categories'),
-                fetch('/api/proveedores'),
-            ]);
-            if (!brandsRes.ok || !categoriesRes.ok || !suppliersRes.ok) throw new Error("Error al cargar opciones de filtro.");
+      try {
+        const [brandsRes, categoriesRes, suppliersRes] = await Promise.all([
+          fetch("/api/brands"),
+          fetch("/api/categories"),
+          fetch("/api/proveedores"),
+        ]);
+        if (!brandsRes.ok || !categoriesRes.ok || !suppliersRes.ok)
+          throw new Error("Error al cargar opciones de filtro.");
 
-            setBrands(await brandsRes.json());
-            setCategories(await categoriesRes.json());
-            setSuppliers(await suppliersRes.json());
-        } catch (err: any) {
-            console.error("Filtro-Error:", err);
-            setError("No se pudieron cargar las opciones de filtro. La tabla principal podría funcionar.");
-        }
+        setBrands(await brandsRes.json());
+        setCategories(await categoriesRes.json());
+        setSuppliers(await suppliersRes.json());
+      } catch (err: any) {
+        console.error("Filtro-Error:", err);
+        setError(
+          "No se pudieron cargar las opciones de filtro. La tabla principal podría funcionar.",
+        );
+      }
     };
     fetchFilterOptions();
   }, []);
 
-  const fetchProducts = useCallback(async (pageNum = 1) => {
-    setLoading(true);
-    setError(null);
-    const params = new URLSearchParams();
-    if (filters.search) params.append('search', filters.search);
-    if (filters.brandId) params.append('brandId', filters.brandId);
-    if (filters.categoryId) params.append('categoryId', filters.categoryId);
-    if (filters.supplierId) params.append('supplierId', filters.supplierId);
-    params.append('page', String(pageNum));
-    params.append('limit', '20');
-    const queryString = params.toString();
+  const fetchProducts = useCallback(
+    async (pageNum = 1) => {
+      setLoading(true);
+      setError(null);
+      const params = new URLSearchParams();
+      if (filters.search) params.append("search", filters.search);
+      if (filters.brandId) params.append("brandId", filters.brandId);
+      if (filters.categoryId) params.append("categoryId", filters.categoryId);
+      if (filters.supplierId) params.append("supplierId", filters.supplierId);
+      params.append("page", String(pageNum));
+      params.append("limit", "20");
+      const queryString = params.toString();
 
-    try {
-      const response = await fetch(`/api/products?${queryString}`);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error HTTP: ${response.status}`);
+      try {
+        const response = await fetch(`/api/products?${queryString}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.message || `Error HTTP: ${response.status}`,
+          );
+        }
+        const result = await response.json();
+        const items = Array.isArray(result) ? result : result.data;
+        setProducts(
+          items.map((product: any) => ({
+            ...product,
+            pricePurchase: product.pricePurchase
+              ? parseFloat(product.pricePurchase)
+              : null,
+            priceSale: parseFloat(product.priceSale),
+          })),
+        );
+        if (!Array.isArray(result)) {
+          setTotalPages(result.pagination.totalPages);
+          setTotalProducts(result.pagination.total);
+          setPage(result.pagination.page);
+        } else {
+          setTotalPages(1);
+          setTotalProducts(items.length);
+          setPage(1);
+        }
+      } catch (err: any) {
+        setError(err.message || "Error al cargar los productos.");
+      } finally {
+        setLoading(false);
       }
-      const result = await response.json();
-      const items = Array.isArray(result) ? result : result.data;
-      setProducts(items.map((product: any) => ({
-        ...product,
-        pricePurchase: product.pricePurchase ? parseFloat(product.pricePurchase) : null,
-        priceSale: parseFloat(product.priceSale),
-      })));
-      if (!Array.isArray(result)) {
-        setTotalPages(result.pagination.totalPages);
-        setTotalProducts(result.pagination.total);
-        setPage(result.pagination.page);
-      } else {
-        setTotalPages(1);
-        setTotalProducts(items.length);
-        setPage(1);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar los productos.');
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
+    },
+    [filters],
+  );
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -130,20 +150,22 @@ const ProductTable = () => {
     setIsModalOpen(true);
   };
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleFilterChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
+    setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleClearFilters = () => {
-    setFilters({ search: '', brandId: '', categoryId: '', supplierId: '' });
+    setFilters({ search: "", brandId: "", categoryId: "", supplierId: "" });
     setPage(1);
   };
 
   const [isAllPagesSelected, setIsAllPagesSelected] = useState(false);
 
   const handleToggleSelect = (productId: number) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(productId)) next.delete(productId);
       else next.add(productId);
@@ -158,9 +180,11 @@ const ProductTable = () => {
       setIsAllPagesSelected(false);
     } else if (selectedIds.size === products.length) {
       setIsAllPagesSelected(true);
-      toast.success(`Se seleccionaron los ${totalProducts.toLocaleString("es-AR")} productos de todas las páginas.`);
+      toast.success(
+        `Se seleccionaron los ${totalProducts.toLocaleString("es-AR")} productos de todas las páginas.`,
+      );
     } else {
-      setSelectedIds(new Set(products.map(p => p.id)));
+      setSelectedIds(new Set(products.map((p) => p.id)));
       setIsAllPagesSelected(false);
     }
   };
@@ -170,29 +194,35 @@ const ProductTable = () => {
     setIsAllPagesSelected(false);
   };
 
-  const handleBatchUpdate = async (data: { brandId?: string; categoryId?: string; supplierId?: string }) => {
+  const handleBatchUpdate = async (data: {
+    brandId?: string;
+    categoryId?: string;
+    supplierId?: string;
+  }) => {
     setIsSavingBatch(true);
     try {
       const payload = isAllPagesSelected
         ? { allPages: true, filters, ...data }
         : { productIds: Array.from(selectedIds), ...data };
 
-      const res = await fetch('/api/products/batch-supplier', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/products/batch-supplier", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Error al actualizar productos.');
+        throw new Error(errorData.message || "Error al actualizar productos.");
       }
       const resJson = await res.json();
-      toast.success(`Productos actualizados con éxito (${resJson.count || selectedIds.size} producto(s)).`);
+      toast.success(
+        `Productos actualizados con éxito (${resJson.count || selectedIds.size} producto(s)).`,
+      );
       handleClearSelection();
       setIsBatchSupplierModalOpen(false);
       fetchProducts(page);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Error inesperado.');
+      toast.error(err instanceof Error ? err.message : "Error inesperado.");
     } finally {
       setIsSavingBatch(false);
     }
@@ -226,7 +256,10 @@ const ProductTable = () => {
     }
   };
 
-  const handleToggleWebPublic = async (productId: number, newStatus: boolean) => {
+  const handleToggleWebPublic = async (
+    productId: number,
+    newStatus: boolean,
+  ) => {
     try {
       const res = await fetch(`/api/products/${productId}`, {
         method: "PUT",
@@ -236,9 +269,15 @@ const ProductTable = () => {
       if (!res.ok) throw new Error("Error al actualizar visibilidad web.");
 
       setProducts((prev) =>
-        prev.map((p) => (p.id === productId ? { ...p, isPublicWeb: newStatus } : p))
+        prev.map((p) =>
+          p.id === productId ? { ...p, isPublicWeb: newStatus } : p,
+        ),
       );
-      toast.success(newStatus ? "Producto publicado en la Tienda Web." : "Producto ocultado de la Tienda Web.");
+      toast.success(
+        newStatus
+          ? "Producto publicado en la Tienda Web."
+          : "Producto ocultado de la Tienda Web.",
+      );
     } catch (err: any) {
       toast.error(err.message || "Error al cambiar estado web.");
     }
@@ -263,7 +302,7 @@ const ProductTable = () => {
       toast.success(
         isPublicWeb
           ? `${data.count || totalProducts} productos publicados en Tienda Web.`
-          : `${data.count || totalProducts} productos ocultados de Tienda Web.`
+          : `${data.count || totalProducts} productos ocultados de Tienda Web.`,
       );
     } catch (err: any) {
       toast.error("Error al actualizar productos masivamente.");
@@ -281,8 +320,10 @@ const ProductTable = () => {
         isLoading={isDeleting}
       >
         ¿Estás seguro de que quieres eliminar el producto{" "}
-        <strong className="text-foreground">&quot;{itemToDelete?.name}&quot;</strong>?
-        Esta acción no se puede deshacer.
+        <strong className="text-foreground">
+          &quot;{itemToDelete?.name}&quot;
+        </strong>
+        ? Esta acción no se puede deshacer.
       </ConfirmationModal>
 
       <BatchSupplierModal
@@ -294,12 +335,24 @@ const ProductTable = () => {
         isSaving={isSavingBatch}
         onSave={handleBatchUpdate}
         onClose={() => setIsBatchSupplierModalOpen(false)}
-        onBrandCreated={(newBrand) => setBrands(prev => [...prev, newBrand].sort((a, b) => a.name.localeCompare(b.name)))}
-        onCategoryCreated={(newCategory) => setCategories(prev => [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)))}
-        onSupplierCreated={(newSupplier) => setSuppliers(prev => [...prev, newSupplier].sort((a, b) => a.name.localeCompare(b.name)))}
+        onBrandCreated={(newBrand) =>
+          setBrands((prev) =>
+            [...prev, newBrand].sort((a, b) => a.name.localeCompare(b.name)),
+          )
+        }
+        onCategoryCreated={(newCategory) =>
+          setCategories((prev) =>
+            [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)),
+          )
+        }
+        onSupplierCreated={(newSupplier) =>
+          setSuppliers((prev) =>
+            [...prev, newSupplier].sort((a, b) => a.name.localeCompare(b.name)),
+          )
+        }
       />
 
-      <CSVImportModal 
+      <CSVImportModal
         isOpen={isCSVModalOpen}
         onClose={() => setIsCSVModalOpen(false)}
         onSuccess={() => fetchProducts(1)}
@@ -344,29 +397,63 @@ const ProductTable = () => {
                 <th className="py-3 px-2 text-sm font-semibold text-foreground w-8 text-center">
                   <input
                     type="checkbox"
-                    checked={isAllPagesSelected || (products.length > 0 && selectedIds.size === products.length)}
+                    checked={
+                      isAllPagesSelected ||
+                      (products.length > 0 &&
+                        selectedIds.size === products.length)
+                    }
                     onChange={handleSelectAll}
                     className="rounded border-border cursor-pointer"
                   />
                 </th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground">Nombre</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">SKU</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">Marca</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">Categoría</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">Proveedor</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground text-right w-28">P. Compra</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground text-right w-28">P. Venta</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-20">Stock</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-28">Tienda Web</th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-20">Acciones</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground">
+                  Nombre
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">
+                  SKU
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">
+                  Marca
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">
+                  Categoría
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">
+                  Proveedor
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-right w-28">
+                  P. Compra
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-right w-28">
+                  P. Venta
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-20">
+                  Stock
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-28">
+                  Tienda Web
+                </th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-20">
+                  Acciones
+                </th>
               </tr>
             </thead>
             <tbody>
               {!loading && products.length === 0 ? (
-                <tr><td colSpan={11} className="text-center text-foreground-muted py-8">No se encontraron productos.</td></tr>
+                <tr>
+                  <td
+                    colSpan={11}
+                    className="text-center text-foreground-muted py-8"
+                  >
+                    No se encontraron productos.
+                  </td>
+                </tr>
               ) : (
                 products.map((product) => (
-                  <tr key={product.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
+                  <tr
+                    key={product.id}
+                    className="border-b border-border last:border-b-0 hover:bg-background transition-colors"
+                  >
                     <td className="py-2.5 px-2 text-center w-8">
                       <input
                         type="checkbox"
@@ -375,20 +462,35 @@ const ProductTable = () => {
                         className="rounded border-border cursor-pointer"
                       />
                     </td>
-                    <td className="py-2.5 px-2 text-sm text-foreground font-medium max-w-[200px] truncate" title={product.name}>
+                    <td
+                      className="py-2.5 px-2 text-sm text-foreground font-medium max-w-[200px] truncate"
+                      title={product.name}
+                    >
                       {product.name}
                     </td>
-                    <td className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate" title={product.sku || '-'}>
-                      {product.sku || '-'}
+                    <td
+                      className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate"
+                      title={product.sku || "-"}
+                    >
+                      {product.sku || "-"}
                     </td>
-                    <td className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate" title={product.brand.name}>
+                    <td
+                      className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate"
+                      title={product.brand.name}
+                    >
                       {product.brand.name}
                     </td>
-                    <td className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate" title={product.category.name}>
+                    <td
+                      className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate"
+                      title={product.category.name}
+                    >
                       {product.category.name}
                     </td>
-                    <td className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate" title={product.supplier?.name || '-'}>
-                      {product.supplier?.name || '-'}
+                    <td
+                      className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate"
+                      title={product.supplier?.name || "-"}
+                    >
+                      {product.supplier?.name || "-"}
                     </td>
                     <td className="py-2.5 px-2 text-sm text-foreground text-right w-28 font-mono">
                       {formatCurrency(product.pricePurchase ?? 0)}
@@ -397,11 +499,21 @@ const ProductTable = () => {
                       {formatCurrency(product.priceSale)}
                     </td>
                     <td className="py-2.5 px-2 text-sm text-foreground font-semibold text-center w-20">
-                      {product.quantityStock}{product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : ''}
+                      {product.quantityStock}
+                      {product.unitType === "WEIGHT"
+                        ? "kg"
+                        : product.unitType === "VOLUME"
+                          ? "L"
+                          : ""}
                     </td>
                     <td className="py-2.5 px-2 text-sm text-center w-28">
                       <button
-                        onClick={() => handleToggleWebPublic(product.id, !product.isPublicWeb)}
+                        onClick={() =>
+                          handleToggleWebPublic(
+                            product.id,
+                            !product.isPublicWeb,
+                          )
+                        }
                         className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1 mx-auto transition-colors ${
                           product.isPublicWeb
                             ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300"
@@ -411,21 +523,35 @@ const ProductTable = () => {
                       >
                         {product.isPublicWeb ? (
                           <>
-                            <Globe size={12} className="text-emerald-600" /> Publicado
+                            <Globe size={12} className="text-emerald-600" />{" "}
+                            Publicado
                           </>
                         ) : (
                           <>
-                            <EyeOff size={12} className="text-gray-500" /> Oculto
+                            <EyeOff size={12} className="text-gray-500" />{" "}
+                            Oculto
                           </>
                         )}
                       </button>
                     </td>
                     <td className="py-2.5 px-2 text-sm text-center w-20 whitespace-nowrap">
                       <div className="flex items-center justify-center space-x-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(product.id)} title="Editar" className="h-7 w-7">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(product.id)}
+                          title="Editar"
+                          className="h-7 w-7"
+                        >
                           <Edit3 size={15} className="text-primary" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenDeleteModal(product)} title="Eliminar" className="h-7 w-7">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenDeleteModal(product)}
+                          title="Eliminar"
+                          className="h-7 w-7"
+                        >
                           <Trash2 size={15} className="text-destructive" />
                         </Button>
                       </div>
@@ -437,16 +563,18 @@ const ProductTable = () => {
           </table>
           <div className="md:hidden space-y-2">
             {!loading && products.length === 0 ? (
-                <div className="text-center text-foreground-muted py-8">No se encontraron productos.</div>
+              <div className="text-center text-foreground-muted py-8">
+                No se encontraron productos.
+              </div>
             ) : (
-                products.map((product) => (
-                  <ProductMobileCard
-                    key={product.id}
-                    product={product}
-                    onEdit={handleEdit}
-                    onOpenDelete={handleOpenDeleteModal}
-                  />
-                ))
+              products.map((product) => (
+                <ProductMobileCard
+                  key={product.id}
+                  product={product}
+                  onEdit={handleEdit}
+                  onOpenDelete={handleOpenDeleteModal}
+                />
+              ))
             )}
           </div>
         </div>

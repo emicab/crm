@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Brand, Category, Supplier, Product } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Upload, Search, Image as ImageIcon, Check, X } from 'lucide-react';
 import { useQuickCreate } from '@/hooks/useQuickCreate';
 import QuickCreateModal from './QuickCreateModal';
+import toast from 'react-hot-toast';
 
 interface ProductFormData {
   name: string;
@@ -44,6 +45,63 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const [isFetchingDropdowns, setIsFetchingDropdowns] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSearchingML, setIsSearchingML] = useState(false);
+  const [mlCandidates, setMlCandidates] = useState<Array<{ id: string; title: string; imageUrl: string; thumbnail: string }>>([]);
+  const [isMLModalOpen, setIsMLModalOpen] = useState(false);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor selecciona un archivo de imagen válido.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La imagen no debe superar los 5MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setFormData(prev => ({ ...prev, imageUrl: dataUrl }));
+        toast.success('Imagen cargada desde tu PC.');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSearchMLImage = async () => {
+    const searchQuery = formData.name || formData.sku;
+    if (!searchQuery.trim()) {
+      toast.error('Ingresa el Nombre del producto para buscar su foto.');
+      return;
+    }
+
+    setIsSearchingML(true);
+    try {
+      const res = await fetch(`/api/products/search-image?q=${encodeURIComponent(searchQuery)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'No se encontraron imágenes.');
+      }
+
+      if (data.candidates && data.candidates.length > 0) {
+        setMlCandidates(data.candidates);
+        setIsMLModalOpen(true);
+        toast.success(`Se encontraron ${data.candidates.length} fotos en Mercado Libre.`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error al buscar foto.');
+    } finally {
+      setIsSearchingML(false);
+    }
+  };
 
   const brandQuickCreate = useQuickCreate({
     apiEndpoint: '/api/brands',
@@ -216,27 +274,88 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         />
       </div>
 
-      <div>
+      {/* Sección de Imagen de Producto */}
+      <div className="space-y-3 p-4 bg-muted/30 rounded-xl border border-border">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <label className="block text-sm font-semibold text-foreground">
+            Imagen del Producto (para Tienda Web)
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept="image/*"
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              title="Cargar una foto guardada en tu computadora"
+              className="text-xs flex items-center gap-1.5"
+            >
+              <Upload size={14} /> Subir desde PC
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSearchMLImage}
+              disabled={isSearchingML || (!formData.name && !formData.sku)}
+              title="Buscar foto oficial automáticamente en Mercado Libre por nombre"
+              className="text-xs flex items-center gap-1.5 border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+            >
+              {isSearchingML ? (
+                <Loader2 size={14} className="animate-spin text-amber-700" />
+              ) : (
+                <Search size={14} className="text-amber-700" />
+              )}
+              {isSearchingML ? "Buscando..." : "🔍 Buscar Foto en Mercado Libre"}
+            </Button>
+          </div>
+        </div>
+
         <Input
-          label="URL de Imagen del Producto (para Tienda Web)"
+          label=""
           name="imageUrl"
-          placeholder="https://ejemplo.com/imagen-producto.jpg"
+          placeholder="O pega directamente la URL de la imagen (https://...)"
           value={formData.imageUrl}
           onChange={handleChange}
         />
+
         {formData.imageUrl && (
-          <div className="mt-2 flex items-center gap-3 bg-background p-2.5 rounded-lg border border-border">
-            <img
-              src={formData.imageUrl}
-              alt="Vista previa del producto"
-              className="w-14 h-14 object-cover rounded-md border border-border"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-            />
-            <span className="text-xs text-foreground-muted font-medium">
-              Vista previa de la imagen para la Tienda Web (ClinStore)
-            </span>
+          <div className="flex items-center justify-between gap-3 bg-background p-3 rounded-lg border border-border">
+            <div className="flex items-center gap-3">
+              <img
+                src={formData.imageUrl}
+                alt="Vista previa del producto"
+                className="w-16 h-16 object-cover rounded-md border border-border"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+              <div>
+                <p className="text-xs font-semibold text-foreground">Vista previa lista</p>
+                <p className="text-[11px] text-foreground-muted truncate max-w-xs">
+                  {formData.imageUrl.startsWith("data:")
+                    ? "Imagen cargada desde tu PC"
+                    : formData.imageUrl}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setFormData((prev) => ({ ...prev, imageUrl: "" }))}
+              className="text-xs text-destructive hover:bg-destructive/10"
+              title="Quitar foto"
+            >
+              <X size={16} /> Quitar
+            </Button>
           </div>
         )}
       </div>
@@ -316,6 +435,70 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         onSubmit={categoryQuickCreate.handleCreate}
         onClose={() => categoryQuickCreate.setIsOpen(false)}
       />
+
+      {/* Modal Selector de Fotos de Mercado Libre */}
+      {isMLModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                🔍 Imágenes Encontradas en Mercado Libre
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsMLModalOpen(false)}
+                className="text-foreground-muted hover:text-foreground p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-foreground-muted">
+              Selecciona la foto oficial que quieras usar para <strong className="text-foreground">&quot;{formData.name}&quot;</strong>:
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-80 overflow-y-auto p-1">
+              {mlCandidates.map((candidate) => (
+                <div
+                  key={candidate.id}
+                  onClick={() => {
+                    setFormData((prev) => ({ ...prev, imageUrl: candidate.imageUrl }));
+                    setIsMLModalOpen(false);
+                    toast.success("Foto oficial asignada al producto.");
+                  }}
+                  className="group relative bg-muted/40 border border-border hover:border-primary rounded-lg p-2 flex flex-col items-center justify-between text-center cursor-pointer transition-all hover:shadow-md"
+                >
+                  <img
+                    src={candidate.imageUrl || candidate.thumbnail}
+                    alt={candidate.title}
+                    className="w-20 h-20 object-contain rounded mb-2 group-hover:scale-105 transition-transform"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = candidate.thumbnail;
+                    }}
+                  />
+                  <p className="text-[11px] font-medium text-foreground line-clamp-2 leading-tight">
+                    {candidate.title}
+                  </p>
+                  <span className="mt-2 w-full py-1 text-[10px] font-bold bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white rounded transition-colors">
+                    Usar esta foto
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-border pt-3 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsMLModalOpen(false)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
