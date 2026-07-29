@@ -4,13 +4,13 @@ import path from "path";
 /**
  * Carga las variables del archivo .env al entorno de ejecución (process.env)
  * en tiempo de ejecución (runtime), tanto en desarrollo como en producción.
- * Si faltan credenciales de Supabase, aplica los valores por defecto automáticos.
+ * Si faltan credenciales de Supabase, aplica ÚNICAMENTE la clave pública (anon key)
+ * garantizando la seguridad con Row Level Security (RLS).
  */
 export function loadEnv() {
   const DEFAULT_ENV: Record<string, string> = {
     NEXT_PUBLIC_SUPABASE_URL: "https://htroigemnwqiugieodmv.supabase.co",
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MDM4ODcsImV4cCI6MjA5OTI3OTg4N30.sSp5vEDvI7OHuYL0SeeFiATilC_f_BdZao2BjeN0IVQ",
-    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzcwMzg4NywiZXhwIjoyMDk5Mjc5ODg3fQ.CdGy6jjP5pfF6hnlGHrVV3PAWCnJqvQ4AxGTesnnStQ",
   };
 
   try {
@@ -35,7 +35,7 @@ export function loadEnv() {
     console.error("[EnvLoader] Error al leer archivo .env en runtime:", err);
   }
 
-  // Inyectar fallbacks predeterminados si faltan en el entorno
+  // Inyectar únicamente fallbacks públicos de lectura/escritura con RLS si faltan
   Object.entries(DEFAULT_ENV).forEach(([key, val]) => {
     if (!process.env[key]) {
       process.env[key] = val;
