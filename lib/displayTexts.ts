@@ -9,6 +9,7 @@ export const paymentTypeDisplayMap: Record<PaymentTypeEnum, string> = {
   [PaymentTypeEnum.QR]: 'QR',
   [PaymentTypeEnum.OTHER]: 'Otro',
   [PaymentTypeEnum.ON_ACCOUNT]: 'En cuenta',
+  [PaymentTypeEnum.MERCADO_PAGO]: 'Mercado Pago',
 };
 
 // Esta función tomará el valor del enum (o un string) y devolverá el texto en español

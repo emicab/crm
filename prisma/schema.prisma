@@ -38,6 +38,7 @@ model Product {
   unitType      String?  // null=sin especificar, UNIT, WEIGHT, VOLUME
   isPublicWeb   Boolean  @default(false)
   webCategory   String?
+  imageUrl      String?
   brandId       Int
   categoryId    Int
   supplierId    Int?
@@ -255,6 +256,7 @@ enum PaymentType {
   QR
   OTHER
   ON_ACCOUNT
+  MERCADO_PAGO
 }
 
 enum PurchaseStatus {

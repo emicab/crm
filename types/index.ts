@@ -20,6 +20,7 @@ export interface Brand {
     name: string;
     sku?: string | null;
     description?: string | null;
+    imageUrl?: string | null;
     pricePurchase: number;
     priceSale: number;
     quantityStock: number;
@@ -68,6 +69,7 @@ export interface Brand {
     QR = 'QR',
     OTHER = 'OTHER',
     ON_ACCOUNT = 'ON_ACCOUNT',
+    MERCADO_PAGO = 'MERCADO_PAGO',
   }
   
   export interface Combo {

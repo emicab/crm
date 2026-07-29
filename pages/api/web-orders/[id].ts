@@ -39,7 +39,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         let mappedPaymentType: PaymentType = PaymentType.OTHER;
         const pm = (currentOrder.paymentMethod || "").toUpperCase();
-        if (pm.includes("TRANSFER")) {
+        if (pm.includes("MERCADO") || pm.includes("MP")) {
+          mappedPaymentType = (PaymentType as any).MERCADO_PAGO || PaymentType.OTHER;
+        } else if (pm.includes("TRANSFER")) {
           mappedPaymentType = PaymentType.TRANSFER;
         } else if (pm.includes("CASH") || pm.includes("EFECTIVO")) {
           mappedPaymentType = PaymentType.CASH;

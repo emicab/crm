@@ -14,6 +14,7 @@ interface ProductFormData {
   name: string;
   sku: string;
   description: string;
+  imageUrl: string;
   pricePurchase: string;
   priceSale: string;
   quantityStock: string;
@@ -31,7 +32,7 @@ interface ProductFormProps {
 const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const router = useRouter();
   const [formData, setFormData] = useState<ProductFormData>({
-    name: '', sku: '', description: '', pricePurchase: '', priceSale: '',
+    name: '', sku: '', description: '', imageUrl: '', pricePurchase: '', priceSale: '',
     quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
     unitType: '',
   });
@@ -91,6 +92,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         name: initialProductData.name || '',
         sku: initialProductData.sku || '',
         description: initialProductData.description || '',
+        imageUrl: initialProductData.imageUrl || '',
         pricePurchase: initialProductData.pricePurchase !== null && initialProductData.pricePurchase !== undefined ? String(initialProductData.pricePurchase) : '',
         priceSale: String(initialProductData.priceSale) || '',
         quantityStock: String(initialProductData.quantityStock) || '',
@@ -131,6 +133,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         name: formData.name,
         sku: formData.sku || null,
         description: formData.description || null,
+        imageUrl: formData.imageUrl || null,
         pricePurchase: formData.pricePurchase ? parseFloat(formData.pricePurchase) : null,
         priceSale: parseFloat(formData.priceSale),
         quantityStock: parseFloat(formData.quantityStock),
@@ -211,6 +214,31 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
           id="description" name="description" rows={3} value={formData.description} onChange={handleChange}
           className="block w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
+      </div>
+
+      <div>
+        <Input
+          label="URL de Imagen del Producto (para Tienda Web)"
+          name="imageUrl"
+          placeholder="https://ejemplo.com/imagen-producto.jpg"
+          value={formData.imageUrl}
+          onChange={handleChange}
+        />
+        {formData.imageUrl && (
+          <div className="mt-2 flex items-center gap-3 bg-background p-2.5 rounded-lg border border-border">
+            <img
+              src={formData.imageUrl}
+              alt="Vista previa del producto"
+              className="w-14 h-14 object-cover rounded-md border border-border"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+            <span className="text-xs text-foreground-muted font-medium">
+              Vista previa de la imagen para la Tienda Web (ClinStore)
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

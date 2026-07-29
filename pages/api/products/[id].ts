@@ -109,6 +109,9 @@ export default async function handler(
       if (description !== undefined) {
         dataToUpdate.description = typeof description === 'string' ? (description.trim() || null) : description;
       }
+      if (req.body.imageUrl !== undefined) {
+        dataToUpdate.imageUrl = typeof req.body.imageUrl === 'string' ? (req.body.imageUrl.trim() || null) : req.body.imageUrl;
+      }
       if (pricePurchase !== undefined && pricePurchase !== null && pricePurchase !== '') {
         dataToUpdate.pricePurchase = new Decimal(parseFloat(pricePurchase));
       } else if (pricePurchase === '' || pricePurchase === null) {

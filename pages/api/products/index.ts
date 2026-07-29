@@ -120,7 +120,7 @@ export default async function handler(
   } else if (req.method === 'POST') {
     const {
         pricePurchase, priceSale, quantityStock, stockMinAlert,
-        brandId, categoryId, supplierId, unitType
+        brandId, categoryId, supplierId, unitType, imageUrl
     } = req.body;
     let {
         name, sku, description
@@ -165,6 +165,7 @@ export default async function handler(
           name: name.trim(),
           sku: sku ? sku.trim() : null,
           description: description ? description.trim() : null,
+          imageUrl: imageUrl ? imageUrl.trim() : null,
           pricePurchase: pricePurchaseDecimal || new Decimal(0),
           priceSale: new Decimal(priceSaleNum),
           quantityStock: quantityStockNum,
