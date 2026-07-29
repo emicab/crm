@@ -12,9 +12,14 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === 'GET') {
-    const { search, brandId, categoryId, supplierId } = req.query;
+    const { search, brandId, categoryId, supplierId, publicOnly, isPublicWeb } = req.query;
 
     const whereClause: Prisma.ProductWhereInput = {};
+
+    // Filtro por visibilidad en la Tienda Web
+    if (publicOnly === 'true' || isPublicWeb === 'true') {
+      whereClause.isPublicWeb = true;
+    }
 
     // Filtro por ID de Marca
     if (brandId && typeof brandId === 'string' && brandId !== '') {
