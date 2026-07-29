@@ -129,6 +129,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         id: p.id, name: p.name, sku: p.sku, description: p.description, tenant_id: tenantId,
         pricePurchase: fmtDec(p.pricePurchase), priceSale: fmtDec(p.priceSale),
         quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert, unitType: p.unitType,
+        isPublicWeb: p.isPublicWeb !== false, webCategory: p.webCategory || null,
         brandId: p.brandId, categoryId: p.categoryId, supplierId: p.supplierId,
         createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString()
       })),
@@ -166,7 +167,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       })),
       Purchase: purchases.map(pu => ({
         id: pu.id, purchaseDate: pu.purchaseDate.toISOString(), totalAmount: fmtDec(pu.totalAmount), tenant_id: tenantId,
-        status: pu.status, paymentType: pu.paymentType, invoiceNumber: pu.invoiceNumber, notes: pu.notes,
+        status: pu.status, paymentType: pu.paymentType || 'CASH', invoiceNumber: pu.invoiceNumber, notes: pu.notes,
         supplierId: pu.supplierId, createdAt: pu.createdAt.toISOString(), updatedAt: pu.updatedAt.toISOString()
       })),
       PurchaseItem: purchaseItems.map(pi => ({
@@ -195,7 +196,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       if (records.length === 0) continue;
 
       const url = `${supabaseUrl}/rest/v1/${tableName}`;
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -207,8 +208,31 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error en Supabase upsert [Tabla: ${tableName}]: [HTTP ${res.status}] ${errorText}`);
+        let errorText = await res.text();
+
+        // Si falla por columna faltante en Supabase Cloud (ej: PGRST204 isPublicWeb), reintentar sin esos campos opcionales
+        if (tableName === "Product" && errorText.includes("PGRST204")) {
+          const strippedRecords = records.map((r: any) => {
+            const { isPublicWeb, webCategory, ...rest } = r;
+            return rest;
+          });
+          res = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": supabaseKey,
+              "Authorization": `Bearer ${supabaseKey}`,
+              "Prefer": "resolution=merge-duplicates"
+            },
+            body: JSON.stringify(strippedRecords)
+          });
+          if (!res.ok) {
+            errorText = await res.text();
+            throw new Error(`Error en Supabase upsert [Tabla: ${tableName}]: [HTTP ${res.status}] ${errorText}`);
+          }
+        } else {
+          throw new Error(`Error en Supabase upsert [Tabla: ${tableName}]: [HTTP ${res.status}] ${errorText}`);
+        }
       }
 
       summary[tableName] = records.length;
