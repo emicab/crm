@@ -338,10 +338,10 @@ const ProductTable = () => {
           onHideWeb={() => handleBatchWebStatus(false)}
         />
         <div className="overflow-x-auto">
-          <table className="hidden md:table w-full text-left">
+          <table className="hidden md:table w-full text-left table-auto">
             <thead className="border-b border-border">
               <tr>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-10">
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-8 text-center">
                   <input
                     type="checkbox"
                     checked={isAllPagesSelected || (products.length > 0 && selectedIds.size === products.length)}
@@ -349,16 +349,16 @@ const ProductTable = () => {
                     className="rounded border-border cursor-pointer"
                   />
                 </th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground max-w-[240px]">Nombre</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-[90px]">SKU</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground w-[110px]">Marca</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground max-w-[140px]">Categoría</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground max-w-[130px]">Proveedor</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Compra</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-right">Precio Venta</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center w-[70px]">Stock</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center w-[110px]">Tienda Web</th>
-                <th className="p-3 sm:p-4 text-sm font-semibold text-foreground text-center w-[90px]">Acciones</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground">Nombre</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">SKU</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">Marca</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">Categoría</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground w-28">Proveedor</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-right w-28">P. Compra</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-right w-28">P. Venta</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-20">Stock</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-28">Tienda Web</th>
+                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-20">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -367,44 +367,68 @@ const ProductTable = () => {
               ) : (
                 products.map((product) => (
                   <tr key={product.id} className="border-b border-border last:border-b-0 hover:bg-background transition-colors">
-                    <td className="p-3 sm:p-4 w-10">
+                    <td className="py-2.5 px-2 text-center w-8">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(product.id)}
                         onChange={() => handleToggleSelect(product.id)}
-                        className="rounded border-border"
+                        className="rounded border-border cursor-pointer"
                       />
                     </td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground font-medium max-w-[240px]"><div className="truncate">{product.name}</div></td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted w-[90px]"><div className="truncate">{product.sku || '-'}</div></td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted w-[110px]"><div className="truncate">{product.brand.name}</div></td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted max-w-[140px]"><div className="truncate">{product.category.name}</div></td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground-muted max-w-[130px]"><div className="truncate">{product.supplier?.name || '-'}</div></td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.pricePurchase ?? 0)}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground text-right">{formatCurrency(product.priceSale)}</td>
-                    <td className="p-3 sm:p-4 text-sm text-foreground font-semibold text-center">{product.quantityStock}{product.unitType === 'WEIGHT' ? ' kg' : product.unitType === 'VOLUME' ? ' L' : ''}</td>
-                    <td className="p-3 sm:p-4 text-sm text-center">
+                    <td className="py-2.5 px-2 text-sm text-foreground font-medium max-w-[200px] truncate" title={product.name}>
+                      {product.name}
+                    </td>
+                    <td className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate" title={product.sku || '-'}>
+                      {product.sku || '-'}
+                    </td>
+                    <td className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate" title={product.brand.name}>
+                      {product.brand.name}
+                    </td>
+                    <td className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate" title={product.category.name}>
+                      {product.category.name}
+                    </td>
+                    <td className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate" title={product.supplier?.name || '-'}>
+                      {product.supplier?.name || '-'}
+                    </td>
+                    <td className="py-2.5 px-2 text-sm text-foreground text-right w-28 font-mono">
+                      {formatCurrency(product.pricePurchase ?? 0)}
+                    </td>
+                    <td className="py-2.5 px-2 text-sm text-foreground font-bold text-right w-28 font-mono">
+                      {formatCurrency(product.priceSale)}
+                    </td>
+                    <td className="py-2.5 px-2 text-sm text-foreground font-semibold text-center w-20">
+                      {product.quantityStock}{product.unitType === 'WEIGHT' ? 'kg' : product.unitType === 'VOLUME' ? 'L' : ''}
+                    </td>
+                    <td className="py-2.5 px-2 text-sm text-center w-28">
                       <button
                         onClick={() => handleToggleWebPublic(product.id, !product.isPublicWeb)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center justify-center gap-1 mx-auto transition-colors ${
+                        className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1 mx-auto transition-colors ${
                           product.isPublicWeb
                             ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300"
                             : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300"
                         }`}
-                        title="Haz clic para activar o desactivar la visibilidad en ClinStore"
+                        title="Haz clic para cambiar la visibilidad en ClinStore"
                       >
-                        {product.isPublicWeb ? "🌐 Publicado" : "🚫 Oculto"}
+                        {product.isPublicWeb ? (
+                          <>
+                            <Globe size={12} className="text-emerald-600" /> Publicado
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff size={12} className="text-gray-500" /> Oculto
+                          </>
+                        )}
                       </button>
                     </td>
-                    <td className="p-3 sm:p-4 text-sm text-center w-[90px] whitespace-nowrap">
-                       <div className="flex items-center justify-center space-x-1">
-                                <Button variant="ghost" size="icon" onClick={() => handleEdit(product.id)} title="Editar" className="h-8 w-8">
-                                    <Edit3 size={16} className="text-primary" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleOpenDeleteModal(product)} title="Eliminar" className="h-8 w-8">
-                                    <Trash2 size={16} className="text-destructive" />
-                                </Button>
-                            </div>
+                    <td className="py-2.5 px-2 text-sm text-center w-20 whitespace-nowrap">
+                      <div className="flex items-center justify-center space-x-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(product.id)} title="Editar" className="h-7 w-7">
+                          <Edit3 size={15} className="text-primary" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenDeleteModal(product)} title="Eliminar" className="h-7 w-7">
+                          <Trash2 size={15} className="text-destructive" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
