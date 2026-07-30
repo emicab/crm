@@ -23,6 +23,7 @@ import Input from "@/components/ui/Input";
 import { formatCurrency } from "@/lib/formatCurrency";
 import toast from "react-hot-toast";
 import { formatDate } from "@/lib/formatDate";
+import { playOrderChimeSound } from "@/lib/audio";
 
 interface WebOrderItem {
   id: number;
@@ -65,23 +66,45 @@ export default function PedidosWebPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<WebOrder | null>(null);
 
-  const fetchOrders = async () => {
-    setLoading(true);
+  const fetchOrders = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/web-orders");
       if (!res.ok) throw new Error("Error al cargar pedidos web.");
       const data = await res.json();
-      setOrders(data);
+      setOrders((prevOrders) => {
+        if (prevOrders.length > 0 && Array.isArray(data)) {
+          const hasNewOrder = data.length > prevOrders.length;
+          const hasNewPaid = data.some((newO: WebOrder) => {
+            const oldO = prevOrders.find((po) => po.id === newO.id);
+            return oldO && oldO.paymentStatus !== "PAID" && newO.paymentStatus === "PAID";
+          });
+
+          if (hasNewOrder || hasNewPaid) {
+            playOrderChimeSound();
+            if (hasNewPaid) {
+              toast.success("¡Pago confirmado por Mercado Pago! 🟢", { duration: 4000 });
+            } else if (hasNewOrder) {
+              toast.success("¡Nuevo pedido web recibido! 🛒", { duration: 4000 });
+            }
+          }
+        }
+        return data;
+      });
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(true);
+    const interval = setInterval(() => {
+      fetchOrders(false);
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const filteredOrders = orders.filter((o) => {

@@ -1,6 +1,5 @@
 // pages/api/webhooks/mercadopago.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { MercadoPagoConfig, Payment, MerchantOrder } from "mercadopago";
 import prisma from "../../../lib/prisma";
 
 export default async function handler(
@@ -14,88 +13,34 @@ export default async function handler(
 
   try {
     const body = req.body || {};
-    const dataObj = body.data || {};
-    const action = (body.action || req.query.action || "").toString();
-    const notificationType = (body.type || req.query.type || action).toString();
+    const fullStr = JSON.stringify({ body, query: req.query });
 
     console.log("[Webhook MP Notification Received]", {
-      action,
-      notificationType,
-      dataObj,
+      action: body.action || req.query.action,
+      type: body.type || req.query.type,
+      dataObj: body.data,
       query: req.query,
     });
 
     let webOrderNumber: string | null = null;
     let isApproved = false;
 
-    // 1. Extraer directamente los datos si vienen presentes en el body de la notificación
-    const dataStatus = (dataObj.status || dataObj.status_detail || "").toLowerCase();
+    // 1. Extraer webOrderNumber con Regex (WEB-XXXXX) de todo el contenido recibido
+    const orderMatch = fullStr.match(/WEB-[A-Z0-9_-]+/i);
+    if (orderMatch) {
+      webOrderNumber = orderMatch[0];
+    }
+
+    // 2. Verificar aprobación de pago en cualquier campo del payload o query
     if (
-      dataStatus === "approved" ||
-      dataStatus === "processed" ||
-      dataStatus === "accredited" ||
-      dataStatus === "closed" ||
-      dataStatus === "paid"
+      /status["']?\s*:\s*["']?(approved|processed|accredited|closed|paid)/i.test(fullStr) ||
+      /status_detail["']?\s*:\s*["']?accredited/i.test(fullStr) ||
+      /action["']?\s*:\s*["']?order\.processed/i.test(fullStr)
     ) {
       isApproved = true;
     }
 
-    if (dataObj.external_reference) {
-      webOrderNumber = String(dataObj.external_reference);
-    } else if (Array.isArray(dataObj.items) && dataObj.items.length > 0) {
-      const item = dataObj.items[0];
-      if (item.id && String(item.id).startsWith("WEB-")) {
-        webOrderNumber = String(item.id);
-      } else if (item.title && item.title.includes("WEB-")) {
-        const match = String(item.title).match(/WEB-[A-Z0-9_-]+/i);
-        if (match) webOrderNumber = match[0];
-      }
-    }
-
-    // 2. Si no se pudo determinar el pedido o estado del body, consultar a la API de Mercado Pago
-    const paymentId = dataObj.id || req.query["data.id"] || req.query.id || body.id;
-
-    if (paymentId && (!webOrderNumber || !isApproved)) {
-      const storeConfig = await prisma.storeConfig.findFirst();
-      const mpTokenConfig = await prisma.setting.findUnique({
-        where: { key: "mercadopago_access_token" },
-      });
-
-      const accessToken =
-        storeConfig?.mpAccessToken ||
-        mpTokenConfig?.value ||
-        process.env.MERCADOPAGO_ACCESS_TOKEN ||
-        process.env.MP_ACCESS_TOKEN ||
-        "";
-
-      if (accessToken && (accessToken.startsWith("APP_USR") || accessToken.startsWith("TEST-"))) {
-        const client = new MercadoPagoConfig({ accessToken });
-
-        try {
-          if (String(paymentId).startsWith("ORD") || notificationType === "order" || action.includes("order")) {
-            const orderClient = new MerchantOrder(client);
-            const orderData = await orderClient.get({ merchantOrderId: String(paymentId) });
-            if (orderData) {
-              if (orderData.order_status === "paid" || orderData.status === "closed") {
-                isApproved = true;
-              }
-              webOrderNumber = orderData.external_reference || webOrderNumber;
-            }
-          } else {
-            const paymentClient = new Payment(client);
-            const payment = await paymentClient.get({ id: String(paymentId) });
-            if (payment && payment.status === "approved") {
-              isApproved = true;
-              webOrderNumber = payment.external_reference || webOrderNumber;
-            }
-          }
-        } catch (fetchErr) {
-          console.warn("[Webhook MP] Error consultando API de Mercado Pago para el ID:", paymentId);
-        }
-      }
-    }
-
-    // 3. Si tenemos el número de orden y está APROBADO, actualizar en ClinPOS
+    // 3. Si se identificó el pedido y el estado es aprobado/procesado, actualizar en ClinPOS
     if (webOrderNumber && isApproved) {
       const order = await prisma.webOrder.findFirst({
         where: { webOrderNumber },
@@ -108,8 +53,12 @@ export default async function handler(
             paymentStatus: "PAID",
           },
         });
-        console.log(`[Webhook MP Exito] Pedido #${webOrderNumber} actualizado a PAID en ClinPOS.`);
+        console.log(`[Webhook MP Exito] Pedido #${webOrderNumber} marcado como PAID en ClinPOS.`);
+      } else {
+        console.warn(`[Webhook MP Warn] No se encontró el pedido #${webOrderNumber} en la base de datos.`);
       }
+    } else {
+      console.warn(`[Webhook MP Skip] No se pudo emparejar orden o estado. webOrderNumber: ${webOrderNumber}, isApproved: ${isApproved}`);
     }
 
     return res.status(200).json({ received: true });
