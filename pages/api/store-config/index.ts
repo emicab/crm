@@ -11,18 +11,18 @@ export default async function handler(
   if (req.method === 'GET') {
     try {
       const reqSlug = req.query.slug ? sanitizeString(String(req.query.slug).toLowerCase()) : null;
-      let config = reqSlug
-        ? await prisma.storeConfig.findFirst({ where: { slug: reqSlug } })
-        : null;
+      let config = null;
 
-      if (!config) {
+      if (reqSlug) {
+        config = await prisma.storeConfig.findFirst({ where: { slug: reqSlug } });
+      } else {
         config = await prisma.storeConfig.findFirst();
       }
 
       if (!config) {
         res.status(200).json({
           slug: reqSlug || '',
-          businessName: reqSlug ? reqSlug.toUpperCase() : '',
+          businessName: reqSlug ? reqSlug.toUpperCase().replace(/-/g, ' ') : 'Mi Tienda',
           description: '',
           logoUrl: '',
           bannerUrl: '',
