@@ -453,6 +453,7 @@ model StoreConfig {
   isWebActive     Boolean  @default(false)
   mpAccessToken   String?
   mpPublicKey     String?
+  mpFeePercent    Decimal  @default(0)
   whatsappPhone   String?
   minStockBuffer  Float    @default(0)
   allowPickup       Boolean  @default(true)

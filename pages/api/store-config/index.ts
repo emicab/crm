@@ -36,6 +36,7 @@ export default async function handler(
         ...config,
         deliveryFee: config.deliveryFee.toString(),
         minDeliveryAmount: config.minDeliveryAmount ? config.minDeliveryAmount.toString() : '0',
+        mpFeePercent: (config as any).mpFeePercent ? (config as any).mpFeePercent.toString() : '0',
       });
       return;
     } catch (error) {
@@ -54,6 +55,7 @@ export default async function handler(
         isWebActive,
         mpAccessToken,
         mpPublicKey,
+        mpFeePercent,
         whatsappPhone,
         minStockBuffer,
         allowPickup,
@@ -86,6 +88,7 @@ export default async function handler(
             isWebActive: Boolean(isWebActive),
             mpAccessToken: mpAccessToken ? mpAccessToken.trim() : null,
             mpPublicKey: mpPublicKey ? mpPublicKey.trim() : null,
+            mpFeePercent: parseFloat(mpFeePercent) || 0,
             whatsappPhone: whatsappPhone ? whatsappPhone.trim() : null,
             minStockBuffer: parseFloat(minStockBuffer) || 0,
             allowPickup: allowPickup !== undefined ? Boolean(allowPickup) : true,
@@ -106,6 +109,7 @@ export default async function handler(
             isWebActive: Boolean(isWebActive),
             mpAccessToken: mpAccessToken ? mpAccessToken.trim() : null,
             mpPublicKey: mpPublicKey ? mpPublicKey.trim() : null,
+            mpFeePercent: parseFloat(mpFeePercent) || 0,
             whatsappPhone: whatsappPhone ? whatsappPhone.trim() : null,
             minStockBuffer: parseFloat(minStockBuffer) || 0,
             allowPickup: allowPickup !== undefined ? Boolean(allowPickup) : true,

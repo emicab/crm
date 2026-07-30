@@ -20,6 +20,7 @@ export default function ConfigTiendaWebTab() {
     isWebActive: false,
     mpAccessToken: "",
     mpPublicKey: "",
+    mpFeePercent: 0,
     whatsappPhone: "",
     minStockBuffer: 0,
     allowPickup: true,
@@ -44,6 +45,7 @@ export default function ConfigTiendaWebTab() {
           isWebActive: Boolean(data.isWebActive),
           mpAccessToken: data.mpAccessToken || "",
           mpPublicKey: data.mpPublicKey || "",
+          mpFeePercent: parseFloat(data.mpFeePercent) || 0,
           whatsappPhone: data.whatsappPhone || "",
           minStockBuffer: parseFloat(data.minStockBuffer) || 0,
           allowPickup: data.allowPickup !== undefined ? Boolean(data.allowPickup) : true,
@@ -265,7 +267,7 @@ export default function ConfigTiendaWebTab() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
           <Input
             label="Access Token de Producción (Opcional)"
             name="mpAccessToken"
@@ -281,7 +283,19 @@ export default function ConfigTiendaWebTab() {
             onChange={handleChange}
             placeholder="APP_USR-..."
           />
+          <Input
+            label="Comisión Estimada Mercado Pago (%)"
+            name="mpFeePercent"
+            type="number"
+            step="0.01"
+            value={String(formData.mpFeePercent)}
+            onChange={handleChange}
+            placeholder="ej. 6.49"
+          />
         </div>
+        <p className="text-xs text-foreground-muted italic">
+          💡 La comisión estimada (ej. 6.49% en el acto o 3.99% a 14 días) te permite visualizar la deducción retenida por MP al evaluar tus ventas netas del día.
+        </p>
       </div>
 
       {/* Reglas de Stock y Envíos */}
