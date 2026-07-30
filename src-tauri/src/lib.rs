@@ -190,6 +190,21 @@ const MIGRATIONS: &[Migration] = &[
             ALTER TABLE "DiscountCode" ADD COLUMN "minPurchase" DECIMAL DEFAULT 0;
         "#,
     },
+    Migration {
+        version: 5,
+        name: "add_missing_ecommerce_columns",
+        sql: r#"
+            ALTER TABLE "Product" ADD COLUMN "unitType" TEXT;
+            ALTER TABLE "Product" ADD COLUMN "isPublicWeb" BOOLEAN NOT NULL DEFAULT 0;
+            ALTER TABLE "Product" ADD COLUMN "webCategory" TEXT;
+            ALTER TABLE "Product" ADD COLUMN "imageUrl" TEXT;
+
+            ALTER TABLE "Sale" ADD COLUMN "discountCodeApplied" TEXT;
+            ALTER TABLE "Sale" ADD COLUMN "promotionsApplied" TEXT;
+            ALTER TABLE "Sale" ADD COLUMN "creditCardPromotionId" INTEGER;
+            ALTER TABLE "Sale" ADD COLUMN "onAccount" BOOLEAN NOT NULL DEFAULT 0;
+        "#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {
