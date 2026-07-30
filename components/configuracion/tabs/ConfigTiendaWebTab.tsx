@@ -255,12 +255,12 @@ export default function ConfigTiendaWebTab() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <a
-              href="https://www.mercadopago.com.ar/developers/panel/credentials"
+              href="/api/mercadopago/connect"
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5"
             >
-              Conectar Mercado Pago 🔗
+              Conectar Mercado Pago (OAuth 2.0) 🔗
             </a>
           </div>
         </div>
