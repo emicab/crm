@@ -9,10 +9,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { webOrderNumber, items, total, clientName, clientPhone } = req.body;
+    const { webOrderNumber, items, total, clientName, clientPhone, orderPayload } = req.body;
+    const cleanOrderNum = webOrderNumber || orderPayload?.webOrderNumber || `WEB-${Date.now()}`;
 
     if (!total || total <= 0) {
       return res.status(400).json({ message: "Monto total inválido para el checkout." });
+    }
+
+    // Registrar o asegurar el pedido en la base de datos de ClinPOS atómicamente
+    if (orderPayload) {
+      try {
+        const existing = await prisma.webOrder.findFirst({
+          where: { webOrderNumber: cleanOrderNum },
+        });
+
+        if (!existing) {
+          await prisma.webOrder.create({
+            data: {
+              webOrderNumber: cleanOrderNum,
+              clientName: orderPayload.clientName || clientName,
+              clientEmail: orderPayload.clientEmail || null,
+              clientPhone: orderPayload.clientPhone || clientPhone,
+              shippingAddress: orderPayload.shippingAddress || null,
+              deliveryType: orderPayload.deliveryType || "PICKUP",
+              paymentMethod: "MERCADO_PAGO",
+              paymentStatus: "PENDING",
+              status: "PENDING_PREPARATION",
+              totalAmount: parseFloat(orderPayload.totalAmount || total) || 0,
+              notes: orderPayload.notes || null,
+              items: {
+                create: (orderPayload.items || []).map((i: any) => ({
+                  productId: parseInt(i.productId),
+                  quantity: parseFloat(i.quantity),
+                  unitPrice: parseFloat(i.unitPrice),
+                  subtotal: parseFloat(i.quantity) * parseFloat(i.unitPrice),
+                })),
+              },
+            },
+          });
+        }
+      } catch (e) {
+        console.warn("[mp-preference] Aviso al registrar orden previa en BD:", e);
+      }
     }
 
     const storeConfig = await prisma.storeConfig.findFirst();
@@ -33,7 +71,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const rawReturnUrl = req.body.returnUrl || req.headers.referer || req.headers.origin || "http://localhost:3003";
       const returnUrl = rawReturnUrl.split("?")[0].replace(/\/$/, "");
-      const cleanOrderNum = webOrderNumber || `WEB-${Date.now()}`;
 
       const successUrl = `${returnUrl}?status=approved&external_reference=${cleanOrderNum}`;
       const failureUrl = `${returnUrl}?status=failure&external_reference=${cleanOrderNum}`;
