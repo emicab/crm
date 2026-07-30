@@ -2,36 +2,60 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // Solo se valida la seguridad en producción
+  const { pathname } = request.nextUrl;
+
+  // Manejo global de CORS preflight (OPTIONS) para permitir llamadas desde ClinStore / Ngrok / Vercel
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-app-secret, ngrok-skip-browser-warning',
+      },
+    });
+  }
+
+  // Rutas públicas y de API que deben ser accesibles desde la Tienda Web y Webhooks de Mercado Pago
+  const isPublicRoute =
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/static/') ||
+    pathname.startsWith('/favicon.ico') ||
+    pathname.startsWith('/ClinPOS.png') ||
+    pathname.startsWith('/IgniteCRM.png') ||
+    pathname.startsWith('/api/web-orders') ||
+    pathname.startsWith('/api/webhooks/') ||
+    pathname.startsWith('/api/mercadopago/') ||
+    pathname.startsWith('/api/store-config') ||
+    pathname.startsWith('/api/products') ||
+    pathname.startsWith('/api/categories') ||
+    pathname.startsWith('/api/coupons/') ||
+    pathname.startsWith('/api/sync') ||
+    pathname.startsWith('/api/mp/');
+
+  if (isPublicRoute) {
+    const res = NextResponse.next();
+    res.headers.set('Access-Control-Allow-Origin', '*');
+    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-app-secret, ngrok-skip-browser-warning');
+    return res;
+  }
+
+  // Solo se valida la seguridad interna de escritorio en producción
   if (process.env.NODE_ENV === 'production') {
     const appSecret = process.env.APP_SECRET;
-    
-    // Si la clave secreta está definida en el entorno, validamos la cabecera, cookie o query param
+
     if (appSecret) {
       const incomingSecretHeader = request.headers.get('x-app-secret');
       const incomingSecretCookie = request.cookies.get('app_auth_token')?.value;
       const urlToken = request.nextUrl.searchParams.get('_token');
-      const { pathname } = request.nextUrl;
 
-      // Permitir assets estáticos necesarios para renderizar páginas de error o la app
-      if (
-        pathname.startsWith('/_next/') || 
-        pathname.startsWith('/static/') || 
-        pathname.startsWith('/favicon.ico') || 
-        pathname.startsWith('/ClinPOS.png') ||
-        pathname.startsWith('/IgniteCRM.png')
-      ) {
-        return NextResponse.next();
-      }
-
-      // Si el token de Tauri viene por query string y es válido,
-      // lo guardamos en una cookie para las próximas peticiones
+      // Si el token de Tauri viene por query string y es válido, lo guardamos en cookie
       if (urlToken === appSecret) {
-        // Hacemos una redirección limpia para quitar el _token de la URL
         const url = request.nextUrl.clone();
         url.searchParams.delete('_token');
         const response = NextResponse.redirect(url);
-        
+
         response.cookies.set('app_auth_token', appSecret, {
           httpOnly: true,
           secure: false, // Localhost
@@ -42,20 +66,18 @@ export function middleware(request: NextRequest) {
         return response;
       }
 
-      // Si no tenemos el query string, validamos usando la cookie o el header (este último por retrocompatibilidad/debug)
+      // Si no coincide la cookie ni la cabecera, denegamos el acceso a pantallas privadas de la app
       if (incomingSecretHeader !== appSecret && incomingSecretCookie !== appSecret) {
         const clientIp = request.headers.get('x-forwarded-for') || 'desconocido';
         console.warn(`[Security] Bloqueado intento de acceso externo a ${pathname} desde ${clientIp}`);
-        
-        // Si es una petición de API, devolvemos JSON
+
         if (pathname.startsWith('/api/')) {
           return new NextResponse(
             JSON.stringify({ success: false, error: 'Access Denied' }),
             { status: 403, headers: { 'content-type': 'application/json' } }
           );
         }
-        
-        // Si es una página normal, devolvemos un HTML simple y elegante
+
         return new NextResponse(
           `<!DOCTYPE html>
           <html>
@@ -82,10 +104,11 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  const res = NextResponse.next();
+  res.headers.set('Access-Control-Allow-Origin', '*');
+  return res;
 }
 
-// Configuración de rutas a las que aplica el middleware
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico).*)',
