@@ -110,14 +110,9 @@ export default async function handler(
               isActive: isActive !== undefined ? !!isActive : true,
             },
           });
-          try {
-            await prisma.$executeRawUnsafe(
-              `UPDATE "DiscountCode" SET "discountType" = ?, "discountValue" = ?, "minPurchase" = ? WHERE "id" = ?`,
-              type, valNum, isNaN(minP) ? 0 : minP, newCode.id
-            );
-          } catch {
-            /* ignore */
-          }
+          const safeMinP = isNaN(minP) ? 0 : minP;
+          const codeId = newCode.id;
+          await prisma.$executeRaw`UPDATE "DiscountCode" SET "discountType" = ${type}, "discountValue" = ${valNum}, "minPurchase" = ${safeMinP} WHERE "id" = ${codeId}`;
         } else {
           throw err;
         }
