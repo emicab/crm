@@ -253,17 +253,16 @@ export default function ConfigTiendaWebTab() {
               <p className="text-xs text-foreground-muted">Conectá tu cuenta de Mercado Pago con 1 clic sin copiar claves secretas.</p>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => {
-              window.open("/api/mercadopago/connect", "_blank");
-              toast.success("Iniciando flujo de autorización oficial OAuth 2.0 con Mercado Pago...");
-            }}
-            className="shrink-0 bg-blue-600 hover:bg-blue-700 font-bold flex items-center gap-1.5"
-          >
-            Conectar Mercado Pago (OAuth 2.0) 🔗
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href="https://www.mercadopago.com.ar/developers/panel/credentials"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5"
+            >
+              Conectar Mercado Pago 🔗
+            </a>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
