@@ -425,3 +425,22 @@ ALTER TABLE "Setting" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "StoreConfig" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WebOrder" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WebOrderItem" DISABLE ROW LEVEL SECURITY;
+C R E A T E   T A B L E   \  
+ D i s c o u n t C o d e \   ( 
+     \ i d \   I N T E G E R   N O T   N U L L , 
+     \ c o d e \   T E X T   N O T   N U L L , 
+     \ d i s c o u n t T y p e \   T E X T   N O T   N U L L , 
+     \ d i s c o u n t V a l u e \   D E C I M A L ( 1 0 ,   2 )   N O T   N U L L , 
+     \ m i n P u r c h a s e \   D E C I M A L ( 1 0 ,   2 ) , 
+     \ m a x U s e s \   I N T E G E R , 
+     \ c u r r e n t U s e s \   I N T E G E R   N O T   N U L L   D E F A U L T   0 , 
+     \ v a l i d F r o m \   T I M E S T A M P ( 3 ) , 
+     \ v a l i d U n t i l \   T I M E S T A M P ( 3 ) , 
+     \ i s A c t i v e \   B O O L E A N   N O T   N U L L   D E F A U L T   t r u e , 
+     \ c r e a t e d A t \   T I M E S T A M P ( 3 )   N O T   N U L L   D E F A U L T   C U R R E N T _ T I M E S T A M P , 
+     \ u p d a t e d A t \   T I M E S T A M P ( 3 )   N O T   N U L L , 
+     \ t e n a n t _ i d \   T E X T   N O T   N U L L , 
+     C O N S T R A I N T   \ D i s c o u n t C o d e _ p k e y \   P R I M A R Y   K E Y   ( \ t e n a n t _ i d \ ,   \ i d \ ) 
+ ) ; 
+ A L T E R   T A B L E   \ D i s c o u n t C o d e \   D I S A B L E   R O W   L E V E L   S E C U R I T Y ;  
+ 

@@ -76,6 +76,7 @@ export interface Brand {
     id: number;
     name: string;
     description?: string | null;
+    imageUrl?: string | null;
     price: number;
     active: boolean;
     createdAt: string;
@@ -96,6 +97,7 @@ export interface Brand {
     id: number;
     name: string;
     description?: string | null;
+    imageUrl?: string | null;
     type: string; // BUY_X_GET_Y | SET_DISCOUNT | THRESHOLD
     status: string; // ACTIVE | INACTIVE
     discountType: string; // PERCENTAGE | FIXED_AMOUNT

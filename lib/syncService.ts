@@ -70,6 +70,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         combo: { updatedAt: { gt: lastSync } }
       }
     });
+    const storeConfigs = await prisma.storeConfig.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
 
     const computerHostname = typeof os.hostname === "function" ? os.hostname() : "pos_local";
     const rawTenant = (
@@ -183,6 +184,13 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       AccountMovement: accountMovements.map(am => ({
         id: am.id, accountBalanceId: am.accountBalanceId, type: am.type, amount: fmtDec(am.amount), tenant_id: tenantId,
         description: am.description, saleId: am.saleId, createdAt: am.createdAt.toISOString()
+      })),
+      StoreConfig: storeConfigs.map(sc => ({
+        id: sc.id, slug: sc.slug, businessName: sc.businessName, description: sc.description, logoUrl: sc.logoUrl, bannerUrl: sc.bannerUrl,
+        primaryColor: sc.primaryColor, isWebActive: sc.isWebActive, mpAccessToken: sc.mpAccessToken, mpPublicKey: sc.mpPublicKey,
+        mpFeePercent: fmtDec(sc.mpFeePercent), whatsappPhone: sc.whatsappPhone, minStockBuffer: sc.minStockBuffer, allowPickup: sc.allowPickup,
+        allowDelivery: sc.allowDelivery, deliveryFee: fmtDec(sc.deliveryFee), minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
+        tenant_id: tenantId, createdAt: sc.createdAt.toISOString(), updatedAt: sc.updatedAt.toISOString()
       }))
     };
 
@@ -234,7 +242,75 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       summary[tableName] = records.length;
     }
 
-    // 5. Actualizar marca de tiempo de última sincronización
+    // 5. Descargar nuevos Pedidos Web (WebOrders) desde Supabase
+    try {
+      const urlWebOrders = `${supabaseUrl}/rest/v1/WebOrder?tenant_id=eq.${tenantId}&select=*,WebOrderItem(*)`;
+      const resWebOrders = await fetch(urlWebOrders, {
+        headers: {
+          "apikey": supabaseKey,
+          "Authorization": `Bearer ${supabaseKey}`
+        }
+      });
+      if (resWebOrders.ok) {
+        const cloudOrders = await resWebOrders.json();
+        for (const order of cloudOrders) {
+          const exists = await prisma.webOrder.findFirst({
+            where: { webOrderNumber: order.webOrderNumber }
+          });
+          if (!exists) {
+            await prisma.webOrder.create({
+              data: {
+                webOrderNumber: order.webOrderNumber,
+                clientName: order.clientName,
+                clientEmail: order.clientEmail,
+                clientPhone: order.clientPhone,
+                shippingAddress: order.shippingAddress,
+                deliveryType: order.deliveryType,
+                paymentMethod: order.paymentMethod,
+                paymentStatus: order.paymentStatus,
+                status: order.status,
+                totalAmount: order.totalAmount,
+                notes: order.notes,
+                createdAt: new Date(order.createdAt),
+                items: {
+                  create: (order.WebOrderItem || []).map((i: any) => ({
+                    productId: i.productId,
+                    quantity: i.quantity,
+                    unitPrice: i.unitPrice,
+                    subtotal: i.subtotal
+                  }))
+                }
+              }
+            });
+
+            // Descontar stock localmente
+            for (const item of (order.WebOrderItem || [])) {
+              try {
+                await prisma.product.update({
+                  where: { id: item.productId },
+                  data: { quantityStock: { decrement: item.quantity } }
+                });
+              } catch (err) {
+                console.warn("Stock decrement error for product", item.productId, err);
+              }
+            }
+          } else {
+             // Si existe, actualizar estado de pago por si cambió en la web
+             await prisma.webOrder.update({
+               where: { id: exists.id },
+               data: {
+                 paymentStatus: order.paymentStatus,
+                 status: order.status
+               }
+             });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Error al descargar WebOrders desde Supabase:", err);
+    }
+
+    // 6. Actualizar marca de tiempo de última sincronización
     const syncTimeString = syncStartTime.toISOString();
     await prisma.setting.upsert({
       where: { key: "supabase_last_sync" },
