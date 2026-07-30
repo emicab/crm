@@ -1,7 +1,7 @@
 "use client";
 
-import Link from 'next/link';
-import { useModules } from '@/hooks/useModules';
+import Link from "next/link";
+import { useModules } from "@/hooks/useModules";
 import {
   ArrowUpRightSquare,
   History,
@@ -20,60 +20,193 @@ import {
   ShoppingBag,
   Percent,
   FileText,
-} from 'lucide-react';
+} from "lucide-react";
 
 const priorityModules = [
-  { name: 'Caja', href: '/caja', icon: Wallet, description: 'Abrir/Cerrar caja y ver movimientos del día.', shortcut: 'Ctrl+J' },
-  { name: 'Nueva Venta', href: '/ventas/nueva', icon: ShoppingCart, description: 'Registra una nueva transacción de venta.', shortcut: 'Ctrl+N' },
-  { name: 'Productos', href: '/productos', icon: Package, description: 'Gestiona tu catálogo de productos.', shortcut: 'Ctrl+P', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Gastos', href: '/gastos', icon: TrendingDown, description: 'Registra y controla tus gastos.', shortcut: 'Ctrl+G', moduleId: 'gastos', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  {
+    name: "Caja",
+    href: "/caja",
+    icon: Wallet,
+    description: "Abrir/Cerrar caja y ver movimientos del día.",
+    shortcut: "Ctrl+J",
+  },
+  {
+    name: "Nueva Venta",
+    href: "/ventas/nueva",
+    icon: ShoppingCart,
+    description: "Registra una nueva transacción de venta.",
+    shortcut: "Ctrl+N",
+  },
+  {
+    name: "Productos",
+    href: "/productos",
+    icon: Package,
+    description: "Gestiona tu catálogo de productos.",
+    shortcut: "Ctrl+P",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Gastos",
+    href: "/gastos",
+    icon: TrendingDown,
+    description: "Registra y controla tus gastos.",
+    shortcut: "Ctrl+G",
+    moduleId: "gastos",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
 ];
 
 const secondaryModules = [
-  { name: 'Nueva Compra', href: '/compras/nueva', icon: ArrowUpRightSquare, description: 'Ingresa mercadería y actualiza tu stock.', moduleId: 'compras', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Analíticas', href: '/analiticas', icon: LayoutDashboard, description: 'Visualiza tus métricas y gráficos clave.', moduleId: 'analiticas', allowedRoles: ["ADMIN"] },
-  { name: 'Clientes', href: '/clientes', icon: Users, moduleId: 'clientes', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Cuenta Corriente', href: '/cuenta-corriente', icon: Users, moduleId: 'cuenta_corriente', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Proveedores', href: '/proveedores', icon: Truck, moduleId: 'compras', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Vendedores', href: '/vendedores', icon: UserPlus, moduleId: 'vendedores', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Categorías', href: '/categorias', icon: Shapes, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Marcas', href: '/marcas', icon: Tag, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Carga de Stock', href: '/stock', icon: Barcode, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Alertas de Stock', href: '/stock/alertas', icon: AlertTriangle, allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Combos', href: '/combos', icon: ShoppingBag, moduleId: 'combos_promociones', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Promociones', href: '/promociones', icon: Percent, moduleId: 'combos_promociones', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { name: 'Historial Ventas', href: '/ventas', icon: FileText },
-  { name: 'Historial Compras', href: '/compras', icon: History, moduleId: 'compras', allowedRoles: ["ADMIN", "SUPERVISOR"] },
+  {
+    name: "Nueva Compra",
+    href: "/compras/nueva",
+    icon: ArrowUpRightSquare,
+    description: "Ingresa mercadería y actualiza tu stock.",
+    moduleId: "compras",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Analíticas",
+    href: "/analiticas",
+    icon: LayoutDashboard,
+    description: "Visualiza tus métricas y gráficos clave.",
+    moduleId: "analiticas",
+    allowedRoles: ["ADMIN"],
+  },
+  {
+    name: "Clientes",
+    href: "/clientes",
+    icon: Users,
+    moduleId: "clientes",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Cuenta Corriente",
+    href: "/cuenta-corriente",
+    icon: Users,
+    moduleId: "cuenta_corriente",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Proveedores",
+    href: "/proveedores",
+    icon: Truck,
+    moduleId: "compras",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Vendedores",
+    href: "/vendedores",
+    icon: UserPlus,
+    moduleId: "vendedores",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Categorías",
+    href: "/categorias",
+    icon: Shapes,
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Marcas",
+    href: "/marcas",
+    icon: Tag,
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Carga de Stock",
+    href: "/stock",
+    icon: Barcode,
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Alertas de Stock",
+    href: "/stock/alertas",
+    icon: AlertTriangle,
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Combos",
+    href: "/combos",
+    icon: ShoppingBag,
+    moduleId: "combos_promociones",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Promociones",
+    href: "/promociones",
+    icon: Percent,
+    moduleId: "combos_promociones",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  { name: "Historial Ventas", href: "/ventas", icon: FileText },
+  {
+    name: "Historial Compras",
+    href: "/compras",
+    icon: History,
+    moduleId: "compras",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
 ];
 
 const shortcuts = [
-  { keys: ['Ctrl', 'N'], label: 'Nueva Venta' },
-  { keys: ['Ctrl', 'J'], label: 'Caja' },
-  { keys: ['Ctrl', 'P'], label: 'Productos', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { keys: ['Ctrl', 'G'], label: 'Gastos', moduleId: 'gastos', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { keys: ['Ctrl', 'E'], label: 'Nueva Compra', moduleId: 'compras', allowedRoles: ["ADMIN", "SUPERVISOR"] },
-  { keys: ['Ctrl', 'A'], label: 'Analíticas', moduleId: 'analiticas', allowedRoles: ["ADMIN"] },
-  { keys: ['F9'], label: 'Ir a Caja' },
-  { keys: ['Ctrl', ',', ''], label: 'Configuración', allowedRoles: ["ADMIN"] },
+  { keys: ["Ctrl", "N"], label: "Nueva Venta" },
+  { keys: ["Ctrl", "J"], label: "Caja" },
+  {
+    keys: ["Ctrl", "P"],
+    label: "Productos",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    keys: ["Ctrl", "G"],
+    label: "Gastos",
+    moduleId: "gastos",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    keys: ["Ctrl", "E"],
+    label: "Nueva Compra",
+    moduleId: "compras",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    keys: ["Ctrl", "A"],
+    label: "Analíticas",
+    moduleId: "analiticas",
+    allowedRoles: ["ADMIN"],
+  },
+  { keys: ["F9"], label: "Ir a Caja" },
+  { keys: ["Ctrl", ",", ""], label: "Configuración", allowedRoles: ["ADMIN"] },
 ];
 
-const NavCard = ({ module }: { module: typeof priorityModules[0] }) => (
-  <Link href={module.href} className="group relative block rounded-2xl border border-border bg-white p-6 shadow-sm transition-all duration-200 ease-in-out hover:border-primary hover:shadow-lg hover:-translate-y-1 overflow-hidden">
+const NavCard = ({ module }: { module: (typeof priorityModules)[0] }) => (
+  <Link
+    href={module.href}
+    className="group relative block rounded-2xl border border-border bg-white p-6 shadow-sm transition-all duration-200 ease-in-out hover:border-primary hover:shadow-lg hover:-translate-y-1 overflow-hidden"
+  >
     <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -z-0" />
     <div className="flex items-center space-x-4 relative z-10">
-      <div className="rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 p-3.5 text-primary shadow-sm">
+      <div className="rounded-xl bg-linear-to-br from-primary/20 to-primary/10 p-3.5 text-primary shadow-sm">
         <module.icon className="h-7 w-7" />
       </div>
       <div className="flex-1">
-        <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">{module.name}</h3>
-        <p className="mt-0.5 text-sm text-foreground-muted">{module.description}</p>
+        <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+          {module.name}
+        </h3>
+        <p className="mt-0.5 text-sm text-foreground-muted">
+          {module.description}
+        </p>
       </div>
       {module.shortcut && (
         <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-md bg-muted border border-border text-[11px] font-mono text-foreground-muted shrink-0">
-          {module.shortcut.split('+').map((k, i) => (
+          {module.shortcut.split("+").map((k, i) => (
             <span key={i}>
-              {i > 0 && <span className="text-foreground-muted/40 mx-0.5">+</span>}
-              <kbd className="px-1 py-0.5 rounded bg-background border border-border">{k}</kbd>
+              {i > 0 && (
+                <span className="text-foreground-muted/40 mx-0.5">+</span>
+              )}
+              <kbd className="px-1 py-0.5 rounded bg-background border border-border">
+                {k}
+              </kbd>
             </span>
           ))}
         </div>
@@ -82,8 +215,15 @@ const NavCard = ({ module }: { module: typeof priorityModules[0] }) => (
   </Link>
 );
 
-const SecondaryNavCard = ({ module }: { module: typeof secondaryModules[0] }) => (
-  <Link href={module.href} className="group flex flex-col items-center justify-center rounded-xl border border-border bg-white p-4 text-center shadow-sm transition-all duration-200 ease-in-out hover:border-primary hover:shadow-md hover:-translate-y-0.5">
+const SecondaryNavCard = ({
+  module,
+}: {
+  module: (typeof secondaryModules)[0];
+}) => (
+  <Link
+    href={module.href}
+    className="group flex flex-col items-center justify-center rounded-xl border border-border bg-white p-4 text-center shadow-sm transition-all duration-200 ease-in-out hover:border-primary hover:shadow-md hover:-translate-y-0.5"
+  >
     <module.icon className="h-7 w-7 text-foreground-muted transition-colors group-hover:text-primary" />
     <p className="mt-2 text-xs font-semibold text-foreground">{module.name}</p>
   </Link>
@@ -92,25 +232,25 @@ const SecondaryNavCard = ({ module }: { module: typeof secondaryModules[0] }) =>
 export default function HomePage() {
   const { isModuleEnabled, currentUser } = useModules();
 
-  const filteredPriorityModules = priorityModules.filter(mod => {
+  const filteredPriorityModules = priorityModules.filter((mod) => {
     if (mod.moduleId && !isModuleEnabled(mod.moduleId)) return false;
-    if (isModuleEnabled('roles') && currentUser && mod.allowedRoles) {
+    if (isModuleEnabled("roles") && currentUser && mod.allowedRoles) {
       return mod.allowedRoles.includes(currentUser.role);
     }
     return true;
   });
 
-  const filteredSecondaryModules = secondaryModules.filter(mod => {
+  const filteredSecondaryModules = secondaryModules.filter((mod) => {
     if (mod.moduleId && !isModuleEnabled(mod.moduleId)) return false;
-    if (isModuleEnabled('roles') && currentUser && mod.allowedRoles) {
+    if (isModuleEnabled("roles") && currentUser && mod.allowedRoles) {
       return mod.allowedRoles.includes(currentUser.role);
     }
     return true;
   });
 
-  const filteredShortcuts = shortcuts.filter(s => {
+  const filteredShortcuts = shortcuts.filter((s) => {
     if (s.moduleId && !isModuleEnabled(s.moduleId)) return false;
-    if (isModuleEnabled('roles') && currentUser && s.allowedRoles) {
+    if (isModuleEnabled("roles") && currentUser && s.allowedRoles) {
       return s.allowedRoles.includes(currentUser.role);
     }
     return true;
@@ -161,14 +301,24 @@ export default function HomePage() {
                 {filteredShortcuts.map((s) => (
                   <div key={s.label} className="flex items-center gap-2">
                     <div className="flex items-center gap-0.5">
-                      {s.keys.filter(k => k).map((k, i) => (
-                        <span key={i}>
-                          {i > 0 && <span className="text-foreground-muted/40 mx-0.5 text-xs">+</span>}
-                          <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[11px] text-foreground-muted">{k}</kbd>
-                        </span>
-                      ))}
+                      {s.keys
+                        .filter((k) => k)
+                        .map((k, i) => (
+                          <span key={i}>
+                            {i > 0 && (
+                              <span className="text-foreground-muted/40 mx-0.5 text-xs">
+                                +
+                              </span>
+                            )}
+                            <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[11px] text-foreground-muted">
+                              {k}
+                            </kbd>
+                          </span>
+                        ))}
                     </div>
-                    <span className="text-sm text-foreground-muted">{s.label}</span>
+                    <span className="text-sm text-foreground-muted">
+                      {s.label}
+                    </span>
                   </div>
                 ))}
               </div>
