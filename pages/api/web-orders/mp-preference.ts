@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const client = new MercadoPagoConfig({ accessToken });
       const preference = new Preference(client);
 
-      const rawReturnUrl = req.body.returnUrl || req.headers.referer || req.headers.origin || "http://localhost:3003";
+      const rawReturnUrl = req.body.returnUrl || req.headers.referer || req.headers.origin || "https://reposedly-uncurtained-dorothy.ngrok-free.dev";
       const returnUrl = rawReturnUrl.split("?")[0].replace(/\/$/, "");
 
       const response = await preference.create({
@@ -50,14 +50,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             name: clientName || "Cliente Web",
             phone: { number: clientPhone || "" },
           },
-          backUrls: {
+          back_urls: {
             success: `${returnUrl}?status=approved&external_reference=${webOrderNumber}`,
             failure: `${returnUrl}?status=failure&external_reference=${webOrderNumber}`,
             pending: `${returnUrl}?status=pending&external_reference=${webOrderNumber}`,
           },
-          autoReturn: "approved",
-          externalReference: webOrderNumber,
-          notificationUrl: process.env.MP_WEBHOOK_URL || undefined,
+          auto_return: "approved",
+          external_reference: webOrderNumber,
+          notification_url: process.env.MP_WEBHOOK_URL || undefined,
         },
       });
 
