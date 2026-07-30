@@ -181,6 +181,11 @@ export default async function handler(
             supplier: true,
         }
       });
+      try {
+        const { runSupabaseSync } = require("../../lib/syncService");
+        runSupabaseSync(false).catch((err: any) => console.error("Auto-sync error:", err));
+      } catch { /* ignore */ }
+
       res.status(201).json(newProduct);
     } catch (error: unknown) {
       handleApiError(res, error, "creating product");

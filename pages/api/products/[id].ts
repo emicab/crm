@@ -137,6 +137,12 @@ export default async function handler(
         data: dataToUpdate,
         include: { brand: true, category: true, supplier: true },
       });
+
+      try {
+        const { runSupabaseSync } = require("../../../lib/syncService");
+        runSupabaseSync(false).catch((err: any) => console.error("Auto-sync error:", err));
+      } catch { /* ignore */ }
+
       res.status(200).json(updatedProduct);
     } catch (error: any) {
       handleApiError(res, error, `updating product ${id}`);
@@ -165,6 +171,10 @@ export default async function handler(
       await prisma.product.delete({
         where: { id },
       });
+      try {
+        const { runSupabaseSync } = require("../../../lib/syncService");
+        runSupabaseSync(false).catch((err: any) => console.error("Auto-sync error:", err));
+      } catch { /* ignore */ }
       res.status(204).end(); // No Content
     } catch (error: any) {
       handleApiError(res, error, `deleting product ${id}`);
@@ -190,6 +200,10 @@ export default async function handler(
         where: { id },
         data: dataToUpdate,
       });
+      try {
+        const { runSupabaseSync } = require("../../../lib/syncService");
+        runSupabaseSync(false).catch((err: any) => console.error("Auto-sync error:", err));
+      } catch { /* ignore */ }
       res.status(200).json(updated);
     } catch (error: any) {
       handleApiError(res, error, `patching product ${id} stock`);
