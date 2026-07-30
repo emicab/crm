@@ -15,14 +15,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: "Monto total inválido para el checkout." });
     }
 
+    const storeConfig = await prisma.storeConfig.findFirst();
     const mpTokenConfig = await prisma.setting.findUnique({
       where: { key: "mercadopago_access_token" },
     });
 
     const accessToken =
-      mpTokenConfig?.value || process.env.MERCADOPAGO_ACCESS_TOKEN || "";
+      storeConfig?.mpAccessToken ||
+      mpTokenConfig?.value ||
+      process.env.MERCADOPAGO_ACCESS_TOKEN ||
+      process.env.MP_ACCESS_TOKEN ||
+      "";
 
-    if (accessToken && accessToken.startsWith("APP_USR")) {
+    if (accessToken && (accessToken.startsWith("APP_USR") || accessToken.startsWith("TEST-"))) {
       const client = new MercadoPagoConfig({ accessToken });
       const preference = new Preference(client);
 
@@ -49,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return res.status(200).json({
         success: true,
-        init_point: response.init_point || response.sandbox_init_point,
+        init_point: response.sandbox_init_point || response.init_point,
       });
     }
 
