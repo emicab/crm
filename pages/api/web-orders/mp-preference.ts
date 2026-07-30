@@ -50,9 +50,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             phone: { number: clientPhone || "" },
           },
           backUrls: {
-            success: `${origin}?status=success&order=${webOrderNumber}`,
-            failure: `${origin}?status=failure&order=${webOrderNumber}`,
-            pending: `${origin}?status=pending&order=${webOrderNumber}`,
+            success: `${origin}?status=approved&external_reference=${webOrderNumber}`,
+            failure: `${origin}?status=failure&external_reference=${webOrderNumber}`,
+            pending: `${origin}?status=pending&external_reference=${webOrderNumber}`,
           },
           autoReturn: "approved",
           externalReference: webOrderNumber,
