@@ -28,7 +28,10 @@ export default async function handler(
       }
       res.status(200).json({
         ...code,
-        discountPercent: code.discountPercent.toString(),
+        discountPercent: code.discountPercent ? code.discountPercent.toString() : '0',
+        discountType: (code as any).discountType || 'PERCENTAGE',
+        discountValue: (code as any).discountValue ? (code as any).discountValue.toString() : (code.discountPercent ? code.discountPercent.toString() : '0'),
+        minPurchase: (code as any).minPurchase ? (code as any).minPurchase.toString() : '0',
       });
     } catch (error) {
       handleApiError(res, error, `fetching discount code ${id}`);
@@ -114,9 +117,10 @@ export default async function handler(
 
       res.status(200).json({
         ...updated,
-        discountPercent: updated.discountPercent.toString(),
-        discountValue: updated.discountValue?.toString() || updated.discountPercent.toString(),
-        minPurchase: updated.minPurchase?.toString() || '0',
+        discountPercent: type === 'PERCENTAGE' ? valNum.toString() : '0',
+        discountType: type,
+        discountValue: valNum.toString(),
+        minPurchase: (isNaN(minP) ? 0 : minP).toString(),
       });
     } catch (error) {
       handleApiError(res, error, `updating discount code ${id}`);

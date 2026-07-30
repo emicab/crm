@@ -31,9 +31,12 @@ export default async function handler(
         prisma.discountCode.count({ where: whereClause }),
       ]);
 
-      const codesForJson = codes.map(c => ({
+      const codesForJson = codes.map((c: any) => ({
         ...c,
-        discountPercent: c.discountPercent.toString(),
+        discountPercent: c.discountPercent ? c.discountPercent.toString() : '0',
+        discountType: c.discountType || 'PERCENTAGE',
+        discountValue: c.discountValue ? c.discountValue.toString() : (c.discountPercent ? c.discountPercent.toString() : '0'),
+        minPurchase: c.minPurchase ? c.minPurchase.toString() : '0',
       }));
 
       if (page !== undefined) {
@@ -122,9 +125,10 @@ export default async function handler(
 
       res.status(201).json({
         ...newCode,
-        discountPercent: newCode.discountPercent.toString(),
-        discountValue: newCode.discountValue?.toString() || newCode.discountPercent.toString(),
-        minPurchase: newCode.minPurchase?.toString() || '0',
+        discountPercent: type === 'PERCENTAGE' ? valNum.toString() : '0',
+        discountType: type,
+        discountValue: valNum.toString(),
+        minPurchase: (isNaN(minP) ? 0 : minP).toString(),
       });
     } catch (error) {
       handleApiError(res, error, "creating discount code");
