@@ -31,34 +31,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const client = new MercadoPagoConfig({ accessToken });
       const preference = new Preference(client);
 
-      const rawReturnUrl = req.body.returnUrl || req.headers.referer || req.headers.origin || "https://reposedly-uncurtained-dorothy.ngrok-free.dev";
+      const rawReturnUrl = req.body.returnUrl || req.headers.referer || req.headers.origin || "http://localhost:3003";
       const returnUrl = rawReturnUrl.split("?")[0].replace(/\/$/, "");
+      const cleanOrderNum = webOrderNumber || `WEB-${Date.now()}`;
+
+      const successUrl = `${returnUrl}?status=approved&external_reference=${cleanOrderNum}`;
+      const failureUrl = `${returnUrl}?status=failure&external_reference=${cleanOrderNum}`;
+      const pendingUrl = `${returnUrl}?status=pending&external_reference=${cleanOrderNum}`;
+
+      const prefBody: any = {
+        items: [
+          {
+            id: cleanOrderNum,
+            title: `Pedido Web #${cleanOrderNum}`,
+            quantity: 1,
+            unit_price: Number(total),
+            currency_id: "ARS",
+            description: `Pedido de ${clientName || "Cliente"} (${clientPhone || ""})`,
+          },
+        ],
+        payer: {
+          name: clientName || "Cliente Web",
+          phone: { number: clientPhone || "" },
+        },
+        back_urls: {
+          success: successUrl,
+          failure: failureUrl,
+          pending: pendingUrl,
+        },
+        auto_return: "approved",
+        external_reference: cleanOrderNum,
+      };
+
+      if (process.env.MP_WEBHOOK_URL) {
+        prefBody.notification_url = process.env.MP_WEBHOOK_URL;
+      }
+
+      console.log("[MP Preference Payload]", JSON.stringify(prefBody, null, 2));
 
       const response = await preference.create({
-        body: {
-          items: [
-            {
-              id: webOrderNumber || `WEB-${Date.now()}`,
-              title: `Pedido Web #${webOrderNumber || ""}`,
-              quantity: 1,
-              unit_price: Number(total),
-              currency_id: "ARS",
-              description: `Pedido de ${clientName || "Cliente"} (${clientPhone || ""})`,
-            },
-          ],
-          payer: {
-            name: clientName || "Cliente Web",
-            phone: { number: clientPhone || "" },
-          },
-          back_urls: {
-            success: `${returnUrl}?status=approved&external_reference=${webOrderNumber}`,
-            failure: `${returnUrl}?status=failure&external_reference=${webOrderNumber}`,
-            pending: `${returnUrl}?status=pending&external_reference=${webOrderNumber}`,
-          },
-          auto_return: "approved",
-          external_reference: webOrderNumber,
-          notification_url: process.env.MP_WEBHOOK_URL || undefined,
-        },
+        body: prefBody,
       });
 
       return res.status(200).json({

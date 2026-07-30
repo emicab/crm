@@ -66,6 +66,7 @@ export default function PedidosWebPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<WebOrder | null>(null);
   const isInitialLoadedRef = useRef(false);
+  const notifiedKeysRef = useRef<Set<string>>(new Set());
 
   const fetchOrders = async (isInitial = false) => {
     if (isInitial) setLoading(true);
@@ -75,31 +76,48 @@ export default function PedidosWebPage() {
       if (!res.ok) throw new Error("Error al cargar pedidos web.");
       const data: WebOrder[] = await res.json();
 
-      if (!isInitialLoadedRef.current) {
-        isInitialLoadedRef.current = true;
-        setOrders(data);
-        return;
-      }
-
-      setOrders((prevOrders) => {
-        if (Array.isArray(data)) {
-          const hasNewOrder = data.length > prevOrders.length;
-          const hasNewPaid = data.some((newO: WebOrder) => {
-            const oldO = prevOrders.find((po) => po.id === newO.id);
-            return oldO ? oldO.paymentStatus !== "PAID" && newO.paymentStatus === "PAID" : newO.paymentStatus === "PAID";
-          });
-
-          if (hasNewOrder || hasNewPaid) {
-            playOrderChimeSound();
-            if (hasNewPaid) {
-              toast.success("¡Pago confirmado por Mercado Pago! 🟢", { duration: 5000 });
-            } else if (hasNewOrder) {
-              toast.success("¡Nuevo pedido web recibido! 🛒", { duration: 5000 });
+      if (Array.isArray(data)) {
+        if (!isInitialLoadedRef.current) {
+          isInitialLoadedRef.current = true;
+          data.forEach((o) => {
+            notifiedKeysRef.current.add(`${o.id}-CREATED`);
+            if (o.paymentStatus === "PAID") {
+              notifiedKeysRef.current.add(`${o.id}-PAID`);
             }
+          });
+          setOrders(data);
+          return;
+        }
+
+        let notifyPaid = false;
+        let notifyNew = false;
+
+        data.forEach((newO) => {
+          const createdKey = `${newO.id}-CREATED`;
+          const paidKey = `${newO.id}-PAID`;
+
+          if (!notifiedKeysRef.current.has(createdKey)) {
+            notifiedKeysRef.current.add(createdKey);
+            notifyNew = true;
+          }
+
+          if (newO.paymentStatus === "PAID" && !notifiedKeysRef.current.has(paidKey)) {
+            notifiedKeysRef.current.add(paidKey);
+            notifyPaid = true;
+          }
+        });
+
+        if (notifyPaid || notifyNew) {
+          playOrderChimeSound();
+          if (notifyPaid) {
+            toast.success("¡Pago confirmado por Mercado Pago! 🟢", { duration: 5000 });
+          } else if (notifyNew) {
+            toast.success("¡Nuevo pedido web recibido! 🛒", { duration: 5000 });
           }
         }
-        return data;
-      });
+
+        setOrders(data);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
