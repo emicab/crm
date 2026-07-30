@@ -56,6 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           discountType: discType,
           discountValue: val,
           discountAmount: Math.min(numSubtotal, discountAmount),
+          minPurchase: minP,
           message: `¡Código ${discountCode.code} (${labelMsg}) aplicado con éxito!`,
         });
       }
@@ -91,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           discountType: coupon.discountType,
           discountValue: val,
           discountAmount: Math.min(numSubtotal, discountAmount),
+          minPurchase: minP,
           message: `¡Cupón ${coupon.code} aplicado con éxito!`,
         });
       }
@@ -117,6 +119,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           discountType: c.type,
           discountValue: c.val,
           discountAmount: Math.min(numSubtotal, discountAmount),
+          minPurchase: c.min,
           message: `¡Cupón ${cleanCode} (${c.msg}) aplicado con éxito!`,
         });
       }
