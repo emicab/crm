@@ -257,12 +257,12 @@ export default function ConfigTiendaWebTab() {
             type="button"
             variant="primary"
             onClick={() => {
-              window.open("https://www.mercadopago.com.ar/developers/panel/credentials", "_blank");
-              toast.success("Abriendo el panel de credenciales de Mercado Pago. Copiá tu Access Token y pegalo abajo.");
+              window.open("/api/mercadopago/connect", "_blank");
+              toast.success("Iniciando flujo de autorización oficial OAuth 2.0 con Mercado Pago...");
             }}
-            className="shrink-0 bg-blue-600 hover:bg-blue-700 font-bold"
+            className="shrink-0 bg-blue-600 hover:bg-blue-700 font-bold flex items-center gap-1.5"
           >
-            Conectar Mercado Pago 🔗
+            Conectar Mercado Pago (OAuth 2.0) 🔗
           </Button>
         </div>
 
