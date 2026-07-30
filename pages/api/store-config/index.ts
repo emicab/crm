@@ -15,6 +15,14 @@ export default async function handler(
 
       if (reqSlug) {
         config = await prisma.storeConfig.findFirst({ where: { slug: reqSlug } });
+        if (!config) {
+          return res.status(404).json({
+            message: `La tienda "${reqSlug}" no existe.`,
+            exists: false,
+            isWebActive: false,
+            slug: reqSlug,
+          });
+        }
       } else {
         config = await prisma.storeConfig.findFirst();
       }
