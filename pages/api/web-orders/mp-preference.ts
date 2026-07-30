@@ -56,6 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
           autoReturn: "approved",
           externalReference: webOrderNumber,
+          notificationUrl: process.env.MP_WEBHOOK_URL || undefined,
         },
       });
 
