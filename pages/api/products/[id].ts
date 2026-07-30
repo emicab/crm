@@ -126,6 +126,12 @@ export default async function handler(
         const validUnitTypes = [null, 'UNIT', 'WEIGHT', 'VOLUME'];
         dataToUpdate.unitType = validUnitTypes.includes(unitType) ? (unitType || null) : null;
       }
+      if (req.body.isPublicWeb !== undefined) {
+        dataToUpdate.isPublicWeb = Boolean(req.body.isPublicWeb);
+      }
+      if (req.body.webCategory !== undefined) {
+        dataToUpdate.webCategory = typeof req.body.webCategory === 'string' ? (req.body.webCategory.trim() || null) : req.body.webCategory;
+      }
       if (supplierId !== undefined && supplierId !== null && supplierId !== '') {
         dataToUpdate.supplier = { connect: { id: parseInt(supplierId) } };
       } else if (supplierId === '' || supplierId === null) {

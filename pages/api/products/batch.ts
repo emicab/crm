@@ -43,6 +43,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: updateData,
       });
 
+      try {
+        const { runSupabaseSync } = require("../../lib/syncService");
+        runSupabaseSync(false).catch((err: any) => console.error("Auto-sync error:", err));
+      } catch { /* ignore */ }
+
       return res.status(200).json({ message: "Productos actualizados correctamente.", count: result.count });
     } catch (error: any) {
       return res.status(500).json({ message: error.message || "Error al actualizar productos en lote." });

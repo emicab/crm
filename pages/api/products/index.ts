@@ -171,6 +171,8 @@ export default async function handler(
           quantityStock: quantityStockNum,
           stockMinAlert: stockMinAlert ? parseFloat(stockMinAlert) : null,
           unitType: resolvedUnitType,
+          isPublicWeb: req.body.isPublicWeb !== undefined ? Boolean(req.body.isPublicWeb) : true,
+          webCategory: req.body.webCategory ? String(req.body.webCategory).trim() : null,
           brand: { connect: { id: brandIdInt } },
           category: { connect: { id: categoryIdInt } },
           ...(supplierId ? { supplier: { connect: { id: parseInt(supplierId) } } } : {}),
