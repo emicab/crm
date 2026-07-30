@@ -62,35 +62,44 @@ export default async function handler(
 
       const generatedNumber = webOrderNumber || `WEB-${Date.now().toString().slice(-6)}`;
 
-      const newOrder = await prisma.$transaction(async (tx) => {
-        const order = await tx.webOrder.create({
-          data: {
-            webOrderNumber: generatedNumber,
-            clientName,
-            clientEmail: clientEmail || null,
-            clientPhone,
-            shippingAddress: shippingAddress || null,
-            deliveryType: deliveryType || 'PICKUP',
-            paymentMethod: paymentMethod || 'CASH_ON_DELIVERY',
-            paymentStatus: paymentStatus || 'PENDING',
-            status: 'PENDING_PREPARATION',
-            totalAmount: parseFloat(totalAmount) || 0,
-            notes: notes || null,
-            items: {
-              create: items.map((i: any) => ({
-                productId: parseInt(i.productId),
-                quantity: parseFloat(i.quantity),
-                unitPrice: parseFloat(i.unitPrice),
-                subtotal: parseFloat(i.quantity) * parseFloat(i.unitPrice),
-              }))
-            }
-          },
-          include: { items: { include: { product: true } } }
-        });
+      // Si el pedido ya existe, evitar duplicados y responder 200 OK
+      const existing = await prisma.webOrder.findFirst({
+        where: { webOrderNumber: generatedNumber },
+      });
 
-        // Descuenta stock automáticamente de los productos
-        for (const item of items) {
-          await tx.product.update({
+      if (existing) {
+        return res.status(200).json(existing);
+      }
+
+      const newOrder = await prisma.webOrder.create({
+        data: {
+          webOrderNumber: generatedNumber,
+          clientName,
+          clientEmail: clientEmail || null,
+          clientPhone,
+          shippingAddress: shippingAddress || null,
+          deliveryType: deliveryType || 'PICKUP',
+          paymentMethod: paymentMethod || 'CASH_ON_DELIVERY',
+          paymentStatus: paymentStatus || 'PENDING',
+          status: 'PENDING_PREPARATION',
+          totalAmount: parseFloat(totalAmount) || 0,
+          notes: notes || null,
+          items: {
+            create: items.map((i: any) => ({
+              productId: parseInt(i.productId),
+              quantity: parseFloat(i.quantity),
+              unitPrice: parseFloat(i.unitPrice),
+              subtotal: parseFloat(i.quantity) * parseFloat(i.unitPrice),
+            }))
+          }
+        },
+        include: { items: { include: { product: true } } }
+      });
+
+      // Descuenta stock automáticamente de los productos
+      for (const item of items) {
+        try {
+          await prisma.product.update({
             where: { id: parseInt(item.productId) },
             data: {
               quantityStock: {
@@ -98,12 +107,12 @@ export default async function handler(
               }
             }
           });
+        } catch (stkErr) {
+          console.warn("Error descontando stock para item:", item, stkErr);
         }
+      }
 
-        return order;
-      });
-
-      res.status(201).json(newOrder);
+      return res.status(201).json(newOrder);
     } catch (error) {
       handleApiError(res, error, "creating web order");
     }
