@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Loader2,
   RefreshCcw,
@@ -65,6 +65,7 @@ export default function PedidosWebPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<WebOrder | null>(null);
+  const isInitialLoadedRef = useRef(false);
 
   const fetchOrders = async (isInitial = false) => {
     if (isInitial) setLoading(true);
@@ -72,21 +73,28 @@ export default function PedidosWebPage() {
     try {
       const res = await fetch("/api/web-orders");
       if (!res.ok) throw new Error("Error al cargar pedidos web.");
-      const data = await res.json();
+      const data: WebOrder[] = await res.json();
+
+      if (!isInitialLoadedRef.current) {
+        isInitialLoadedRef.current = true;
+        setOrders(data);
+        return;
+      }
+
       setOrders((prevOrders) => {
-        if (prevOrders.length > 0 && Array.isArray(data)) {
+        if (Array.isArray(data)) {
           const hasNewOrder = data.length > prevOrders.length;
           const hasNewPaid = data.some((newO: WebOrder) => {
             const oldO = prevOrders.find((po) => po.id === newO.id);
-            return oldO && oldO.paymentStatus !== "PAID" && newO.paymentStatus === "PAID";
+            return oldO ? oldO.paymentStatus !== "PAID" && newO.paymentStatus === "PAID" : newO.paymentStatus === "PAID";
           });
 
           if (hasNewOrder || hasNewPaid) {
             playOrderChimeSound();
             if (hasNewPaid) {
-              toast.success("¡Pago confirmado por Mercado Pago! 🟢", { duration: 4000 });
+              toast.success("¡Pago confirmado por Mercado Pago! 🟢", { duration: 5000 });
             } else if (hasNewOrder) {
-              toast.success("¡Nuevo pedido web recibido! 🛒", { duration: 4000 });
+              toast.success("¡Nuevo pedido web recibido! 🛒", { duration: 5000 });
             }
           }
         }
