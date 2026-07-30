@@ -75,8 +75,119 @@ const MIGRATIONS: &[Migration] = &[
                 "content" TEXT NOT NULL,
                 "suggestions" TEXT,
                 "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT "ChatMessage_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "ChatSession" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                "CONSTRAINT ChatMessage_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "ChatSession" ("id") ON DELETE CASCADE ON UPDATE CASCADE
             );
+        "#,
+    },
+    Migration {
+        version: 3,
+        name: "add_store_config_and_web_orders",
+        sql: r#"
+            CREATE TABLE IF NOT EXISTS "StoreConfig" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "slug" TEXT NOT NULL UNIQUE,
+                "businessName" TEXT NOT NULL,
+                "description" TEXT,
+                "logoUrl" TEXT,
+                "bannerUrl" TEXT,
+                "primaryColor" TEXT DEFAULT '#2563eb',
+                "isWebActive" BOOLEAN NOT NULL DEFAULT 0,
+                "mpAccessToken" TEXT,
+                "mpPublicKey" TEXT,
+                "mpFeePercent" DECIMAL NOT NULL DEFAULT 0,
+                "whatsappPhone" TEXT,
+                "minStockBuffer" REAL NOT NULL DEFAULT 0,
+                "allowPickup" BOOLEAN NOT NULL DEFAULT 1,
+                "allowDelivery" BOOLEAN NOT NULL DEFAULT 1,
+                "deliveryFee" DECIMAL NOT NULL DEFAULT 0,
+                "minDeliveryAmount" DECIMAL NOT NULL DEFAULT 0,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS "WebOrder" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "webOrderNumber" TEXT NOT NULL UNIQUE,
+                "clientName" TEXT NOT NULL,
+                "clientEmail" TEXT,
+                "clientPhone" TEXT NOT NULL,
+                "shippingAddress" TEXT,
+                "deliveryType" TEXT NOT NULL,
+                "paymentMethod" TEXT NOT NULL,
+                "paymentStatus" TEXT NOT NULL,
+                "status" TEXT NOT NULL DEFAULT 'PENDING_PREPARATION',
+                "totalAmount" DECIMAL NOT NULL,
+                "notes" TEXT,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS "WebOrderItem" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "webOrderId" INTEGER NOT NULL,
+                "productId" INTEGER NOT NULL,
+                "quantity" REAL NOT NULL,
+                "unitPrice" DECIMAL NOT NULL,
+                "subtotal" DECIMAL NOT NULL,
+                CONSTRAINT "WebOrderItem_webOrderId_fkey" FOREIGN KEY ("webOrderId") REFERENCES "WebOrder" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT "WebOrderItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+            );
+        "#,
+    },
+    Migration {
+        version: 4,
+        name: "add_promotions_and_coupons_and_invoices",
+        sql: r#"
+            CREATE TABLE IF NOT EXISTS "CreditCardPromotion" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "bank" TEXT NOT NULL,
+                "installments" TEXT NOT NULL,
+                "startDate" DATETIME,
+                "endDate" DATETIME,
+                "notes" TEXT,
+                "active" BOOLEAN NOT NULL DEFAULT 1,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS "Invoice" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "saleId" INTEGER NOT NULL UNIQUE,
+                "cae" TEXT NOT NULL,
+                "caeExpiration" DATETIME NOT NULL,
+                "invoiceType" TEXT NOT NULL,
+                "invoiceNumber" INTEGER NOT NULL,
+                "pointOfSale" INTEGER NOT NULL,
+                "clientCuit" TEXT,
+                "clientName" TEXT,
+                "xmlRequest" TEXT,
+                "xmlResponse" TEXT,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "Invoice_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sale" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS "Coupon" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "code" TEXT NOT NULL UNIQUE,
+                "discountType" TEXT NOT NULL DEFAULT 'PERCENTAGE',
+                "discountValue" DECIMAL NOT NULL,
+                "minPurchase" DECIMAL DEFAULT 0,
+                "maxUses" INTEGER,
+                "usedCount" INTEGER NOT NULL DEFAULT 0,
+                "startDate" DATETIME,
+                "endDate" DATETIME,
+                "active" BOOLEAN NOT NULL DEFAULT 1,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            ALTER TABLE "Client" ADD COLUMN "cuit" TEXT;
+            ALTER TABLE "Client" ADD COLUMN "businessName" TEXT;
+
+            ALTER TABLE "DiscountCode" ADD COLUMN "discountType" TEXT DEFAULT 'PERCENTAGE';
+            ALTER TABLE "DiscountCode" ADD COLUMN "discountValue" DECIMAL;
+            ALTER TABLE "DiscountCode" ADD COLUMN "minPurchase" DECIMAL DEFAULT 0;
         "#,
     },
 ];
@@ -103,7 +214,6 @@ fn run_migrations(db_path: &Path) {
     }
 
     for migration in MIGRATIONS {
-        // Check if already applied
         let already_applied: bool = conn
             .query_row(
                 "SELECT COUNT(*) > 0 FROM _app_migrations WHERE version = ?1",
@@ -118,29 +228,29 @@ fn run_migrations(db_path: &Path) {
 
         println!("[Migrations] Applying v{}: {} ...", migration.version, migration.name);
 
-        match conn.execute_batch(migration.sql) {
-            Ok(_) => {
-                // Record migration as applied
-                let _ = conn.execute(
-                    "INSERT INTO _app_migrations (version, name) VALUES (?1, ?2)",
-                    rusqlite::params![migration.version, migration.name],
-                );
-                println!("[Migrations] ✓ v{} applied successfully", migration.version);
+        let mut has_error = false;
+        for statement in migration.sql.split(';') {
+            let stmt = statement.trim();
+            if stmt.is_empty() {
+                continue;
             }
-            Err(e) => {
-                // If the error is "duplicate column", the migration was already
-                // applied manually — record it and move on.
+            if let Err(e) = conn.execute(stmt, []) {
                 let err_msg = e.to_string();
                 if err_msg.contains("duplicate column") || err_msg.contains("already exists") {
-                    let _ = conn.execute(
-                        "INSERT INTO _app_migrations (version, name) VALUES (?1, ?2)",
-                        rusqlite::params![migration.version, migration.name],
-                    );
-                    println!("[Migrations] ✓ v{} already applied (recorded)", migration.version);
+                    println!("[Migrations] Statement already applied: {}", err_msg);
                 } else {
-                    eprintln!("[Migrations] ✗ v{} failed: {}", migration.version, e);
+                    eprintln!("[Migrations] Error executing statement ({}): {}", stmt, e);
+                    has_error = true;
                 }
             }
+        }
+
+        if !has_error {
+            let _ = conn.execute(
+                "INSERT INTO _app_migrations (version, name) VALUES (?1, ?2)",
+                rusqlite::params![migration.version, migration.name],
+            );
+            println!("[Migrations] ✓ v{} applied successfully", migration.version);
         }
     }
 }
