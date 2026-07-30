@@ -10,7 +10,7 @@ export default async function handler(
   const { code, state, error } = req.query;
 
   if (error || !code) {
-    return res.redirect('/(main)/configuracion?error=mp_auth_failed');
+    return res.redirect('/configuracion?error=mp_auth_failed');
   }
 
   const clientId = process.env.MP_CLIENT_ID;
@@ -22,7 +22,7 @@ export default async function handler(
   try {
     if (!clientId || !clientSecret) {
       // Si no hay client secret configurado, registramos el code de autorización
-      return res.redirect('/(main)/configuracion?mp_code=' + code);
+      return res.redirect('/configuracion?mp_code=' + code);
     }
 
     const tokenRes = await fetch('https://api.mercadopago.com/oauth/token', {
@@ -44,7 +44,7 @@ export default async function handler(
 
     if (!tokenRes.ok || !tokenData.access_token) {
       console.error('Mercado Pago OAuth token exchange error:', tokenData);
-      return res.redirect('/(main)/configuracion?error=mp_token_exchange_failed');
+      return res.redirect('/configuracion?error=mp_token_exchange_failed');
     }
 
     const accessToken = tokenData.access_token;
@@ -73,9 +73,9 @@ export default async function handler(
       });
     }
 
-    return res.redirect('/(main)/configuracion?mp_success=true');
+    return res.redirect('/configuracion?mp_success=true');
   } catch (err: any) {
     console.error('Mercado Pago Callback Exception:', err);
-    return res.redirect('/(main)/configuracion?error=mp_callback_error');
+    return res.redirect('/configuracion?error=mp_callback_error');
   }
 }
