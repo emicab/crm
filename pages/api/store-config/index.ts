@@ -10,11 +10,19 @@ export default async function handler(
 ) {
   if (req.method === 'GET') {
     try {
-      const config = await prisma.storeConfig.findFirst();
+      const reqSlug = req.query.slug ? sanitizeString(String(req.query.slug).toLowerCase()) : null;
+      let config = reqSlug
+        ? await prisma.storeConfig.findFirst({ where: { slug: reqSlug } })
+        : null;
+
+      if (!config) {
+        config = await prisma.storeConfig.findFirst();
+      }
+
       if (!config) {
         res.status(200).json({
-          slug: '',
-          businessName: '',
+          slug: reqSlug || '',
+          businessName: reqSlug ? reqSlug.toUpperCase() : '',
           description: '',
           logoUrl: '',
           bannerUrl: '',
