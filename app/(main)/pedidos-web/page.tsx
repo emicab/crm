@@ -22,6 +22,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { formatCurrency } from "@/lib/formatCurrency";
 import toast from "react-hot-toast";
+import { formatDate } from "@/lib/formatDate";
 
 interface WebOrderItem {
   id: number;
@@ -95,25 +96,46 @@ export default function PedidosWebPage() {
   const handleUpdateOrderStatus = async (
     orderId: number,
     newStatus: string,
-    newPaymentStatus?: string
+    newPaymentStatus?: string,
   ) => {
     try {
       const res = await fetch(`/api/web-orders/${orderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus, paymentStatus: newPaymentStatus }),
+        body: JSON.stringify({
+          status: newStatus,
+          paymentStatus: newPaymentStatus,
+        }),
       });
       if (!res.ok) throw new Error("Error al actualizar el estado del pedido.");
       const updated = await res.json();
 
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: updated.status, paymentStatus: updated.paymentStatus } : o))
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                status: updated.status,
+                paymentStatus: updated.paymentStatus,
+              }
+            : o,
+        ),
       );
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder((prev) => (prev ? { ...prev, status: updated.status, paymentStatus: updated.paymentStatus } : null));
+        setSelectedOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: updated.status,
+                paymentStatus: updated.paymentStatus,
+              }
+            : null,
+        );
       }
       if (updated.saleId) {
-        toast.success("Pedido marcado como Entregado y registrado en Ventas y Movimientos de Caja.");
+        toast.success(
+          "Pedido marcado como Entregado y registrado en Ventas y Movimientos de Caja.",
+        );
       } else {
         toast.success("Estado del pedido actualizado correctamente.");
       }
@@ -169,10 +191,12 @@ export default function PedidosWebPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <ShoppingBag className="text-blue-600" size={28} /> Pedidos Web (ClinStore)
+            <ShoppingBag className="text-blue-600" size={28} /> Pedidos Web
+            (ClinStore)
           </h1>
           <p className="text-foreground-muted text-sm mt-1">
-            Gestión y preparación de pedidos realizados por clientes desde tu tienda online pública.
+            Gestión y preparación de pedidos realizados por clientes desde tu
+            tienda online pública.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -232,7 +256,8 @@ export default function PedidosWebPage() {
               No hay pedidos web registrados aún
             </p>
             <p className="text-xs">
-              Los pedidos realizados en ClinStore aparecerán automáticamente en esta pantalla.
+              Los pedidos realizados en ClinStore aparecerán automáticamente en
+              esta pantalla.
             </p>
           </div>
         ) : (
@@ -244,7 +269,8 @@ export default function PedidosWebPage() {
                   <th className="p-3">Fecha</th>
                   <th className="p-3">Cliente</th>
                   <th className="p-3">Entrega</th>
-                  <th className="p-3 text-center">Estado</th>
+                  <th className="p-3 text-center">Estado Pago</th>
+                  <th className="p-3 text-center">Estado Pedido</th>
                   <th className="p-3 text-right">Total</th>
                   <th className="p-3 text-center">Acciones</th>
                 </tr>
@@ -277,22 +303,41 @@ export default function PedidosWebPage() {
                     <td className="p-3 text-foreground-muted">
                       {order.deliveryType === "DELIVERY" ? (
                         <span className="flex items-center gap-1 text-xs">
-                          <Truck size={14} className="text-purple-600" /> Envío a Domicilio
+                          <Truck size={14} className="text-purple-600" /> Envío
+                          a Domicilio
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 text-xs">
-                          <MapPin size={14} className="text-blue-600" /> Retiro en Local
+                          <MapPin size={14} className="text-blue-600" /> Retiro
+                          en Local
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      {order.paymentStatus === "PAID" ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40">
+                          🟢 PAGADO ({order.paymentMethod === "MERCADO_PAGO" ? "Mercado Pago" : "Efectivo"})
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/40">
+                          🟡 PENDIENTE DE PAGO
                         </span>
                       )}
                     </td>
                     <td className="p-3 text-center">
                       <select
                         value={order.status}
-                        onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                        onChange={(e) =>
+                          handleUpdateOrderStatus(order.id, e.target.value)
+                        }
                         className="text-xs font-semibold p-1.5 rounded-lg border border-border bg-background cursor-pointer focus:ring-2 focus:ring-blue-500/50"
                       >
-                        <option value="PENDING_PREPARATION">En Preparación</option>
-                        <option value="READY_FOR_PICKUP">Listo para Retiro</option>
+                        <option value="PENDING_PREPARATION">
+                          En Preparación
+                        </option>
+                        <option value="READY_FOR_PICKUP">
+                          Listo para Retiro
+                        </option>
                         <option value="SHIPPED">En Envío</option>
                         <option value="DELIVERED">Entregado</option>
                         <option value="CANCELLED">Cancelado</option>
@@ -365,11 +410,18 @@ export default function PedidosWebPage() {
 
               {/* Botones de Cambio Rápido de Estado */}
               <div className="bg-background p-3 rounded-xl border border-border space-y-2">
-                <label className="block text-xs font-bold text-foreground">Cambiar Estado del Pedido:</label>
+                <label className="block text-xs font-bold text-foreground">
+                  Cambiar Estado del Pedido:
+                </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
                     type="button"
-                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, "READY_FOR_PICKUP")}
+                    onClick={() =>
+                      handleUpdateOrderStatus(
+                        selectedOrder.id,
+                        "READY_FOR_PICKUP",
+                      )
+                    }
                     className={`p-2 rounded-lg text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
                       selectedOrder.status === "READY_FOR_PICKUP"
                         ? "bg-blue-600 text-white border-blue-600"
@@ -380,7 +432,9 @@ export default function PedidosWebPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, "SHIPPED")}
+                    onClick={() =>
+                      handleUpdateOrderStatus(selectedOrder.id, "SHIPPED")
+                    }
                     className={`p-2 rounded-lg text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
                       selectedOrder.status === "SHIPPED"
                         ? "bg-purple-600 text-white border-purple-600"
@@ -391,7 +445,13 @@ export default function PedidosWebPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, "DELIVERED", "PAID")}
+                    onClick={() =>
+                      handleUpdateOrderStatus(
+                        selectedOrder.id,
+                        "DELIVERED",
+                        "PAID",
+                      )
+                    }
                     className={`p-2 rounded-lg text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
                       selectedOrder.status === "DELIVERED"
                         ? "bg-emerald-600 text-white border-emerald-600"
@@ -402,7 +462,9 @@ export default function PedidosWebPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleUpdateOrderStatus(selectedOrder.id, "CANCELLED")}
+                    onClick={() =>
+                      handleUpdateOrderStatus(selectedOrder.id, "CANCELLED")
+                    }
                     className={`p-2 rounded-lg text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${
                       selectedOrder.status === "CANCELLED"
                         ? "bg-red-600 text-white border-red-600"
@@ -471,7 +533,10 @@ export default function PedidosWebPage() {
 
       {/* Ticket Imprimible para Empaque / Envío a Domicilio */}
       {selectedOrder && (
-        <div id="web-order-print-ticket" className="hidden print:block text-black p-4 font-mono text-xs w-[80mm] mx-auto bg-white">
+        <div
+          id="web-order-print-ticket"
+          className="hidden print:block text-black p-4 font-mono text-xs w-[80mm] mx-auto bg-white"
+        >
           <style text="text/css">
             {`
               @media print {
@@ -497,41 +562,69 @@ export default function PedidosWebPage() {
           </style>
 
           <div className="text-center border-b-2 border-black pb-2 mb-2">
-            <h2 className="text-base font-bold uppercase">TICKET DE EMPAQUE & ENVÍO</h2>
-            <p className="text-sm font-bold mt-1">{selectedOrder.webOrderNumber}</p>
-            <p className="text-[10px] text-gray-600">{formatDate(selectedOrder.createdAt)}</p>
+            <h2 className="text-base font-bold uppercase">
+              TICKET DE EMPAQUE & ENVÍO
+            </h2>
+            <p className="text-sm font-bold mt-1">
+              {selectedOrder.webOrderNumber}
+            </p>
+            <p className="text-[10px] text-gray-600">
+              {formatDate(selectedOrder.createdAt)}
+            </p>
           </div>
 
           <div className="border-b border-dashed border-black pb-2 mb-2 space-y-1">
-            <p className="font-bold text-sm">CLIENTE: {selectedOrder.clientName}</p>
+            <p className="font-bold text-sm">
+              CLIENTE: {selectedOrder.clientName}
+            </p>
             <p>TEL: {selectedOrder.clientPhone}</p>
             <div className="mt-1 pt-1 border-t border-black">
               <p className="font-bold text-sm">
-                TIPO: {selectedOrder.deliveryType === "DELIVERY" ? "🚚 ENVÍO A DOMICILIO" : "🏪 RETIRO EN LOCAL"}
+                TIPO:{" "}
+                {selectedOrder.deliveryType === "DELIVERY"
+                  ? "🚚 ENVÍO A DOMICILIO"
+                  : "🏪 RETIRO EN LOCAL"}
               </p>
               {selectedOrder.deliveryType === "DELIVERY" && (
                 <p className="font-bold text-xs uppercase bg-black text-white p-1 mt-1 text-center">
-                  DIRECCIÓN: {selectedOrder.shippingAddress || "Sin dirección especificada"}
+                  DIRECCIÓN:{" "}
+                  {selectedOrder.shippingAddress ||
+                    "Sin dirección especificada"}
                 </p>
               )}
             </div>
           </div>
 
           <div className="border-b border-black pb-2 mb-2">
-            <p className="font-bold text-xs uppercase mb-1">PRODUCTOS A EMPACAR:</p>
+            <p className="font-bold text-xs uppercase mb-1">
+              PRODUCTOS A EMPACAR:
+            </p>
             <div className="space-y-1">
               {selectedOrder.items.map((item) => (
-                <div key={item.id} className="flex justify-between items-start text-xs">
-                  <span>[ ] {item.quantity}x {item.product?.name || `Producto #${item.productId}`}</span>
-                  <span className="font-bold">{formatCurrency(parseFloat(item.subtotal))}</span>
+                <div
+                  key={item.id}
+                  className="flex justify-between items-start text-xs"
+                >
+                  <span>
+                    [ ] {item.quantity}x{" "}
+                    {item.product?.name || `Producto #${item.productId}`}
+                  </span>
+                  <span className="font-bold">
+                    {formatCurrency(parseFloat(item.subtotal))}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="text-right space-y-1 pt-1">
-            <p className="text-sm font-bold">TOTAL: {formatCurrency(parseFloat(selectedOrder.totalAmount))}</p>
-            <p className="text-[10px]">PAGO: {selectedOrder.paymentMethod} ({selectedOrder.paymentStatus})</p>
+            <p className="text-sm font-bold">
+              TOTAL: {formatCurrency(parseFloat(selectedOrder.totalAmount))}
+            </p>
+            <p className="text-[10px]">
+              PAGO: {selectedOrder.paymentMethod} ({selectedOrder.paymentStatus}
+              )
+            </p>
           </div>
 
           <div className="text-center pt-3 text-[10px] border-t border-dashed border-black mt-3">
