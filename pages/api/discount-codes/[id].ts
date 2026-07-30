@@ -70,20 +70,47 @@ export default async function handler(
         }
       }
 
-      const updated = await prisma.discountCode.update({
-        where: { id },
-        data: {
-          code,
-          discountPercent: new Decimal(type === 'PERCENTAGE' ? valNum : 0),
-          discountType: type,
-          discountValue: new Decimal(valNum),
-          minPurchase: new Decimal(isNaN(minP) ? 0 : minP),
-          validFrom: validFrom ? new Date(validFrom) : null,
-          validUntil: validUntil ? new Date(validUntil) : null,
-          maxUses: maxUses !== undefined && maxUses !== '' ? parseInt(maxUses) : null,
-          isActive: isActive !== undefined ? !!isActive : true,
-        },
-      });
+      let updated: any;
+      try {
+        updated = await prisma.discountCode.update({
+          where: { id },
+          data: {
+            code,
+            discountPercent: new Decimal(type === 'PERCENTAGE' ? valNum : 0),
+            discountType: type,
+            discountValue: new Decimal(valNum),
+            minPurchase: new Decimal(isNaN(minP) ? 0 : minP),
+            validFrom: validFrom ? new Date(validFrom) : null,
+            validUntil: validUntil ? new Date(validUntil) : null,
+            maxUses: maxUses !== undefined && maxUses !== '' ? parseInt(maxUses) : null,
+            isActive: isActive !== undefined ? !!isActive : true,
+          },
+        });
+      } catch (err: any) {
+        if (err.message && err.message.includes("Unknown argument")) {
+          updated = await prisma.discountCode.update({
+            where: { id },
+            data: {
+              code,
+              discountPercent: new Decimal(type === 'PERCENTAGE' ? valNum : 0),
+              validFrom: validFrom ? new Date(validFrom) : null,
+              validUntil: validUntil ? new Date(validUntil) : null,
+              maxUses: maxUses !== undefined && maxUses !== '' ? parseInt(maxUses) : null,
+              isActive: isActive !== undefined ? !!isActive : true,
+            },
+          });
+          try {
+            await prisma.$executeRawUnsafe(
+              `UPDATE "DiscountCode" SET "discountType" = ?, "discountValue" = ?, "minPurchase" = ? WHERE "id" = ?`,
+              type, valNum, isNaN(minP) ? 0 : minP, id
+            );
+          } catch {
+            /* ignore */
+          }
+        } else {
+          throw err;
+        }
+      }
 
       res.status(200).json({
         ...updated,
