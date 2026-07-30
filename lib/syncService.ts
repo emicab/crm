@@ -70,10 +70,12 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         combo: { updatedAt: { gt: lastSync } }
       }
     });
-    const storeConfigs = await prisma.storeConfig.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const storeConfigs = await prisma.storeConfig.findMany();
+    const firstStoreConfig = storeConfigs[0];
 
     const computerHostname = typeof os.hostname === "function" ? os.hostname() : "pos_local";
     const rawTenant = (
+      firstStoreConfig?.slug?.trim() ||
       config.license_key?.trim() ||
       config.businessCuit?.trim() ||
       config.businessName?.trim() ||
@@ -185,13 +187,29 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         id: am.id, accountBalanceId: am.accountBalanceId, type: am.type, amount: fmtDec(am.amount), tenant_id: tenantId,
         description: am.description, saleId: am.saleId, createdAt: am.createdAt.toISOString()
       })),
-      StoreConfig: storeConfigs.map(sc => ({
+      StoreConfig: storeConfigs.length > 0 ? storeConfigs.map(sc => ({
         id: sc.id, slug: sc.slug, businessName: sc.businessName, description: sc.description, logoUrl: sc.logoUrl, bannerUrl: sc.bannerUrl,
         primaryColor: sc.primaryColor, isWebActive: sc.isWebActive, mpAccessToken: sc.mpAccessToken, mpPublicKey: sc.mpPublicKey,
         mpFeePercent: fmtDec(sc.mpFeePercent), whatsappPhone: sc.whatsappPhone, minStockBuffer: sc.minStockBuffer, allowPickup: sc.allowPickup,
         allowDelivery: sc.allowDelivery, deliveryFee: fmtDec(sc.deliveryFee), minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
         tenant_id: tenantId, createdAt: sc.createdAt.toISOString(), updatedAt: sc.updatedAt.toISOString()
-      }))
+      })) : [{
+        id: 1,
+        slug: tenantId,
+        businessName: tenantId.toUpperCase().replace(/_/g, ' '),
+        description: 'Bienvenido a nuestra tienda online',
+        primaryColor: '#2563eb',
+        isWebActive: true,
+        allowPickup: true,
+        allowDelivery: true,
+        deliveryFee: "0.00",
+        minDeliveryAmount: "0.00",
+        mpFeePercent: "0.00",
+        minStockBuffer: 0,
+        tenant_id: tenantId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }]
     };
 
     // 4. Enviar datos a Supabase tabla por tabla

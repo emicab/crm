@@ -143,6 +143,14 @@ export default async function handler(
         });
       }
 
+      // Sincronizar inmediatamente con Supabase en segundo plano
+      try {
+        const { runSupabaseSync } = require("../../../lib/syncService");
+        runSupabaseSync(true).catch((err: any) => console.error("Error auto-syncing store config to Supabase:", err));
+      } catch (err) {
+        console.warn("Could not auto-sync store config:", err);
+      }
+
       res.status(200).json({
         ...result,
         deliveryFee: result.deliveryFee.toString(),
