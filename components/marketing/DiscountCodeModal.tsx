@@ -8,6 +8,9 @@ interface DiscountCode {
   id: number;
   code: string;
   discountPercent: string;
+  discountType?: string;
+  discountValue?: string;
+  minPurchase?: string;
   validFrom: string | null;
   validUntil: string | null;
   maxUses: number | null;
@@ -25,7 +28,10 @@ interface DiscountCodeModalProps {
 const DiscountCodeModal: React.FC<DiscountCodeModalProps> = ({ isOpen, onClose, onSuccess, initialData }) => {
   const [formData, setFormData] = useState({
     code: '',
+    discountType: 'PERCENTAGE',
     discountPercent: '',
+    discountValue: '',
+    minPurchase: '',
     validFrom: '',
     validUntil: '',
     maxUses: '',
@@ -37,7 +43,10 @@ const DiscountCodeModal: React.FC<DiscountCodeModalProps> = ({ isOpen, onClose, 
     if (initialData) {
       setFormData({
         code: initialData.code,
-        discountPercent: initialData.discountPercent.toString(),
+        discountType: initialData.discountType || 'PERCENTAGE',
+        discountPercent: initialData.discountPercent ? initialData.discountPercent.toString() : '',
+        discountValue: initialData.discountValue ? initialData.discountValue.toString() : (initialData.discountPercent ? initialData.discountPercent.toString() : ''),
+        minPurchase: initialData.minPurchase ? initialData.minPurchase.toString() : '',
         validFrom: initialData.validFrom ? new Date(initialData.validFrom).toISOString().slice(0, 16) : '',
         validUntil: initialData.validUntil ? new Date(initialData.validUntil).toISOString().slice(0, 16) : '',
         maxUses: initialData.maxUses !== null ? initialData.maxUses.toString() : '',
@@ -46,7 +55,10 @@ const DiscountCodeModal: React.FC<DiscountCodeModalProps> = ({ isOpen, onClose, 
     } else {
       setFormData({
         code: '',
+        discountType: 'PERCENTAGE',
         discountPercent: '',
+        discountValue: '',
+        minPurchase: '',
         validFrom: '',
         validUntil: '',
         maxUses: '',
@@ -57,8 +69,9 @@ const DiscountCodeModal: React.FC<DiscountCodeModalProps> = ({ isOpen, onClose, 
 
   if (!isOpen) return null;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -67,8 +80,9 @@ const DiscountCodeModal: React.FC<DiscountCodeModalProps> = ({ isOpen, onClose, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.code || !formData.discountPercent) {
-      toast.error('El código y el porcentaje son obligatorios');
+    const val = formData.discountValue || formData.discountPercent;
+    if (!formData.code || !val) {
+      toast.error('El código y el valor del descuento son obligatorios');
       return;
     }
 
@@ -77,6 +91,8 @@ const DiscountCodeModal: React.FC<DiscountCodeModalProps> = ({ isOpen, onClose, 
       const payload = {
         ...formData,
         code: formData.code.trim().toUpperCase(),
+        discountPercent: val,
+        discountValue: val,
         validFrom: formData.validFrom ? new Date(formData.validFrom).toISOString() : null,
         validUntil: formData.validUntil ? new Date(formData.validUntil).toISOString() : null,
       };
@@ -135,7 +151,7 @@ const DiscountCodeModal: React.FC<DiscountCodeModalProps> = ({ isOpen, onClose, 
               <Input
                 label="Código (*)"
                 name="code"
-                placeholder="Ej: VERANO20"
+                placeholder="Ej: COMPRA1000"
                 value={formData.code}
                 onChange={handleChange}
                 required
@@ -143,19 +159,49 @@ const DiscountCodeModal: React.FC<DiscountCodeModalProps> = ({ isOpen, onClose, 
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1">Tipo de Descuento</label>
+                <select
+                  name="discountType"
+                  value={formData.discountType}
+                  onChange={handleChange}
+                  className="w-full p-2.5 rounded-xl border border-border bg-background text-foreground text-sm font-semibold outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="PERCENTAGE">Porcentaje (%)</option>
+                  <option value="FIXED_AMOUNT">Monto Fijo ($)</option>
+                </select>
+              </div>
+
+              <div>
+                <Input
+                  label={formData.discountType === 'PERCENTAGE' ? "Porcentaje % (*)" : "Monto Fijo $ (*)"}
+                  type="number"
+                  name="discountValue"
+                  placeholder={formData.discountType === 'PERCENTAGE' ? "Ej: 15" : "Ej: 1000"}
+                  min="0"
+                  step="0.01"
+                  value={formData.discountValue || formData.discountPercent}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
             <div>
               <Input
-                label="Descuento % (*)"
+                label="Monto Mínimo de Compra / Umbral ($)"
                 type="number"
-                name="discountPercent"
-                placeholder="Ej: 15"
+                name="minPurchase"
+                placeholder="Opcional (Ej: 10000 para req. $10.000)"
                 min="0"
-                max="100"
                 step="0.01"
-                value={formData.discountPercent}
+                value={formData.minPurchase}
                 onChange={handleChange}
-                required
               />
+              <p className="text-[11px] text-foreground-muted mt-1">
+                El cupón se activará únicamente cuando la compra supere este valor umbral.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

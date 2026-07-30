@@ -269,10 +269,13 @@ enum PurchaseStatus {
 model DiscountCode {
   id              Int       @id @default(autoincrement())
   code            String    @unique
-  discountPercent Decimal // Porcentaje de descuento (ej: 10.0)
+  discountPercent Decimal   // Porcentaje o valor de descuento (ej: 10.0)
+  discountType    String?   @default("PERCENTAGE") // PERCENTAGE | FIXED_AMOUNT
+  discountValue   Decimal?  // Valor numérico de descuento ($ o %)
+  minPurchase     Decimal?  @default(0) // Compra mínima / Umbral requerido
   validFrom       DateTime?
   validUntil      DateTime?
-  maxUses         Int? // Límite de usos (null = ilimitado)
+  maxUses         Int?      // Límite de usos (null = ilimitado)
   currentUses     Int       @default(0)
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())

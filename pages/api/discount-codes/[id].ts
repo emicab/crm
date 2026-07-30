@@ -34,21 +34,24 @@ export default async function handler(
       handleApiError(res, error, `fetching discount code ${id}`);
     }
   } else if (req.method === 'PUT') {
-    const { discountPercent, validFrom, validUntil, maxUses, isActive } = req.body;
+    const { discountPercent, discountType, discountValue, minPurchase, validFrom, validUntil, maxUses, isActive } = req.body;
     let { code } = req.body;
 
     if (!code || typeof code !== 'string' || code.trim() === '') {
       return res.status(400).json({ message: 'El código de descuento es obligatorio.' });
     }
-    if (discountPercent === undefined || isNaN(parseFloat(discountPercent))) {
-      return res.status(400).json({ message: 'El porcentaje de descuento es obligatorio y debe ser un número.' });
+    const valNum = parseFloat(discountValue !== undefined && discountValue !== '' ? discountValue : discountPercent);
+    if (isNaN(valNum) || valNum < 0) {
+      return res.status(400).json({ message: 'El valor de descuento debe ser un número válido mayor o igual a 0.' });
     }
-    const pct = parseFloat(discountPercent);
-    if (pct < 0 || pct > 100) {
+
+    const type = discountType === 'FIXED_AMOUNT' ? 'FIXED_AMOUNT' : 'PERCENTAGE';
+    if (type === 'PERCENTAGE' && valNum > 100) {
       return res.status(400).json({ message: 'El porcentaje de descuento debe estar entre 0 y 100.' });
     }
 
     code = sanitizeString(code).toUpperCase().trim();
+    const minP = minPurchase !== undefined && minPurchase !== '' ? parseFloat(minPurchase) : 0;
 
     try {
       const existing = await prisma.discountCode.findUnique({
@@ -58,7 +61,6 @@ export default async function handler(
         return res.status(404).json({ message: 'Código de descuento no encontrado.' });
       }
 
-      // Validar unicidad si cambia el nombre del código
       if (existing.code !== code) {
         const duplicate = await prisma.discountCode.findUnique({
           where: { code },
@@ -72,7 +74,10 @@ export default async function handler(
         where: { id },
         data: {
           code,
-          discountPercent: new Decimal(pct),
+          discountPercent: new Decimal(type === 'PERCENTAGE' ? valNum : 0),
+          discountType: type,
+          discountValue: new Decimal(valNum),
+          minPurchase: new Decimal(isNaN(minP) ? 0 : minP),
           validFrom: validFrom ? new Date(validFrom) : null,
           validUntil: validUntil ? new Date(validUntil) : null,
           maxUses: maxUses !== undefined && maxUses !== '' ? parseInt(maxUses) : null,
@@ -83,6 +88,8 @@ export default async function handler(
       res.status(200).json({
         ...updated,
         discountPercent: updated.discountPercent.toString(),
+        discountValue: updated.discountValue?.toString() || updated.discountPercent.toString(),
+        minPurchase: updated.minPurchase?.toString() || '0',
       });
     } catch (error) {
       handleApiError(res, error, `updating discount code ${id}`);

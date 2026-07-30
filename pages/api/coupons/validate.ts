@@ -31,16 +31,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(400).json({ message: "El código de descuento alcanzó el límite máximo de usos." });
         }
 
-        const percent = Number(discountCode.discountPercent || 0);
-        const discountAmount = (numSubtotal * percent) / 100;
+        const minP = Number(discountCode.minPurchase || 0);
+        if (numSubtotal < minP) {
+          return res.status(400).json({
+            message: `El cupón ${discountCode.code} requiere una compra mínima / umbral de $${minP.toLocaleString("es-AR")}.`,
+          });
+        }
+
+        const discType = discountCode.discountType || "PERCENTAGE";
+        const val = Number(discountCode.discountValue || discountCode.discountPercent || 0);
+        let discountAmount = 0;
+
+        if (discType === "PERCENTAGE") {
+          discountAmount = (numSubtotal * val) / 100;
+        } else {
+          discountAmount = val;
+        }
+
+        const labelMsg = discType === "PERCENTAGE" ? `${val}% OFF` : `$${val.toLocaleString("es-AR")} OFF`;
 
         return res.status(200).json({
           valid: true,
           code: discountCode.code,
-          discountType: "PERCENTAGE",
-          discountValue: percent,
+          discountType: discType,
+          discountValue: val,
           discountAmount: Math.min(numSubtotal, discountAmount),
-          message: `¡Código ${discountCode.code} (${percent}% OFF) aplicado con éxito!`,
+          message: `¡Código ${discountCode.code} (${labelMsg}) aplicado con éxito!`,
         });
       }
 

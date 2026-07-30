@@ -131,7 +131,18 @@ const DiscountCodeTable = () => {
               codes.map(code => (
                 <tr key={code.id} className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="p-4 font-bold text-foreground font-mono uppercase">{code.code}</td>
-                  <td className="p-4 text-emerald-600 font-semibold">{parseFloat(code.discountPercent)}%</td>
+                  <td className="p-4 font-semibold">
+                    <span className="text-emerald-600">
+                      {code.discountType === 'FIXED_AMOUNT'
+                        ? `$${parseFloat(code.discountValue || code.discountPercent).toLocaleString('es-AR')} OFF`
+                        : `${parseFloat(code.discountValue || code.discountPercent)}% OFF`}
+                    </span>
+                    {code.minPurchase && parseFloat(code.minPurchase) > 0 ? (
+                      <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                        Umbral: Mín. ${parseFloat(code.minPurchase).toLocaleString('es-AR')}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="p-4 text-xs text-foreground-muted">
                     {code.validFrom || code.validUntil ? (
                       <>
