@@ -96,14 +96,16 @@ export default function PedidosWebPage() {
           const createdKey = `${newO.id}-CREATED`;
           const paidKey = `${newO.id}-PAID`;
 
-          if (!notifiedKeysRef.current.has(createdKey)) {
-            notifiedKeysRef.current.add(createdKey);
-            notifyNew = true;
-          }
+          const isNewOrder = !notifiedKeysRef.current.has(createdKey);
+          const isNewPaid = newO.paymentStatus === "PAID" && !notifiedKeysRef.current.has(paidKey);
 
-          if (newO.paymentStatus === "PAID" && !notifiedKeysRef.current.has(paidKey)) {
-            notifiedKeysRef.current.add(paidKey);
+          if (isNewOrder) notifiedKeysRef.current.add(createdKey);
+          if (newO.paymentStatus === "PAID") notifiedKeysRef.current.add(paidKey);
+
+          if (isNewPaid) {
             notifyPaid = true;
+          } else if (isNewOrder) {
+            notifyNew = true;
           }
         });
 
@@ -128,8 +130,10 @@ export default function PedidosWebPage() {
   useEffect(() => {
     fetchOrders(true);
     const interval = setInterval(() => {
-      fetchOrders(false);
-    }, 3000);
+      if (typeof document !== "undefined" && !document.hidden) {
+        fetchOrders(false);
+      }
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
