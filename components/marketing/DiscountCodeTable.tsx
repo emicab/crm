@@ -5,18 +5,7 @@ import { Loader2, Edit, Trash2, RefreshCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import DiscountCodeModal from './DiscountCodeModal';
-
-interface DiscountCode {
-  id: number;
-  code: string;
-  discountPercent: string;
-  validFrom: string | null;
-  validUntil: string | null;
-  maxUses: number | null;
-  currentUses: number;
-  isActive: boolean;
-}
+import DiscountCodeModal, { type DiscountCode } from './DiscountCodeModal';
 
 const DiscountCodeTable = () => {
   const [codes, setCodes] = useState<DiscountCode[]>([]);

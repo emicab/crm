@@ -52,6 +52,7 @@ export const useSaleState = () => {
     notes: savedCart.current?.notes || "",
     items: savedCart.current?.items || [],
     discountCode: savedCart.current?.discountCode || "",
+    creditCardPromotionId: savedCart.current?.creditCardPromotionId || null,
   }));
 
   const [comboDiscounts, setComboDiscounts] = useState<Record<number, number>>(
@@ -1004,7 +1005,6 @@ export const useSaleState = () => {
     handleItemDetailChange,
     handleRemoveItem,
     handleFormChange,
-    setFormData,
     handleSubmit,
     handleSaveOrder,
     handlePrintLastSale,

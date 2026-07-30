@@ -33,7 +33,6 @@ export default async function handler(
             }
           },
           invoice: true,
-          // @ts-ignore: added recently
           creditCardPromotion: true,
         },
       });

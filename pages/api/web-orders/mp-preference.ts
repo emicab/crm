@@ -9,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { webOrderNumber, items, total, clientName, clientPhone, orderPayload } = req.body;
+    const { webOrderNumber, total, clientName, clientPhone, orderPayload } = req.body;
     const cleanOrderNum = webOrderNumber || orderPayload?.webOrderNumber || `WEB-${Date.now()}`;
 
     if (!total || total <= 0) {

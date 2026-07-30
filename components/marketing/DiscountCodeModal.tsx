@@ -4,13 +4,13 @@ import { X, CheckCircle, Tag } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 
-interface DiscountCode {
+export interface DiscountCode {
   id: number;
   code: string;
   discountPercent: string;
-  discountType?: string;
-  discountValue?: string;
-  minPurchase?: string;
+  discountType?: string | null;
+  discountValue?: string | null;
+  minPurchase?: string | null;
   validFrom: string | null;
   validUntil: string | null;
   maxUses: number | null;
