@@ -182,7 +182,7 @@ export default async function handler(
         }
       });
       try {
-        const { runSupabaseSync } = require("../../lib/syncService");
+        const { runSupabaseSync } = require("../../../lib/syncService");
         runSupabaseSync(false).catch((err: any) => console.error("Auto-sync error:", err));
       } catch { /* ignore */ }
 
