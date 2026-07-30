@@ -59,9 +59,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           failure: failureUrl,
           pending: pendingUrl,
         },
-        auto_return: "approved",
         external_reference: cleanOrderNum,
       };
+
+      // Mercado Pago exige HTTPS para activar auto_return
+      if (returnUrl.startsWith("https://")) {
+        prefBody.auto_return = "approved";
+      }
 
       if (process.env.MP_WEBHOOK_URL) {
         prefBody.notification_url = process.env.MP_WEBHOOK_URL;
