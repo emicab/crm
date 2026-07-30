@@ -237,7 +237,7 @@ export default function PedidosWebPage() {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={fetchOrders}
+            onClick={() => fetchOrders(true)}
             className="flex items-center gap-2"
           >
             <RefreshCcw size={16} /> Actualizar Pedidos
@@ -572,7 +572,7 @@ export default function PedidosWebPage() {
           id="web-order-print-ticket"
           className="hidden print:block text-black p-4 font-mono text-xs w-[80mm] mx-auto bg-white"
         >
-          <style text="text/css">
+          <style>
             {`
               @media print {
                 body * {
