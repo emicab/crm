@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
+import { Prisma } from '@prisma/client';
 
 export default async function handler(
   req: NextApiRequest,
@@ -38,6 +39,7 @@ export default async function handler(
           isWebActive: false,
           mpAccessToken: '',
           mpPublicKey: '',
+          mpFeePercent: '0',
           whatsappPhone: '',
           minStockBuffer: 0,
           allowPickup: true,
@@ -50,9 +52,9 @@ export default async function handler(
 
       res.status(200).json({
         ...config,
-        deliveryFee: config.deliveryFee.toString(),
+        deliveryFee: config.deliveryFee ? config.deliveryFee.toString() : '0',
         minDeliveryAmount: config.minDeliveryAmount ? config.minDeliveryAmount.toString() : '0',
-        mpFeePercent: (config as any).mpFeePercent ? (config as any).mpFeePercent.toString() : '0',
+        mpFeePercent: config.mpFeePercent ? config.mpFeePercent.toString() : '0',
       });
       return;
     } catch (error) {
@@ -90,6 +92,11 @@ export default async function handler(
 
       const existingConfig = await prisma.storeConfig.findFirst();
 
+      const parsedMpFeePercent = new Prisma.Decimal(parseFloat(mpFeePercent) || 0);
+      const parsedDeliveryFee = new Prisma.Decimal(parseFloat(deliveryFee) || 0);
+      const parsedMinDeliveryAmount = new Prisma.Decimal(parseFloat(minDeliveryAmount) || 0);
+      const parsedMinStockBuffer = parseFloat(minStockBuffer) || 0;
+
       let result;
       if (existingConfig) {
         result = await prisma.storeConfig.update({
@@ -104,13 +111,13 @@ export default async function handler(
             isWebActive: Boolean(isWebActive),
             mpAccessToken: mpAccessToken ? mpAccessToken.trim() : null,
             mpPublicKey: mpPublicKey ? mpPublicKey.trim() : null,
-            mpFeePercent: parseFloat(mpFeePercent) || 0,
+            mpFeePercent: parsedMpFeePercent,
             whatsappPhone: whatsappPhone ? whatsappPhone.trim() : null,
-            minStockBuffer: parseFloat(minStockBuffer) || 0,
+            minStockBuffer: parsedMinStockBuffer,
             allowPickup: allowPickup !== undefined ? Boolean(allowPickup) : true,
             allowDelivery: allowDelivery !== undefined ? Boolean(allowDelivery) : true,
-            deliveryFee: parseFloat(deliveryFee) || 0,
-            minDeliveryAmount: parseFloat(minDeliveryAmount) || 0,
+            deliveryFee: parsedDeliveryFee,
+            minDeliveryAmount: parsedMinDeliveryAmount,
           },
         });
       } else {
@@ -125,13 +132,13 @@ export default async function handler(
             isWebActive: Boolean(isWebActive),
             mpAccessToken: mpAccessToken ? mpAccessToken.trim() : null,
             mpPublicKey: mpPublicKey ? mpPublicKey.trim() : null,
-            mpFeePercent: parseFloat(mpFeePercent) || 0,
+            mpFeePercent: parsedMpFeePercent,
             whatsappPhone: whatsappPhone ? whatsappPhone.trim() : null,
-            minStockBuffer: parseFloat(minStockBuffer) || 0,
+            minStockBuffer: parsedMinStockBuffer,
             allowPickup: allowPickup !== undefined ? Boolean(allowPickup) : true,
             allowDelivery: allowDelivery !== undefined ? Boolean(allowDelivery) : true,
-            deliveryFee: parseFloat(deliveryFee) || 0,
-            minDeliveryAmount: parseFloat(minDeliveryAmount) || 0,
+            deliveryFee: parsedDeliveryFee,
+            minDeliveryAmount: parsedMinDeliveryAmount,
           },
         });
       }
@@ -140,6 +147,7 @@ export default async function handler(
         ...result,
         deliveryFee: result.deliveryFee.toString(),
         minDeliveryAmount: result.minDeliveryAmount ? result.minDeliveryAmount.toString() : '0',
+        mpFeePercent: result.mpFeePercent ? result.mpFeePercent.toString() : '0',
       });
       return;
     } catch (error) {
