@@ -458,13 +458,84 @@ export default function PedidosWebPage() {
               <Button
                 variant="primary"
                 onClick={() => {
-                  toast.success("Imprimiendo ticket de empaque.");
+                  window.print();
                 }}
                 className="flex items-center gap-1"
               >
                 <Printer size={16} /> Imprimir Ticket de Empaque
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ticket Imprimible para Empaque / Envío a Domicilio */}
+      {selectedOrder && (
+        <div id="web-order-print-ticket" className="hidden print:block text-black p-4 font-mono text-xs w-[80mm] mx-auto bg-white">
+          <style text="text/css">
+            {`
+              @media print {
+                body * {
+                  visibility: hidden !important;
+                }
+                #web-order-print-ticket, #web-order-print-ticket * {
+                  visibility: visible !important;
+                }
+                #web-order-print-ticket {
+                  position: fixed !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 80mm !important;
+                  padding: 4mm !important;
+                  font-family: monospace, sans-serif !important;
+                  font-size: 11px !important;
+                  color: #000 !important;
+                  background: #fff !important;
+                }
+              }
+            `}
+          </style>
+
+          <div className="text-center border-b-2 border-black pb-2 mb-2">
+            <h2 className="text-base font-bold uppercase">TICKET DE EMPAQUE & ENVÍO</h2>
+            <p className="text-sm font-bold mt-1">{selectedOrder.webOrderNumber}</p>
+            <p className="text-[10px] text-gray-600">{formatDate(selectedOrder.createdAt)}</p>
+          </div>
+
+          <div className="border-b border-dashed border-black pb-2 mb-2 space-y-1">
+            <p className="font-bold text-sm">CLIENTE: {selectedOrder.clientName}</p>
+            <p>TEL: {selectedOrder.clientPhone}</p>
+            <div className="mt-1 pt-1 border-t border-black">
+              <p className="font-bold text-sm">
+                TIPO: {selectedOrder.deliveryType === "DELIVERY" ? "🚚 ENVÍO A DOMICILIO" : "🏪 RETIRO EN LOCAL"}
+              </p>
+              {selectedOrder.deliveryType === "DELIVERY" && (
+                <p className="font-bold text-xs uppercase bg-black text-white p-1 mt-1 text-center">
+                  DIRECCIÓN: {selectedOrder.shippingAddress || "Sin dirección especificada"}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="border-b border-black pb-2 mb-2">
+            <p className="font-bold text-xs uppercase mb-1">PRODUCTOS A EMPACAR:</p>
+            <div className="space-y-1">
+              {selectedOrder.items.map((item) => (
+                <div key={item.id} className="flex justify-between items-start text-xs">
+                  <span>[ ] {item.quantity}x {item.product?.name || `Producto #${item.productId}`}</span>
+                  <span className="font-bold">{formatCurrency(parseFloat(item.subtotal))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="text-right space-y-1 pt-1">
+            <p className="text-sm font-bold">TOTAL: {formatCurrency(parseFloat(selectedOrder.totalAmount))}</p>
+            <p className="text-[10px]">PAGO: {selectedOrder.paymentMethod} ({selectedOrder.paymentStatus})</p>
+          </div>
+
+          <div className="text-center pt-3 text-[10px] border-t border-dashed border-black mt-3">
+            ¡GRACIAS POR TU COMPRA!
           </div>
         </div>
       )}
