@@ -31,7 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const client = new MercadoPagoConfig({ accessToken });
       const preference = new Preference(client);
 
-      const origin = (req.headers.referer || req.headers.origin || "http://localhost:3003").replace(/\/$/, "");
+      const rawReturnUrl = req.body.returnUrl || req.headers.referer || req.headers.origin || "http://localhost:3003";
+      const returnUrl = rawReturnUrl.split("?")[0].replace(/\/$/, "");
 
       const response = await preference.create({
         body: {
@@ -50,9 +51,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             phone: { number: clientPhone || "" },
           },
           backUrls: {
-            success: `${origin}?status=approved&external_reference=${webOrderNumber}`,
-            failure: `${origin}?status=failure&external_reference=${webOrderNumber}`,
-            pending: `${origin}?status=pending&external_reference=${webOrderNumber}`,
+            success: `${returnUrl}?status=approved&external_reference=${webOrderNumber}`,
+            failure: `${returnUrl}?status=failure&external_reference=${webOrderNumber}`,
+            pending: `${returnUrl}?status=pending&external_reference=${webOrderNumber}`,
           },
           autoReturn: "approved",
           externalReference: webOrderNumber,
