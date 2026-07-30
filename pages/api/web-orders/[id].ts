@@ -29,7 +29,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (notes !== undefined) updateData.notes = notes;
 
       const isDelivered = status === "DELIVERED";
+      const isCancelling = status === "CANCELLED" && currentOrder.status !== "CANCELLED";
+      const isUncancelling = status && status !== "CANCELLED" && currentOrder.status === "CANCELLED";
+
       const isAlreadyRegistered = (currentOrder.notes || "").includes("[VENTA_REGISTRADA#");
+
+      // Si el pedido se CANCELA, reponer stock de los productos
+      if (isCancelling) {
+        for (const item of currentOrder.items) {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: {
+              quantityStock: {
+                increment: Number(item.quantity),
+              },
+            },
+          });
+        }
+      } else if (isUncancelling) {
+        // Si el pedido se DES-CANCELANTE, volver a descontar el stock
+        for (const item of currentOrder.items) {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: {
+              quantityStock: {
+                decrement: Number(item.quantity),
+              },
+            },
+          });
+        }
+      }
 
       let createdSaleId: number | null = null;
 

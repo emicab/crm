@@ -159,6 +159,10 @@ export default function PedidosWebPage() {
         toast.success(
           "Pedido marcado como Entregado y registrado en Ventas y Movimientos de Caja.",
         );
+      } else if (newStatus === "CANCELLED") {
+        toast.success(
+          "Pedido cancelado. El stock de los productos fue repuesto automáticamente 📦🔄",
+        );
       } else {
         toast.success("Estado del pedido actualizado correctamente.");
       }
