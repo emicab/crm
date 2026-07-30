@@ -17,6 +17,7 @@ const EditarComboPage = () => {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [active, setActive] = useState(true);
   const [pricingMode, setPricingMode] = useState<'fixed' | 'percentage'>('fixed');
   const [fixedPrice, setFixedPrice] = useState('');
@@ -37,6 +38,7 @@ const EditarComboPage = () => {
         const data: Combo = await res.json();
         setName(data.name);
         setDescription(data.description || '');
+        setImageUrl(data.imageUrl || '');
         setActive(data.active);
         setFixedPrice(data.price.toString());
         setItems(data.items.map(i => ({
@@ -77,6 +79,19 @@ const EditarComboPage = () => {
 
   useEffect(() => { searchProducts(searchTerm); }, [searchTerm, searchProducts]);
 
+  const handleLocalImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setImageUrl(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const addItem = (product: Product) => {
     if (items.some(i => i.productId === product.id)) return;
     setItems([...items, { productId: product.id, productName: product.name, quantity: 1, defaultPrice: product.priceSale, customPrice: '' }]);
@@ -115,6 +130,7 @@ const EditarComboPage = () => {
           name: name.trim(),
           description: description.trim() || null,
           price: effectivePrice,
+          imageUrl: imageUrl || null,
           active,
           items: items.map(i => ({
             productId: i.productId,
@@ -148,8 +164,37 @@ const EditarComboPage = () => {
       <form onSubmit={handleSubmit} className="bg-muted p-6 rounded-xl shadow-lg space-y-4">
         {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded">{error}</p>}
 
-        <Input label="Nombre" value={name} onChange={e => setName(e.target.value)} required />
-        <Input label="Descripción (opcional)" value={description} onChange={e => setDescription(e.target.value)} />
+        <Input
+          label="Nombre del Combo *"
+          placeholder="Ej. Promo Hamburguesa + Bebida"
+          value={name} onChange={e => setName(e.target.value)}
+          required
+        />
+        <Input
+          label="Descripción (Opcional)"
+          placeholder="Detalle extra que verá el cliente..."
+          value={description} onChange={e => setDescription(e.target.value)}
+        />
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-foreground">Imagen del Combo</label>
+          <div className="flex items-center gap-3">
+            {imageUrl && (
+              <img src={imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md border border-border bg-background" />
+            )}
+            <div className="flex-1 space-y-2">
+              <Input
+                placeholder="Pegar URL de la imagen o subir archivo..."
+                value={imageUrl}
+                onChange={e => setImageUrl(e.target.value)}
+              />
+              <label className="cursor-pointer inline-flex items-center text-sm text-primary hover:underline">
+                <input type="file" accept="image/*" className="hidden" onChange={handleLocalImageUpload} />
+                O subir desde tu PC
+              </label>
+            </div>
+          </div>
+        </div>
 
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} className="rounded" />

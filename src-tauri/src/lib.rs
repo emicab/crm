@@ -205,6 +205,14 @@ const MIGRATIONS: &[Migration] = &[
             ALTER TABLE "Sale" ADD COLUMN "onAccount" BOOLEAN NOT NULL DEFAULT 0;
         "#,
     },
+    Migration {
+        version: 6,
+        name: "add_images_to_combos_and_promotions",
+        sql: r#"
+            ALTER TABLE "Combo" ADD COLUMN "imageUrl" TEXT;
+            ALTER TABLE "Promotion" ADD COLUMN "imageUrl" TEXT;
+        "#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {

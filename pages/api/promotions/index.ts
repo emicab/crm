@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       handleApiError(res, error, 'fetching promotions');
     }
   } else if (req.method === 'POST') {
-    const { name, description, type, discountType, discountValue, minQuantity, maxDiscountQty, priority, startDate, endDate, conditions } = req.body;
+    const { name, description, imageUrl, type, discountType, discountValue, minQuantity, maxDiscountQty, priority, startDate, endDate, conditions } = req.body;
 
     if (!name || !type || !discountType || discountValue === undefined) {
       return res.status(400).json({ message: 'Nombre, tipo, tipo de descuento y valor son obligatorios.' });
@@ -49,6 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: {
           name,
           description: description || null,
+          imageUrl: imageUrl || null,
           type,
           status: 'ACTIVE',
           discountType,

@@ -16,6 +16,7 @@ const EditarPromocionPage = () => {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [type, setType] = useState('BUY_X_GET_Y');
   const [status, setStatus] = useState('ACTIVE');
   const [discountType, setDiscountType] = useState('PERCENTAGE');
@@ -43,6 +44,7 @@ const EditarPromocionPage = () => {
         const data: Promotion = await res.json();
         setName(data.name);
         setDescription(data.description || '');
+        setImageUrl(data.imageUrl || '');
         setType(data.type);
         setStatus(data.status);
         setDiscountType(data.discountType);
@@ -95,6 +97,19 @@ const EditarPromocionPage = () => {
 
   useEffect(() => { searchItems(searchTerm); }, [searchTerm, searchType, searchItems]);
 
+  const handleLocalImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setImageUrl(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const addCondition = (item: any) => {
     const exists = conditions.some(c =>
       searchType === 'product' ? c.productId === item.id : c.categoryId === item.id
@@ -128,6 +143,7 @@ const EditarPromocionPage = () => {
       const body: any = {
         name: name.trim(),
         description: description.trim() || null,
+        imageUrl: imageUrl || null,
         type,
         status,
         discountType,
@@ -174,17 +190,37 @@ const EditarPromocionPage = () => {
       <form onSubmit={handleSubmit} className="bg-muted p-6 rounded-xl shadow-lg space-y-4">
         {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded">{error}</p>}
 
-        <Input label="Nombre" value={name} onChange={e => setName(e.target.value)} required />
-        <Input label="Descripción (opcional)" value={description} onChange={e => setDescription(e.target.value)} />
+        <Input label="Nombre de la Promoción *" placeholder="Ej. Llevá 3 Pagá 2" value={name} onChange={e => setName(e.target.value)} required />
+        <Input label="Descripción (Opcional)" placeholder="Detalle que verá el cliente..." value={description} onChange={e => setDescription(e.target.value)} />
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-foreground">Imagen de la Promoción</label>
+          <div className="flex items-center gap-3">
+            {imageUrl && (
+              <img src={imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md border border-border bg-background" />
+            )}
+            <div className="flex-1 space-y-2">
+              <Input
+                placeholder="Pegar URL de la imagen o subir archivo..."
+                value={imageUrl}
+                onChange={e => setImageUrl(e.target.value)}
+              />
+              <label className="cursor-pointer inline-flex items-center text-sm text-primary hover:underline">
+                <input type="file" accept="image/*" className="hidden" onChange={handleLocalImageUpload} />
+                O subir desde tu PC
+              </label>
+            </div>
+          </div>
+        </div>
 
         <div className="flex gap-4">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-foreground mb-1">Tipo</label>
-            <select value={type} onChange={e => setType(e.target.value)}
-              className="w-full rounded-md border border-border bg-background text-foreground p-2 text-sm">
+            <label className="block text-sm font-medium text-foreground mb-1">Tipo de Promoción</label>
+            <select value={type} onChange={e => setType(e.target.value)} disabled
+              className="w-full rounded-md border border-border bg-muted text-foreground-muted p-2 text-sm cursor-not-allowed">
               <option value="BUY_X_GET_Y">2x1 / Lleva N, paga M</option>
-              <option value="SET_DISCOUNT">Descuento por conjunto</option>
-              <option value="THRESHOLD">Descuento por umbral</option>
+              <option value="SET_DISCOUNT">Descuento por conjunto (A+B)</option>
+              <option value="THRESHOLD">Descuento por umbral de total</option>
             </select>
           </div>
           <div className="flex-1">

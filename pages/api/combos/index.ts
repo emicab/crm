@@ -48,6 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id: c.id,
           name: c.name,
           description: c.description,
+          imageUrl: c.imageUrl,
           priceSale: c.price.toString(),
           isCombo: true,
           webCategory: "Combos & Promos 🔥",
@@ -61,8 +62,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch (error: any) {
       return res.status(500).json({ message: error.message || "Error al obtener combos." });
     }
+  } else if (req.method === "POST") {
+    const { name, description, price, imageUrl, items } = req.body;
+    if (!name || !price) {
+      return res.status(400).json({ message: "Nombre y precio son obligatorios." });
+    }
+    try {
+      const combo = await prisma.combo.create({
+        data: {
+          name,
+          description: description || null,
+          imageUrl: imageUrl || null,
+          price: price,
+          active: true,
+          items: {
+            create: items.map((item: any) => ({
+              productId: item.productId,
+              quantity: item.quantity || 1,
+              customPrice: item.customPrice || null,
+            })),
+          },
+        },
+      });
+      return res.status(201).json(combo);
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message || "Error al crear combo." });
+    }
   }
 
-  res.setHeader("Allow", ["GET"]);
+  res.setHeader("Allow", ["GET", "POST"]);
   return res.status(405).end(`Method ${req.method} Not Allowed`);
 }

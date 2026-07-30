@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       handleApiError(res, error, `fetching combo ${id}`);
     }
   } else if (req.method === 'PUT') {
-    const { name, description, price, active, items } = req.body;
+    const { name, description, price, imageUrl, active, items } = req.body;
 
     if (!name || !price) {
       return res.status(400).json({ message: 'Nombre y precio son obligatorios.' });
@@ -38,6 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           data: {
             name,
             description: description || null,
+            imageUrl: imageUrl || null,
             price: new Decimal(price),
             active: active !== undefined ? active : true,
             items: {

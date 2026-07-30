@@ -11,6 +11,7 @@ const NuevaPromocionPage = () => {
   const router = useRouter();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [type, setType] = useState('BUY_X_GET_Y');
   const [discountType, setDiscountType] = useState('PERCENTAGE');
   const [discountValue, setDiscountValue] = useState('');
@@ -55,6 +56,19 @@ const NuevaPromocionPage = () => {
 
   useEffect(() => { searchItems(searchTerm); }, [searchTerm, searchType, searchItems]);
 
+  const handleLocalImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setImageUrl(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const addCondition = (item: any) => {
     const exists = conditions.some(c =>
       searchType === 'product' ? c.productId === item.id : c.categoryId === item.id
@@ -92,6 +106,7 @@ const NuevaPromocionPage = () => {
       const body: any = {
         name: name.trim(),
         description: description.trim() || null,
+        imageUrl: imageUrl || null,
         type,
         discountType,
         discountValue: parseFloat(discountValue),
@@ -134,9 +149,28 @@ const NuevaPromocionPage = () => {
 
       <form onSubmit={handleSubmit} className="bg-muted p-6 rounded-xl shadow-lg space-y-4">
         {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded">{error}</p>}
+        <Input label="Nombre de la Promoción *" placeholder="Ej. Llevá 3 Pagá 2" value={name} onChange={e => setName(e.target.value)} required />
+        <Input label="Descripción (Opcional)" placeholder="Detalle que verá el cliente..." value={description} onChange={e => setDescription(e.target.value)} />
 
-        <Input label="Nombre" value={name} onChange={e => setName(e.target.value)} required />
-        <Input label="Descripción (opcional)" value={description} onChange={e => setDescription(e.target.value)} />
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-foreground">Imagen de la Promoción</label>
+          <div className="flex items-center gap-3">
+            {imageUrl && (
+              <img src={imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-md border border-border bg-background" />
+            )}
+            <div className="flex-1 space-y-2">
+              <Input
+                placeholder="Pegar URL de la imagen o subir archivo..."
+                value={imageUrl}
+                onChange={e => setImageUrl(e.target.value)}
+              />
+              <label className="cursor-pointer inline-flex items-center text-sm text-primary hover:underline">
+                <input type="file" accept="image/*" className="hidden" onChange={handleLocalImageUpload} />
+                O subir desde tu PC
+              </label>
+            </div>
+          </div>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-foreground mb-1">Tipo de Promoción</label>
@@ -147,7 +181,6 @@ const NuevaPromocionPage = () => {
             <option value="THRESHOLD">Descuento por umbral de total</option>
           </select>
         </div>
-
         {type === 'THRESHOLD' && (
           <Input label="Umbral mínimo ($)" type="number" step="0.01" min="0" value={minQuantity} onChange={e => setMinQuantity(e.target.value)}
             placeholder="Ej: 1000" />

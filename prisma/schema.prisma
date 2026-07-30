@@ -145,6 +145,7 @@ model Combo {
   name        String
   description String?
   price       Decimal   // Precio fijo del combo
+  imageUrl    String?
   active      Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -172,6 +173,7 @@ model Promotion {
   minQuantity    Int?                  // Para THRESHOLD/BUY_X_GET_Y
   maxDiscountQty Int?                  // Para BUY_X_GET_Y: máx unidades con descuento
   priority       Int                   @default(0)
+  imageUrl       String?
   startDate      DateTime?
   endDate        DateTime?
   createdAt      DateTime              @default(now())
