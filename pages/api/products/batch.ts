@@ -44,8 +44,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       try {
-        const { runSupabaseSync } = require("../../lib/syncService");
-        runSupabaseSync(false).catch((err: any) => console.error("Auto-sync error:", err));
+        const { runSupabaseSync } = require("../../../lib/syncService");
+        await runSupabaseSync(true);
       } catch { /* ignore */ }
 
       return res.status(200).json({ message: "Productos actualizados correctamente.", count: result.count });

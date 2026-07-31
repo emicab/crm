@@ -143,6 +143,33 @@ export default async function handler(
         });
       }
 
+      // Actualizar mpAccessToken directamente en Supabase con upsert
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+        if (supabaseUrl && supabaseKey) {
+          await fetch(`${supabaseUrl}/rest/v1/StoreConfig`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": supabaseKey,
+              "Authorization": `Bearer ${supabaseKey}`,
+              "Prefer": "resolution=merge-duplicates",
+            },
+            body: JSON.stringify({
+              tenant_id: cleanSlug,
+              slug: cleanSlug,
+              businessName: cleanBusinessName,
+              mpAccessToken: mpAccessToken ? mpAccessToken.trim() : null,
+              mpPublicKey: mpPublicKey ? mpPublicKey.trim() : null,
+              updatedAt: new Date().toISOString(),
+            }),
+          });
+        }
+      } catch (err) {
+        console.warn("Could not directly update StoreConfig in Supabase:", err);
+      }
+
       // Sincronizar inmediatamente con Supabase en segundo plano
       try {
         const { runSupabaseSync } = require("../../../lib/syncService");

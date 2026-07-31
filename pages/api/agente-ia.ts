@@ -210,9 +210,100 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     };
 
+    const getCurrentAccount = {
+      type: 'function',
+      name: "obtener_cuenta_corriente",
+      description: "Obtiene el saldo actual de cuenta corriente de un cliente específico, o lista todos los clientes con saldo. Incluye los últimos movimientos.",
+      parameters: {
+        type: 'object',
+        properties: {
+          clienteId: { type: 'number', description: "ID del cliente (opcional). Si se omite, lista todos los clientes con cuenta corriente activa." },
+          dias: { type: 'number', description: "Días hacia atrás para movimientos (ej. 30, por defecto 30)" },
+        },
+      },
+    };
+
+    const getDebtors = {
+      type: 'function',
+      name: "obtener_clientes_morosos",
+      description: "Obtiene los clientes con saldo deudor (balance negativo) en cuenta corriente, ordenados por deuda descendente.",
+      parameters: {
+        type: 'object',
+        properties: {
+          limite: { type: 'number', description: "Cantidad máxima de clientes a retornar (ej. 10, por defecto 10)" },
+        },
+      },
+    };
+
+    const getSalesBySeller = {
+      type: 'function',
+      name: "obtener_ventas_por_vendedor",
+      description: "Obtiene las ventas totales agrupadas por vendedor en los últimos X días, incluyendo cantidad de transacciones y monto total.",
+      parameters: {
+        type: 'object',
+        properties: {
+          dias: { type: 'number', description: "Número de días hacia atrás (ej. 30, por defecto 30)" },
+        },
+      },
+    };
+
+    const getExpensesByCategory = {
+      type: 'function',
+      name: "obtener_gastos_por_periodo",
+      description: "Obtiene los gastos agrupados por categoría en los últimos X días, con subtotales por categoría.",
+      parameters: {
+        type: 'object',
+        properties: {
+          dias: { type: 'number', description: "Número de días hacia atrás (ej. 30, por defecto 30)" },
+          limite: { type: 'number', description: "Cantidad máxima de categorías (ej. 10, por defecto 10)" },
+        },
+      },
+    };
+
+    const getBalanceSummary = {
+      type: 'function',
+      name: "obtener_balance_general",
+      description: "Obtiene un resumen financiero comparando ingresos (ventas) vs egresos (gastos + compras) en un período de días.",
+      parameters: {
+        type: 'object',
+        properties: {
+          dias: { type: 'number', description: "Número de días hacia atrás (ej. 30, por defecto 30)" },
+        },
+      },
+    };
+
+    const getPendingConsignments = {
+      type: 'function',
+      name: "obtener_consignaciones_pendientes",
+      description: "Obtiene las consignaciones activas/pendientes (status 'DELIVERED'), incluyendo cliente, productos y montos adeudados.",
+      parameters: {
+        type: 'object',
+        properties: {
+          limite: { type: 'number', description: "Cantidad máxima de consignaciones (ej. 20, por defecto 20)" },
+        },
+      },
+    };
+
+    const searchProducts = {
+      type: 'function',
+      name: "listar_productos",
+      description: "Busca productos por nombre, categoría o marca. Devuelve id, nombre, precio, stock y alerta de stock mínimo.",
+      parameters: {
+        type: 'object',
+        properties: {
+          busqueda: { type: 'string', description: "Texto a buscar en el nombre del producto (opcional)" },
+          categoriaId: { type: 'number', description: "Filtrar por ID de categoría (opcional)" },
+          marcaId: { type: 'number', description: "Filtrar por ID de marca (opcional)" },
+          limite: { type: 'number', description: "Cantidad máxima de resultados (ej. 20, por defecto 20)" },
+        },
+      },
+    };
+
     const tools = [
       getSalesMetrics, getLowStock, getTopProducts, createPromo, createComboTool,
       createClientTool, updateStockAlertTool, createDiscountCodeTool,
+      getCurrentAccount, getDebtors, getSalesBySeller, getExpensesByCategory,
+      getBalanceSummary, getPendingConsignments, searchProducts,
       executeSql, outOfScopeTrap
     ];
 
@@ -331,45 +422,30 @@ Si consideras útil sugerirle al usuario siguientes pasos o preguntas de seguimi
       }
     });
 
-    // Construir el contexto para Gemini a partir de la historia guardada
-    const contextStr = dbHistory.map((m: any) => `${m.role === 'user' ? 'Usuario' : 'Agente'}: ${m.content}`).join("\n");
-    const fullPrompt = `Contexto de la conversacion (ya respondido):
-${contextStr}
+    // Construir historial como steps reales para que el modelo vea la conversación estructurada
+    let historyArr: any[] = [];
 
-Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es necesario para responderlo): ${message}`;
+    for (const m of dbHistory) {
+      historyArr.push({
+        type: m.role === 'user' ? 'user_input' : 'model_output',
+        content: [{ type: 'text', text: m.content }]
+      });
+    }
 
-    let historyArr: any[] = [{ type: "user_input", content: [{ type: "text", text: fullPrompt }] }];
+    historyArr.push({
+      type: 'user_input',
+      content: [{ type: 'text', text: message }]
+    });
 
-    // Función auxiliar con fallback automático entre modelos de la Interactions API
-    const MODELS_FALLBACK = [
-      "gemini-3.5-flash-lite",
-      "gemini-2.5-flash",
-      "gemini-1.5-flash"
-    ];
+    const MODELO = "gemini-3.5-flash-lite";
     const safeCreateInteraction = async (params: any) => {
-      let lastError = null;
-      for (const modelName of MODELS_FALLBACK) {
-        try {
-          if (process.env.NODE_ENV === 'production') {
-            console.error(`[AgenteIA] Payload to ${modelName}:`, JSON.stringify(params).substring(0, 500) + '...');
-          }
-          const res = await client.interactions.create({
-            ...params,
-            model: modelName,
-          });
-          
-          if (modelName !== MODELS_FALLBACK[0]) {
-            console.log(`[ClinIA Fallback Exitoso] Respondiendo con el modelo alternativo: ${modelName}`);
-          }
-          return res;
-        } catch (err: any) {
-          console.error(`[AgenteIA] Error with ${modelName}:`, err.message || err);
-          console.warn(`[ClinIA Fallback] Modelo ${modelName} no pudo responder (${err?.message || "Error de API"}). Probando modelo alternativo...`);
-          lastError = err;
-          continue;
-        }
+      if (process.env.NODE_ENV === 'production') {
+        console.error(`[AgenteIA] Payload:`, JSON.stringify(params).substring(0, 500) + '...');
       }
-      throw lastError;
+      return await client.interactions.create({
+        ...params,
+        model: MODELO,
+      });
     };
 
     let currentInteraction = await safeCreateInteraction({
@@ -567,6 +643,184 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
             });
             toolResponse = { exito: true, codigoDescuentoCreado: createdCode };
             
+          } else if (call.name === "obtener_cuenta_corriente") {
+            const clienteId = call.arguments?.clienteId;
+            const dias = call.arguments?.dias || 30;
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - dias);
+
+            if (clienteId) {
+              const balance = await prisma.accountBalance.findUnique({
+                where: { clientId: parseInt(clienteId) },
+                include: { client: true }
+              });
+              const movimientos = await prisma.accountMovement.findMany({
+                where: { accountBalanceId: balance?.id, createdAt: { gte: startDate } },
+                orderBy: { createdAt: 'desc' },
+                take: 20
+              });
+              toolResponse = {
+                cliente: balance?.client ? `${balance.client.firstName} ${balance.client.lastName || ''}`.trim() : 'Desconocido',
+                saldoActual: balance?.balance || 0,
+                movimientos: movimientos.map(m => ({ tipo: m.type, monto: m.amount, descripcion: m.description, fecha: m.createdAt }))
+              };
+            } else {
+              const balances = await prisma.accountBalance.findMany({
+                where: { balance: { not: 0 } },
+                include: { client: true },
+                orderBy: { balance: 'desc' },
+                take: 30
+              });
+              toolResponse = {
+                clientes: balances.map(b => ({
+                  id: b.clientId,
+                  nombre: `${b.client?.firstName || ''} ${b.client?.lastName || ''}`.trim(),
+                  saldo: b.balance
+                }))
+              };
+            }
+
+          } else if (call.name === "obtener_clientes_morosos") {
+            const limite = call.arguments?.limite || 10;
+            const balances = await prisma.accountBalance.findMany({
+              where: { balance: { lt: 0 } },
+              include: { client: true },
+              orderBy: { balance: 'asc' },
+              take: limite
+            });
+            toolResponse = {
+              clientesMorosos: balances.map(b => ({
+                id: b.clientId,
+                nombre: `${b.client?.firstName || ''} ${b.client?.lastName || ''}`.trim(),
+                deuda: Math.abs(Number(b.balance))
+              })),
+              totalClientes: balances.length
+            };
+
+          } else if (call.name === "obtener_ventas_por_vendedor") {
+            const dias = call.arguments?.dias || 30;
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - dias);
+
+            const sellers = await prisma.seller.findMany({ where: { isActive: true } });
+            const result = await Promise.all(sellers.map(async (seller) => {
+              const sales = await prisma.sale.findMany({
+                where: { sellerId: seller.id, saleDate: { gte: startDate }, status: "COMPLETED" }
+              });
+              const total = sales.reduce((acc, s) => acc + Number(s.totalAmount), 0);
+              return { vendedor: seller.name, transacciones: sales.length, totalVendido: total };
+            }));
+
+            const totalGeneral = result.reduce((acc, r) => acc + r.totalVendido, 0);
+            toolResponse = { ventasPorVendedor: result.filter(r => r.transacciones > 0), totalGeneral, periodo: `${dias} dias` };
+
+          } else if (call.name === "obtener_gastos_por_periodo") {
+            const dias = call.arguments?.dias || 30;
+            const limite = call.arguments?.limite || 10;
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - dias);
+
+            const expenses = await prisma.expense.findMany({
+              where: { expenseDate: { gte: startDate } }
+            });
+
+            const grouped: Record<string, { cantidad: number; total: number }> = {};
+            for (const e of expenses) {
+              const cat = e.category || 'Sin categoría';
+              if (!grouped[cat]) grouped[cat] = { cantidad: 0, total: 0 };
+              grouped[cat].cantidad++;
+              grouped[cat].total += Number(e.amount);
+            }
+
+            const sorted = Object.entries(grouped)
+              .map(([categoria, datos]) => ({ categoria, ...datos }))
+              .sort((a, b) => b.total - a.total)
+              .slice(0, limite);
+
+            toolResponse = { gastosPorCategoria: sorted, totalGastos: expenses.reduce((a, e) => a + Number(e.amount), 0), periodo: `${dias} dias` };
+
+          } else if (call.name === "obtener_balance_general") {
+            const dias = call.arguments?.dias || 30;
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - dias);
+
+            const sales = await prisma.sale.findMany({
+              where: { saleDate: { gte: startDate }, status: "COMPLETED" }
+            });
+            const totalIngresos = sales.reduce((acc, s) => acc + Number(s.totalAmount), 0);
+
+            const expenses = await prisma.expense.findMany({
+              where: { expenseDate: { gte: startDate } }
+            });
+            const totalGastos = expenses.reduce((acc, e) => acc + Number(e.amount), 0);
+
+            const purchases = await prisma.purchase.findMany({
+              where: { purchaseDate: { gte: startDate }, status: { not: "CANCELLED" } }
+            });
+            const totalCompras = purchases.reduce((acc, p) => acc + Number(p.totalAmount), 0);
+
+            const totalEgresos = totalGastos + totalCompras;
+            toolResponse = {
+              periodo: `${dias} dias`,
+              ingresos: { ventas: totalIngresos, cantidad: sales.length },
+              egresos: { gastos: totalGastos, compras: totalCompras, total: totalEgresos },
+              balanceNeto: totalIngresos - totalEgresos
+            };
+
+          } else if (call.name === "obtener_consignaciones_pendientes") {
+            const limite = call.arguments?.limite || 20;
+            const consignments = await prisma.consignment.findMany({
+              where: { status: "DELIVERED" },
+              include: { client: true, items: { include: { product: true } } },
+              orderBy: { createdAt: 'desc' },
+              take: limite
+            });
+
+            toolResponse = {
+              consignaciones: consignments.map(c => ({
+                id: c.id,
+                cliente: `${c.client?.firstName || ''} ${c.client?.lastName || ''}`.trim(),
+                fecha: c.createdAt,
+                productos: c.items.map(i => ({
+                  producto: i.product?.name || 'Desconocido',
+                  cantidadEntregada: i.quantityGiven,
+                  cantidadVendida: i.quantitySold,
+                  cantidadDevuelta: i.quantityReturned,
+                  precioUnitario: i.priceAtGiven
+                })),
+                notas: c.notes
+              })),
+              total: consignments.length
+            };
+
+          } else if (call.name === "listar_productos") {
+            const { busqueda, categoriaId, marcaId, limite } = call.arguments as any;
+            const take = limite || 20;
+            const where: any = {};
+            if (busqueda) where.name = { contains: busqueda };
+            if (categoriaId) where.categoryId = parseInt(categoriaId);
+            if (marcaId) where.brandId = parseInt(marcaId);
+
+            const products = await prisma.product.findMany({
+              where,
+              include: { brand: true, category: true },
+              orderBy: { name: 'asc' },
+              take
+            });
+
+            toolResponse = {
+              productos: products.map(p => ({
+                id: p.id,
+                nombre: p.name,
+                precioVenta: p.priceSale,
+                stockActual: p.quantityStock,
+                stockMinimo: p.stockMinAlert,
+                marca: p.brand?.name || null,
+                categoria: p.category?.name || null
+              })),
+              total: products.length
+            };
+
           } else if (call.name === "ejecutar_consulta_sql") {
             const { consulta_sql } = call.arguments as any;
             
@@ -594,7 +848,7 @@ Mensaje actual del usuario (debes responder a esto, y llamar a funciones si es n
                 dbPath = "./prisma/dev.db";
               }
               const { DatabaseSync } = eval("require('node:sqlite')");
-              const safeDb = new DatabaseSync(dbPath, { readOnly: true });
+              const safeDb = new DatabaseSync(dbPath, { readOnly: true, timeout: 5000 });
               
               const rawData = safeDb.prepare(consulta_sql).all();
               

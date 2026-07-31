@@ -184,9 +184,19 @@ export default async function handler(
         }
       });
       try {
-        const { runSupabaseSync } = require("../../../lib/syncService");
-        runSupabaseSync(false).catch((err: any) => console.error("Auto-sync error:", err));
-      } catch { /* ignore */ }
+        const { syncSingleProduct, runSupabaseSync } = require("../../../lib/syncService");
+        const synced = await syncSingleProduct(newProduct.id);
+        if (!synced) {
+          console.warn("syncSingleProduct falló, ejecutando full sync forzado");
+          await runSupabaseSync(true);
+        }
+      } catch (syncErr) {
+        console.error("Sync error, intentando full sync forzado:", syncErr);
+        try {
+          const { runSupabaseSync } = require("../../../lib/syncService");
+          await runSupabaseSync(true);
+        } catch { /* ignore */ }
+      }
 
       res.status(201).json(newProduct);
     } catch (error: unknown) {

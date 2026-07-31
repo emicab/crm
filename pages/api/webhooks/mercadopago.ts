@@ -25,6 +25,7 @@ export default async function handler(
 
     let webOrderNumber: string | null = null;
     let isApproved = false;
+    let actualMpFee = 0;
 
     // 1. Intentar extraer directo del contenido recibido
     const orderMatch = fullStr.match(/WEB-[A-Z0-9_-]+/i);
@@ -77,6 +78,15 @@ export default async function handler(
                 isApproved = true;
               }
               webOrderNumber = payment.external_reference || webOrderNumber;
+              if (payment.status === "approved") {
+                const txn = payment.transaction_details as any;
+                if (txn?.net_received_amount && payment.transaction_amount) {
+                  actualMpFee = Math.max(0, Number(payment.transaction_amount) - Number(txn.net_received_amount));
+                }
+                if (actualMpFee === 0 && payment.fee_details && payment.fee_details.length > 0) {
+                  actualMpFee = (payment.fee_details as any[]).reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0);
+                }
+              }
             }
           }
         } catch (fetchErr: any) {
@@ -92,13 +102,18 @@ export default async function handler(
       });
 
       if (order) {
+        const feeToStore = actualMpFee > 0 && actualMpFee < Number(order.totalAmount) ? actualMpFee : 0;
         await prisma.webOrder.update({
           where: { id: order.id },
           data: {
             paymentStatus: "PAID",
+            mpFeeAmount: feeToStore,
+            ...(feeToStore > 0 && order.notes?.includes("[MP_FEE") ? {} : {
+              notes: `${order.notes || ""} [MP_FEE: $${feeToStore.toFixed(2)}]`.trim()
+            }),
           },
         });
-        console.log(`[Webhook MP Exito] Pedido #${webOrderNumber} marcado como PAID en ClinPOS.`);
+        console.log(`[Webhook MP Exito] Pedido #${webOrderNumber} marcado como PAID. Fee MP: $${feeToStore.toFixed(2)}`);
       } else {
         console.warn(`[Webhook MP Warn] No se encontró el pedido #${webOrderNumber} en la base de datos.`);
       }

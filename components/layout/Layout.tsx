@@ -38,7 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Si el módulo de roles está activo y no hay sesión iniciada, mostramos bloqueo de PIN
   const showPinLock = !isLoading && !showOnboarding && isModuleEnabled('roles') && !currentUser;
 
-  // Sincronización automática de Supabase cada 5 minutos
+  // Sincronización automática de Supabase cada 1 minuto
   React.useEffect(() => {
     if (isLoading || !hasSupabaseConfig || showOnboarding || showPinLock || storageMode === 'local') {
       return;
@@ -55,8 +55,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     // Lanzar sync inicial 5 segundos después de montar
     const initialTimeout = setTimeout(triggerSync, 5000);
 
-    // Programar intervalo cada 5 minutos
-    const interval = setInterval(triggerSync, 300000);
+    // Programar intervalo cada 1 minuto
+    const interval = setInterval(triggerSync, 60000);
 
     return () => {
       clearInterval(interval);

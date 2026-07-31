@@ -256,14 +256,36 @@ export default function ConfigTiendaWebTab() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <a
-              href="/api/mercadopago/connect"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5"
+            <button
+              onClick={async () => {
+                if (formData.mpAccessToken) {
+                  toast.success("Ya hay un token configurado.", { duration: 3000 });
+                  return;
+                }
+                try {
+                  const res = await fetch("/api/mp/env-credentials");
+                  if (!res.ok) throw new Error("No hay credenciales en .env");
+                  const data = await res.json();
+                  if (!data.accessToken) throw new Error("Token inválido en .env");
+
+                  // Guardar directo sin esperar que el usuario haga submit
+                  const saveRes = await fetch("/api/store-config", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...formData, mpAccessToken: data.accessToken, mpPublicKey: data.publicKey || formData.mpPublicKey }),
+                  });
+                  if (!saveRes.ok) throw new Error("Error al guardar");
+                  toast.success("Token cargado desde .env y sincronizado a Supabase.", { duration: 5000 });
+                  fetchConfig();
+                } catch (err: any) {
+                  toast.error(err.message || "Error al conectar. Usá OAuth en producción.");
+                  window.open(`https://clinstore.vercel.app/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`, "_blank");
+                }
+              }}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
             >
               Conectar Mercado Pago (OAuth 2.0) 🔗
-            </a>
+            </button>
           </div>
         </div>
 

@@ -17,6 +17,7 @@ import {
   Package,
   XCircle,
   Printer,
+  Trash2,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -64,7 +65,11 @@ export default function PedidosWebPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("ALL");
   const [selectedOrder, setSelectedOrder] = useState<WebOrder | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const isInitialLoadedRef = useRef(false);
   const notifiedKeysRef = useRef<Set<string>>(new Set());
 
@@ -129,21 +134,29 @@ export default function PedidosWebPage() {
 
   useEffect(() => {
     fetchOrders(true);
+  }, []);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
     const interval = setInterval(() => {
       if (typeof document !== "undefined" && !document.hidden) {
         fetchOrders(false);
       }
-    }, 5000);
+    }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [autoRefresh]);
 
   const filteredOrders = orders.filter((o) => {
     const term = searchTerm.toLowerCase();
-    return (
+    const matchesSearch =
       o.clientName.toLowerCase().includes(term) ||
       o.webOrderNumber.toLowerCase().includes(term) ||
-      o.clientPhone.includes(term)
-    );
+      o.clientPhone.includes(term);
+
+    const matchesStatus = statusFilter === "ALL" || o.status === statusFilter;
+    const matchesPaymentStatus = paymentStatusFilter === "ALL" || o.paymentStatus === paymentStatusFilter;
+
+    return matchesSearch && matchesStatus && matchesPaymentStatus;
   });
 
   const handleUpdateOrderStatus = async (
@@ -198,6 +211,64 @@ export default function PedidosWebPage() {
       }
     } catch (err: any) {
       toast.error(err.message || "Error al actualizar estado.");
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredOrders.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredOrders.map((o) => o.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!confirm(`¿Eliminar ${ids.length} pedido(s) seleccionado(s)? Esta acción no se puede deshacer.`)) return;
+    try {
+      const res = await fetch("/api/web-orders/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error("Error al eliminar pedidos.");
+      const result = await res.json();
+      setOrders((prev) => prev.filter((o) => !ids.includes(o.id)));
+      setSelectedIds(new Set());
+      if (selectedOrder && ids.includes(selectedOrder.id)) {
+        setSelectedOrder(null);
+      }
+      toast.success(result.message || "Pedidos eliminados correctamente.");
+    } catch (err: any) {
+      toast.error(err.message || "Error al eliminar pedidos.");
+    }
+  };
+
+  const handleDeleteSingle = async (order: WebOrder) => {
+    if (!confirm(`¿Eliminar pedido ${order.webOrderNumber} de ${order.clientName}?`)) return;
+    try {
+      const res = await fetch("/api/web-orders/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [order.id] }),
+      });
+      if (!res.ok) throw new Error("Error al eliminar pedido.");
+      setOrders((prev) => prev.filter((o) => o.id !== order.id));
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(order.id); return next; });
+      setSelectedOrder(null);
+      toast.success(`Pedido ${order.webOrderNumber} eliminado.`);
+    } catch (err: any) {
+      toast.error(err.message || "Error al eliminar pedido.");
     }
   };
 
@@ -264,6 +335,13 @@ export default function PedidosWebPage() {
           >
             <RefreshCcw size={16} /> Actualizar Pedidos
           </Button>
+          <Button
+            variant={autoRefresh ? "outline" : "primary"}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className="flex items-center gap-2 min-w-[100px]"
+          >
+            {autoRefresh ? "⏸ Pausar" : "▶ Auto"}
+          </Button>
           <a
             href="/configuracion?tab=tienda_web"
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition-colors flex items-center gap-2 shadow-sm"
@@ -275,20 +353,69 @@ export default function PedidosWebPage() {
 
       {/* Main Container */}
       <div className="bg-muted p-4 sm:p-6 rounded-xl shadow space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
-              size={18}
-            />
-            <Input
-              type="text"
-              placeholder="Buscar por cliente, teléfono o Nº de pedido..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+        <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
+          <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+            <div className="relative w-full sm:w-72">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
+                size={18}
+              />
+              <Input
+                type="text"
+                placeholder="Buscar cliente, teléfono, pedido..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 w-full"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+              <option value="ALL">Todos los Estados</option>
+              <option value="PENDING_PREPARATION">En Preparación</option>
+              <option value="READY_FOR_PICKUP">Listo para Retiro</option>
+              <option value="SHIPPED">En Envío</option>
+              <option value="DELIVERED">Entregado</option>
+              <option value="CANCELLED">Cancelado</option>
+            </select>
+            <select
+              value={paymentStatusFilter}
+              onChange={(e) => setPaymentStatusFilter(e.target.value)}
+              className="px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+              <option value="ALL">Todos los Pagos</option>
+              <option value="PAID">Pagado</option>
+              <option value="PENDING">Pendiente</option>
+            </select>
           </div>
+
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-3 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/30 rounded-lg w-full xl:w-auto shrink-0 justify-between xl:justify-start">
+              <span className="text-sm font-semibold text-red-700 dark:text-red-400 pl-2">
+                {selectedIds.size} {selectedIds.size === 1 ? 'pedido seleccionado' : 'pedidos seleccionados'}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                  className="flex items-center gap-1 h-9 px-3"
+                >
+                  <Trash2 size={16} /> Eliminar
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="h-9 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50"
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -322,6 +449,14 @@ export default function PedidosWebPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border text-foreground text-sm font-semibold">
+                  <th className="p-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={filteredOrders.length > 0 && selectedIds.size === filteredOrders.length}
+                      onChange={toggleSelectAll}
+                      className="rounded border-border accent-blue-600 cursor-pointer"
+                    />
+                  </th>
                   <th className="p-3">Nº Pedido</th>
                   <th className="p-3">Fecha</th>
                   <th className="p-3">Cliente</th>
@@ -336,8 +471,16 @@ export default function PedidosWebPage() {
                 {filteredOrders.map((order) => (
                   <tr
                     key={order.id}
-                    className="hover:bg-background/50 transition-colors"
+                    className={`hover:bg-background/50 transition-colors ${selectedIds.has(order.id) ? "bg-blue-50 dark:bg-blue-950/20" : ""}`}
                   >
+                    <td className="p-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(order.id)}
+                        onChange={() => toggleSelect(order.id)}
+                        className="rounded border-border accent-blue-600 cursor-pointer"
+                      />
+                    </td>
                     <td className="p-3 font-mono font-bold text-primary">
                       {order.webOrderNumber}
                     </td>
@@ -570,19 +713,28 @@ export default function PedidosWebPage() {
               </div>
             </div>
 
-            <div className="p-4 border-t border-border bg-background/50 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setSelectedOrder(null)}>
-                Cerrar
-              </Button>
+            <div className="p-4 border-t border-border bg-background/50 flex justify-between gap-2">
               <Button
-                variant="primary"
-                onClick={() => {
-                  window.print();
-                }}
+                variant="destructive"
+                onClick={() => handleDeleteSingle(selectedOrder)}
                 className="flex items-center gap-1"
               >
-                <Printer size={16} /> Imprimir Ticket de Empaque
+                <Trash2 size={14} /> Eliminar Pedido
               </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setSelectedOrder(null)}>
+                  Cerrar
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    window.print();
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <Printer size={16} /> Imprimir Ticket de Empaque
+                </Button>
+              </div>
             </div>
           </div>
         </div>

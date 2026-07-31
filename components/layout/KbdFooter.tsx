@@ -35,6 +35,7 @@ const KbdFooter = () => {
     { keys: ['Ctrl', 'A'], label: 'Analíticas', action: () => router.push('/analiticas') },
     { keys: ['Ctrl', 'Shift', 'V'], label: 'Hist. Ventas', action: () => router.push('/ventas') },
     { keys: ['Ctrl', 'Shift', 'C'], label: 'Hist. Compras', action: () => router.push('/compras') },
+    { keys: ['Ctrl', 'W'], label: 'Pedidos Web', action: () => router.push('/pedidos-web') },
     { keys: ['Ctrl', ','], label: 'Configuración', action: () => router.push('/configuracion') },
   ];
 
@@ -57,7 +58,7 @@ const KbdFooter = () => {
         const map: Record<string, string> = {
           n: '/ventas/nueva', e: '/compras/nueva', p: '/productos',
           j: '/caja',
-          g: '/gastos', a: '/analiticas',
+          g: '/gastos', a: '/analiticas', w: '/pedidos-web',
         };
         if (map[key]) { e.preventDefault(); router.push(map[key]); return; }
       }

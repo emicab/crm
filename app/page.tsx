@@ -20,6 +20,10 @@ import {
   ShoppingBag,
   Percent,
   FileText,
+  Settings,
+  RefreshCcw,
+  Ticket,
+  Bookmark,
 } from "lucide-react";
 
 const priorityModules = [
@@ -53,6 +57,22 @@ const priorityModules = [
     shortcut: "Ctrl+G",
     moduleId: "gastos",
     allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Pedidos Web",
+    href: "/pedidos-web",
+    icon: ShoppingBag,
+    description: "Gestiona y prepara pedidos de ClinStore.",
+    shortcut: "Ctrl+W",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Configuración",
+    href: "/configuracion",
+    icon: Settings,
+    description: "Configura tu tienda web y tu sistema.",
+    shortcut: "Ctrl+,",
+    allowedRoles: ["ADMIN"],
   },
 ];
 
@@ -147,6 +167,45 @@ const secondaryModules = [
     moduleId: "compras",
     allowedRoles: ["ADMIN", "SUPERVISOR"],
   },
+  {
+    name: "Pedidos Web",
+    href: "/pedidos-web",
+    icon: ShoppingBag,
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Consignaciones",
+    href: "/consignaciones",
+    icon: RefreshCcw,
+    moduleId: "consignaciones",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Códigos de Descuento",
+    href: "/codigos-descuento",
+    icon: Ticket,
+    moduleId: "combos_promociones",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    name: "Notas IA",
+    href: "/notas-ia",
+    icon: Bookmark,
+    moduleId: "analiticas",
+    allowedRoles: ["ADMIN"],
+  },
+  {
+    name: "Configuración",
+    href: "/configuracion",
+    icon: Settings,
+    allowedRoles: ["ADMIN"],
+  },
+  {
+    name: "Usuarios y Permisos",
+    href: "/configuracion/usuarios",
+    icon: Users,
+    allowedRoles: ["ADMIN"],
+  },
 ];
 
 const shortcuts = [
@@ -176,6 +235,11 @@ const shortcuts = [
     allowedRoles: ["ADMIN"],
   },
   { keys: ["F9"], label: "Ir a Caja" },
+  {
+    keys: ["Ctrl", "W"],
+    label: "Pedidos Web",
+    allowedRoles: ["ADMIN", "SUPERVISOR"],
+  },
   { keys: ["Ctrl", ",", ""], label: "Configuración", allowedRoles: ["ADMIN"] },
 ];
 

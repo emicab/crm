@@ -61,6 +61,7 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [businessProfile, setBusinessProfile] = useState<string>("general");
   const [storageMode, setStorageMode] = useState<string>("local");
   const [plan, setPlan] = useState<'basico' | 'pro'>("basico");
+  const [planLoaded, setPlanLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [supabaseLastSync, setSupabaseLastSync] = useState<string>("");
@@ -125,6 +126,7 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (error) {
       console.error("Error loading modules context:", error);
     } finally {
+      setPlanLoaded(true);
       setIsLoading(false);
     }
   }, []);
@@ -141,12 +143,13 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     (moduleId: string) => {
       // Módulos exclusivos del Plan Pro
       if (['cuenta_corriente', 'analiticas', 'roles', 'backup_nube', 'consignaciones', 'agente_ia', 'clinia'].includes(moduleId)) {
+        if (!planLoaded) return true;
         return plan === 'pro';
       }
       // Todos los demás módulos son básicos y están siempre habilitados
       return true;
     },
-    [plan]
+    [plan, planLoaded]
   );
 
   const hasRolePermission = useCallback(

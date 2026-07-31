@@ -22,7 +22,10 @@ DROP TABLE IF EXISTS "Category" CASCADE;
 DROP TABLE IF EXISTS "Brand" CASCADE;
 DROP TABLE IF EXISTS "PurchaseItem" CASCADE;
 DROP TABLE IF EXISTS "Purchase" CASCADE;
+DROP TABLE IF EXISTS "WebOrderItem" CASCADE;
+DROP TABLE IF EXISTS "WebOrder" CASCADE;
 DROP TABLE IF EXISTS "Expense" CASCADE;
+DROP TABLE IF EXISTS "StoreConfig" CASCADE;
 DROP TABLE IF EXISTS "Setting" CASCADE;
 
 -- Habilitar extensiones opcionales
@@ -346,6 +349,7 @@ CREATE TABLE "Setting" (
 
 -- 22. Tabla StoreConfig (Configuración de Tienda ClinStore)
 CREATE TABLE "StoreConfig" (
+    "id" INTEGER NOT NULL DEFAULT 1,
     "tenant_id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "businessName" TEXT NOT NULL,
@@ -356,11 +360,13 @@ CREATE TABLE "StoreConfig" (
     "isWebActive" BOOLEAN DEFAULT FALSE,
     "mpAccessToken" TEXT,
     "mpPublicKey" TEXT,
+    "mpFeePercent" NUMERIC(12, 2) DEFAULT 0,
     "whatsappPhone" TEXT,
     "minStockBuffer" DOUBLE PRECISION DEFAULT 0,
     "allowPickup" BOOLEAN DEFAULT TRUE,
     "allowDelivery" BOOLEAN DEFAULT TRUE,
     "deliveryFee" NUMERIC(12, 2) DEFAULT 0,
+    "minDeliveryAmount" NUMERIC(12, 2) DEFAULT 0,
     "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY ("tenant_id")
@@ -380,6 +386,7 @@ CREATE TABLE "WebOrder" (
     "paymentStatus" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'PENDING_PREPARATION',
     "totalAmount" NUMERIC(12, 2) NOT NULL,
+    "mpFeeAmount" NUMERIC(12, 2) NOT NULL DEFAULT 0,
     "notes" TEXT,
     "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -425,22 +432,3 @@ ALTER TABLE "Setting" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "StoreConfig" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WebOrder" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WebOrderItem" DISABLE ROW LEVEL SECURITY;
-C R E A T E   T A B L E   \  
- D i s c o u n t C o d e \   ( 
-     \ i d \   I N T E G E R   N O T   N U L L , 
-     \ c o d e \   T E X T   N O T   N U L L , 
-     \ d i s c o u n t T y p e \   T E X T   N O T   N U L L , 
-     \ d i s c o u n t V a l u e \   D E C I M A L ( 1 0 ,   2 )   N O T   N U L L , 
-     \ m i n P u r c h a s e \   D E C I M A L ( 1 0 ,   2 ) , 
-     \ m a x U s e s \   I N T E G E R , 
-     \ c u r r e n t U s e s \   I N T E G E R   N O T   N U L L   D E F A U L T   0 , 
-     \ v a l i d F r o m \   T I M E S T A M P ( 3 ) , 
-     \ v a l i d U n t i l \   T I M E S T A M P ( 3 ) , 
-     \ i s A c t i v e \   B O O L E A N   N O T   N U L L   D E F A U L T   t r u e , 
-     \ c r e a t e d A t \   T I M E S T A M P ( 3 )   N O T   N U L L   D E F A U L T   C U R R E N T _ T I M E S T A M P , 
-     \ u p d a t e d A t \   T I M E S T A M P ( 3 )   N O T   N U L L , 
-     \ t e n a n t _ i d \   T E X T   N O T   N U L L , 
-     C O N S T R A I N T   \ D i s c o u n t C o d e _ p k e y \   P R I M A R Y   K E Y   ( \ t e n a n t _ i d \ ,   \ i d \ ) 
- ) ; 
- A L T E R   T A B L E   \ D i s c o u n t C o d e \   D I S A B L E   R O W   L E V E L   S E C U R I T Y ;  
- 

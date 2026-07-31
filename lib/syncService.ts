@@ -1,8 +1,54 @@
 // lib/syncService.ts
 import prisma from "./prisma";
 import os from "os";
+import crypto from "crypto";
 
 const fmtDec = (val: any, fallback: string | null = "0.00") => (val !== undefined && val !== null ? val.toString() : fallback);
+
+async function loadConfigFromDb(): Promise<Record<string, string>> {
+  const settings = await prisma.setting.findMany();
+  const config: Record<string, string> = {};
+  for (const s of settings) {
+    config[s.key] = s.value;
+  }
+  return config;
+}
+
+async function getSelectiveSyncCredentials(): Promise<{
+  supabaseUrl: string;
+  supabaseKey: string;
+  tenantId: string;
+}> {
+  const config = await loadConfigFromDb();
+
+  const supabaseUrl = config.supabase_url || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const supabaseKey = config.supabase_service_role_key || process.env.SUPABASE_SERVICE_ROLE_KEY || config.supabase_anon_key || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "Credenciales de Supabase no configuradas. Debe configurar SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY " +
+      "en .env o en la configuración del sistema antes de sincronizar."
+    );
+  }
+
+  const storeConfigs = await prisma.storeConfig.findMany();
+  const firstStoreConfig = storeConfigs[0];
+
+  const computerHostname = typeof os.hostname === "function" ? os.hostname() : "pos_local";
+  const rawTenant = (
+    firstStoreConfig?.slug?.trim() ||
+    config.license_key?.trim() ||
+    config.businessCuit?.trim() ||
+    config.businessName?.trim() ||
+    process.env.LICENSE_KEY?.trim() ||
+    process.env.HARDWARE_ID?.trim() ||
+    `pos_${computerHostname}`
+  );
+
+  const tenantId = crypto.createHash("sha256").update(rawTenant).digest("hex").slice(0, 16);
+
+  return { supabaseUrl, supabaseKey, tenantId };
+}
 
 export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{ 
   success: boolean; 
@@ -12,22 +58,11 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
   tenantId?: string;
 }> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { loadEnv } = require("./envLoader");
     loadEnv();
-    
-    // 1. Cargar las credenciales de Supabase de los settings locales
-    const settings = await prisma.setting.findMany();
-    const config: Record<string, string> = {};
-    for (const s of settings) {
-      config[s.key] = s.value;
-    }
 
-    const DEFAULT_SUPABASE_URL = "https://htroigemnwqiugieodmv.supabase.co";
-    const DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MDM4ODcsImV4cCI6MjA5OTI3OTg4N30.sSp5vEDvI7OHuYL0SeeFiATilC_f_BdZao2BjeN0IVQ";
-
-    const supabaseUrl = config.supabase_url || process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
-    const supabaseKey = config.supabase_service_role_key || process.env.SUPABASE_SERVICE_ROLE_KEY || config.supabase_anon_key || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY;
+    const config = await loadConfigFromDb();
+    const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
     const lastSyncStr = config.supabase_last_sync;
 
     const lastSync = (forceFullSync || !lastSyncStr) ? new Date(0) : new Date(lastSyncStr);
@@ -70,22 +105,31 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         combo: { updatedAt: { gt: lastSync } }
       }
     });
+    const webOrders = await prisma.webOrder.findMany({
+      where: forceFullSync ? {} : { updatedAt: { gt: lastSync } },
+      include: { items: true }
+    });
     const storeConfigs = await prisma.storeConfig.findMany();
     const firstStoreConfig = storeConfigs[0];
 
-    const computerHostname = typeof os.hostname === "function" ? os.hostname() : "pos_local";
-    const rawTenant = (
-      firstStoreConfig?.slug?.trim() ||
-      config.license_key?.trim() ||
-      config.businessCuit?.trim() ||
-      config.businessName?.trim() ||
-      process.env.LICENSE_KEY?.trim() ||
-      process.env.HARDWARE_ID?.trim() ||
-      `pos_${computerHostname}`
-    );
-    const tenantId = rawTenant.toLowerCase().replace(/[^a-z0-9_\-]/gi, "_");
+    // 3a. Obtener IDs reales de WebOrders en Supabase para evitar duplicados por ID mismatch
+    const supabaseWebOrderIds: Record<string, number> = {};
+    try {
+      const idUrl = `${supabaseUrl}/rest/v1/WebOrder?tenant_id=eq.${encodeURIComponent(tenantId)}&select=id,webOrderNumber`;
+      const idRes = await fetch(idUrl, {
+        headers: { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` }
+      });
+      if (idRes.ok) {
+        const existingOrders: { id: number; webOrderNumber: string }[] = await idRes.json();
+        for (const o of existingOrders) {
+          supabaseWebOrderIds[o.webOrderNumber] = o.id;
+        }
+      }
+    } catch (err) {
+      console.warn("[Sync] No se pudieron obtener IDs de WebOrders desde Supabase:", err);
+    }
 
-    // 3. Serializar decodificando Decimales a strings compatibles con JSON
+    // 3b. Serializar decodificando Decimales a strings compatibles con JSON
     const payload = {
       Brand: brands.map(b => ({
         id: b.id, name: b.name, logoUrl: b.logoUrl, tenant_id: tenantId,
@@ -142,7 +186,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         expectedBalance: fmtDec(c.expectedBalance),
         actualBalance: fmtDec(c.actualBalance),
         difference: fmtDec(c.difference),
-        status: c.status, notes: c.notes, sellerId: c.sellerId || 1,
+        status: c.status, notes: c.notes, sellerId: c.sellerId ?? 1,
         createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString()
       })),
       AccountBalance: accountBalances.map(a => ({
@@ -151,9 +195,8 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       })),
       Sale: sales.map(s => ({
         id: s.id, saleDate: s.saleDate.toISOString(), totalAmount: fmtDec(s.totalAmount), tenant_id: tenantId,
-        paymentType: s.paymentType, notes: s.notes, clientId: s.clientId, sellerId: s.sellerId || 1,
+        paymentType: s.paymentType, notes: s.notes, clientId: s.clientId, sellerId: s.sellerId ?? 1,
         cashRegisterId: s.cashRegisterId, discountCodeApplied: s.discountCodeApplied,
-        promotionsApplied: s.promotionsApplied, onAccount: s.onAccount,
         createdAt: s.createdAt.toISOString(), updatedAt: s.updatedAt.toISOString()
       })),
       SaleItem: saleItems.map(si => ({
@@ -187,80 +230,50 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         id: am.id, accountBalanceId: am.accountBalanceId, type: am.type, amount: fmtDec(am.amount), tenant_id: tenantId,
         description: am.description, saleId: am.saleId, createdAt: am.createdAt.toISOString()
       })),
+      WebOrder: webOrders
+        .filter(o => supabaseWebOrderIds[o.webOrderNumber] !== undefined)
+        .map(o => ({
+          id: supabaseWebOrderIds[o.webOrderNumber],
+          webOrderNumber: o.webOrderNumber,
+          clientName: o.clientName,
+          clientEmail: o.clientEmail,
+          clientPhone: o.clientPhone,
+          shippingAddress: o.shippingAddress,
+          deliveryType: o.deliveryType,
+          paymentMethod: o.paymentMethod,
+          paymentStatus: o.paymentStatus,
+          status: o.status,
+          totalAmount: fmtDec(o.totalAmount),
+          mpFeeAmount: fmtDec(o.mpFeeAmount, "0"),
+          notes: o.notes,
+          tenant_id: tenantId,
+          createdAt: o.createdAt.toISOString(),
+          updatedAt: o.updatedAt.toISOString()
+        })),
+      WebOrderItem: webOrders
+        .filter(o => supabaseWebOrderIds[o.webOrderNumber] !== undefined)
+        .flatMap(o => o.items.map(i => ({
+          id: i.id,
+          webOrderId: supabaseWebOrderIds[o.webOrderNumber],
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: fmtDec(i.unitPrice),
+          subtotal: fmtDec(i.subtotal),
+          tenant_id: tenantId
+        }))),
       StoreConfig: storeConfigs.length > 0 ? storeConfigs.map(sc => ({
         id: sc.id, slug: sc.slug, businessName: sc.businessName, description: sc.description, logoUrl: sc.logoUrl, bannerUrl: sc.bannerUrl,
         primaryColor: sc.primaryColor, isWebActive: sc.isWebActive, mpAccessToken: sc.mpAccessToken, mpPublicKey: sc.mpPublicKey,
         mpFeePercent: fmtDec(sc.mpFeePercent), whatsappPhone: sc.whatsappPhone, minStockBuffer: sc.minStockBuffer, allowPickup: sc.allowPickup,
         allowDelivery: sc.allowDelivery, deliveryFee: fmtDec(sc.deliveryFee), minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
         tenant_id: tenantId, createdAt: sc.createdAt.toISOString(), updatedAt: sc.updatedAt.toISOString()
-      })) : [{
-        id: 1,
-        slug: tenantId,
-        businessName: tenantId.toUpperCase().replace(/_/g, ' '),
-        description: 'Bienvenido a nuestra tienda online',
-        primaryColor: '#2563eb',
-        isWebActive: true,
-        allowPickup: true,
-        allowDelivery: true,
-        deliveryFee: "0.00",
-        minDeliveryAmount: "0.00",
-        mpFeePercent: "0.00",
-        minStockBuffer: 0,
-        tenant_id: tenantId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }]
+      })) : []
+
     };
 
-    // 4. Enviar datos a Supabase tabla por tabla
-    const summary: Record<string, number> = {};
-    for (const [tableName, records] of Object.entries(payload)) {
-      if (records.length === 0) continue;
-
-      const url = `${supabaseUrl}/rest/v1/${tableName}`;
-      let res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": supabaseKey,
-          "Authorization": `Bearer ${supabaseKey}`,
-          "Prefer": "resolution=merge-duplicates"
-        },
-        body: JSON.stringify(records)
-      });
-
-      if (!res.ok) {
-        let errorText = await res.text();
-
-        // Si falla por columna faltante en Supabase Cloud (ej: PGRST204 isPublicWeb), reintentar sin esos campos opcionales
-        if (tableName === "Product" && errorText.includes("PGRST204")) {
-          const strippedRecords = records.map((r: any) => {
-            const { isPublicWeb, webCategory, ...rest } = r;
-            return rest;
-          });
-          res = await fetch(url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "apikey": supabaseKey,
-              "Authorization": `Bearer ${supabaseKey}`,
-              "Prefer": "resolution=merge-duplicates"
-            },
-            body: JSON.stringify(strippedRecords)
-          });
-          if (!res.ok) {
-            errorText = await res.text();
-            throw new Error(`Error en Supabase upsert [Tabla: ${tableName}]: [HTTP ${res.status}] ${errorText}`);
-          }
-        } else {
-          throw new Error(`Error en Supabase upsert [Tabla: ${tableName}]: [HTTP ${res.status}] ${errorText}`);
-        }
-      }
-
-      summary[tableName] = records.length;
-    }
-
-    // 5. Descargar nuevos Pedidos Web (WebOrders) desde Supabase
+    // 4. Descargar Pedidos Web (WebOrders) y StoreConfig desde Supabase ANTES de subir,
+    //    para que el paymentStatus de clinstore/MercadoPago (fuente de verdad) no sea pisado
+    //    por el estado local del POS.
     try {
       const urlWebOrders = `${supabaseUrl}/rest/v1/WebOrder?tenant_id=eq.${tenantId}&select=*,WebOrderItem(*)`;
       const resWebOrders = await fetch(urlWebOrders, {
@@ -313,14 +326,49 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
               }
             }
           } else {
-             // Si existe, actualizar estado de pago por si cambió en la web
-             await prisma.webOrder.update({
-               where: { id: exists.id },
-               data: {
-                 paymentStatus: order.paymentStatus,
-                 status: order.status
-               }
-             });
+            const isBeingCancelled = order.status === "CANCELLED" && exists.status !== "CANCELLED";
+            const isBeingRestored = order.status !== "CANCELLED" && exists.status === "CANCELLED";
+
+            if (isBeingCancelled) {
+              const existingItems = await prisma.webOrderItem.findMany({
+                where: { webOrderId: exists.id }
+              });
+              for (const item of existingItems) {
+                try {
+                  await prisma.product.update({
+                    where: { id: item.productId },
+                    data: { quantityStock: { increment: item.quantity } }
+                  });
+                } catch (err) {
+                  console.warn("Stock restore error for cancelled order product", item.productId, err);
+                }
+              }
+            } else if (isBeingRestored) {
+              const existingItems = await prisma.webOrderItem.findMany({
+                where: { webOrderId: exists.id }
+              });
+              for (const item of existingItems) {
+                try {
+                  await prisma.product.update({
+                    where: { id: item.productId },
+                    data: { quantityStock: { decrement: item.quantity } }
+                  });
+                } catch (err) {
+                  console.warn("Stock decrement error for restored order product", item.productId, err);
+                }
+              }
+            }
+
+            await prisma.webOrder.update({
+              where: { id: exists.id },
+              data: {
+                paymentStatus:
+                  exists.paymentStatus === "PAID" || order.paymentStatus === "PAID"
+                    ? "PAID"
+                    : order.paymentStatus,
+                status: order.status
+              }
+            });
           }
         }
       }
@@ -328,7 +376,37 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       console.warn("Error al descargar WebOrders desde Supabase:", err);
     }
 
-    // 6. Actualizar marca de tiempo de última sincronización
+    // 5. Descargar StoreConfig desde Supabase (trae mpAccessToken vinculado desde clinstore)
+    try {
+      const urlConfig = `${supabaseUrl}/rest/v1/StoreConfig?tenant_id=eq.${encodeURIComponent(tenantId)}&select=mpAccessToken,mpPublicKey`;
+      const resConfig = await fetch(urlConfig, {
+        headers: {
+          "apikey": supabaseKey,
+          "Authorization": `Bearer ${supabaseKey}`
+        }
+      });
+      if (resConfig.ok) {
+        const remoteConfigs = await resConfig.json();
+        const remoteConfig = remoteConfigs?.[0];
+        if (remoteConfig?.mpAccessToken && remoteConfig.mpAccessToken !== firstStoreConfig?.mpAccessToken) {
+          await prisma.storeConfig.update({
+            where: { id: firstStoreConfig!.id },
+            data: {
+              mpAccessToken: remoteConfig.mpAccessToken,
+              mpPublicKey: remoteConfig.mpPublicKey || "",
+            },
+          });
+          console.log(`[Sync] mpAccessToken actualizado desde Supabase para tenant ${tenantId}`);
+        }
+      }
+    } catch (err) {
+      console.warn("Error al descargar StoreConfig desde Supabase:", err);
+    }
+
+    // 6. Enviar datos a Supabase tabla por tabla (StoreConfig primero)
+    const summary = await pushEntitiesToSupabase(supabaseUrl, supabaseKey, payload);
+
+    // 7. Actualizar marca de tiempo de última sincronización
     const syncTimeString = syncStartTime.toISOString();
     await prisma.setting.upsert({
       where: { key: "supabase_last_sync" },
@@ -349,5 +427,241 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       success: false,
       message: error.message || "Error al sincronizar con Supabase."
     };
+  }
+}
+
+// ===== SELECTIVE SYNC HELPERS =====
+
+async function pushEntitiesToSupabase(
+  supabaseUrl: string,
+  supabaseKey: string,
+  payload: Record<string, any[]>
+): Promise<Record<string, number>> {
+  const summary: Record<string, number> = {};
+
+  const priorityTable = Object.keys(payload).includes("StoreConfig") ? "StoreConfig" : null;
+  const orderedTables = priorityTable
+    ? [priorityTable, ...Object.keys(payload).filter(t => t !== priorityTable)]
+    : Object.keys(payload);
+
+  for (const tableName of orderedTables) {
+    const records = payload[tableName];
+    if (!records || records.length === 0) continue;
+
+    const url = `${supabaseUrl}/rest/v1/${tableName}`;
+    let res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+        "Prefer": "resolution=merge-duplicates"
+      },
+      body: JSON.stringify(records)
+    });
+
+    if (!res.ok) {
+      let errorText = await res.text();
+
+      if (tableName === "Product" && errorText.includes("PGRST204")) {
+        const strippedRecords = records.map((r: any) => {
+          const { isPublicWeb, webCategory, ...rest } = r;
+          return rest;
+        });
+        res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": supabaseKey,
+            "Authorization": `Bearer ${supabaseKey}`,
+            "Prefer": "resolution=merge-duplicates"
+          },
+          body: JSON.stringify(strippedRecords)
+        });
+        if (!res.ok) {
+          errorText = await res.text();
+          throw new Error(`Error en Supabase upsert [Tabla: ${tableName}]: [HTTP ${res.status}] ${errorText}`);
+        }
+      } else {
+        throw new Error(`Error en Supabase upsert [Tabla: ${tableName}]: [HTTP ${res.status}] ${errorText}`);
+      }
+    }
+
+    summary[tableName] = records.length;
+  }
+
+  return summary;
+}
+
+export async function syncSingleProduct(productId: number): Promise<boolean> {
+  try {
+    const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      include: { brand: true, category: true, supplier: true }
+    });
+    if (!product) return false;
+
+    const payload: Record<string, any[]> = {
+      Product: [{
+        id: product.id, name: product.name, sku: product.sku, description: product.description, tenant_id: tenantId,
+        pricePurchase: fmtDec(product.pricePurchase), priceSale: fmtDec(product.priceSale),
+        quantityStock: product.quantityStock, stockMinAlert: product.stockMinAlert, unitType: product.unitType,
+        isPublicWeb: product.isPublicWeb !== false, webCategory: product.webCategory || null,
+        brandId: product.brandId, categoryId: product.categoryId, supplierId: product.supplierId,
+        createdAt: product.createdAt.toISOString(), updatedAt: product.updatedAt.toISOString()
+      }]
+    };
+
+    await pushEntitiesToSupabase(supabaseUrl, supabaseKey, payload);
+    return true;
+  } catch (error) {
+    console.error("Error en syncSingleProduct:", error);
+    return false;
+  }
+}
+
+export async function syncProducts(productIds: number[]): Promise<boolean> {
+  try {
+    const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
+
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      include: { brand: true, category: true, supplier: true }
+    });
+    if (products.length === 0) return false;
+
+    const payload: Record<string, any[]> = {
+      Product: products.map(p => ({
+        id: p.id, name: p.name, sku: p.sku, description: p.description, tenant_id: tenantId,
+        pricePurchase: fmtDec(p.pricePurchase), priceSale: fmtDec(p.priceSale),
+        quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert, unitType: p.unitType,
+        isPublicWeb: p.isPublicWeb !== false, webCategory: p.webCategory || null,
+        brandId: p.brandId, categoryId: p.categoryId, supplierId: p.supplierId,
+        createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString()
+      }))
+    };
+
+    await pushEntitiesToSupabase(supabaseUrl, supabaseKey, payload);
+    return true;
+  } catch (error) {
+    console.error("Error en syncProducts:", error);
+    return false;
+  }
+}
+
+export async function deleteProductFromSupabase(productId: number): Promise<boolean> {
+  try {
+    const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
+
+    const url = `${supabaseUrl}/rest/v1/Product?tenant_id=eq.${encodeURIComponent(tenantId)}&id=eq.${productId}`;
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`
+      }
+    });
+
+    return res.ok;
+  } catch (error) {
+    console.error("Error en deleteProductFromSupabase:", error);
+    return false;
+  }
+}
+
+export async function syncWebOrderToSupabase(orderId: number): Promise<boolean> {
+  try {
+    const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
+
+    const order = await prisma.webOrder.findUnique({
+      where: { id: orderId },
+      include: { items: true }
+    });
+    if (!order) return false;
+
+    const payload: Record<string, any[]> = {
+      WebOrder: [{
+        id: order.id,
+        webOrderNumber: order.webOrderNumber,
+        clientName: order.clientName,
+        clientEmail: order.clientEmail,
+        clientPhone: order.clientPhone,
+        shippingAddress: order.shippingAddress,
+        deliveryType: order.deliveryType,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        status: order.status,
+        totalAmount: fmtDec(order.totalAmount),
+        mpFeeAmount: fmtDec(order.mpFeeAmount, "0"),
+        notes: order.notes,
+        tenant_id: tenantId,
+        createdAt: order.createdAt.toISOString(),
+        updatedAt: order.updatedAt.toISOString()
+      }],
+      WebOrderItem: order.items.map(i => ({
+        id: i.id,
+        webOrderId: order.id,
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPrice: fmtDec(i.unitPrice),
+        subtotal: fmtDec(i.subtotal),
+        tenant_id: tenantId
+      }))
+    };
+
+    await pushEntitiesToSupabase(supabaseUrl, supabaseKey, payload);
+    return true;
+  } catch (error) {
+    console.error("Error en syncWebOrderToSupabase:", error);
+    return false;
+  }
+}
+
+export async function deleteWebOrdersFromSupabase(webOrderNumbers: string[]): Promise<boolean> {
+  try {
+    const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
+
+    const numbers = [...new Set(webOrderNumbers)].filter(Boolean);
+    if (numbers.length === 0) return true;
+
+    const headers = { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}`, "Content-Type": "application/json" };
+    const apiBase = `${supabaseUrl}/rest/v1`;
+    const tenantParam = `tenant_id=eq.${encodeURIComponent(tenantId)}`;
+
+    let allSupabaseIds: number[] = [];
+    for (const num of numbers) {
+      const p = `webOrderNumber=eq.${encodeURIComponent(num)}`;
+      const r = await fetch(`${apiBase}/WebOrder?${tenantParam}&${p}&select=id`, { headers });
+      if (r.ok) {
+        const rows: { id: number }[] = await r.json();
+        allSupabaseIds.push(...rows.map(x => x.id));
+      }
+    }
+
+    const itemsDeleteIds = [...new Set(allSupabaseIds)];
+    if (itemsDeleteIds.length > 0) {
+      const idList = itemsDeleteIds.join(",");
+      await fetch(`${apiBase}/WebOrderItem?${tenantParam}&webOrderId=in.(${idList})`, { method: "DELETE", headers });
+    }
+
+    let totalDeleted = 0;
+    for (const num of numbers) {
+      const p = `webOrderNumber=eq.${encodeURIComponent(num)}`;
+      const r = await fetch(`${apiBase}/WebOrder?${tenantParam}&${p}`, { method: "DELETE", headers });
+      if (r.ok) {
+        totalDeleted++;
+      } else {
+        const text = await r.text().catch(() => "");
+        console.warn(`[deleteWebOrdersFromSupabase] Delete fail ${num}: ${r.status} ${text}`);
+      }
+    }
+
+    console.log(`[deleteWebOrdersFromSupabase] Deleted ${totalDeleted}/${numbers.length} orders from Supabase`);
+    return totalDeleted > 0;
+  } catch (error) {
+    console.error("Error en deleteWebOrdersFromSupabase:", error);
+    return false;
   }
 }

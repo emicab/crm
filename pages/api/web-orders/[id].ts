@@ -23,50 +23,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ message: "Pedido web no encontrado." });
       }
 
-      const updateData: any = {};
-      if (status) updateData.status = status;
-      if (paymentStatus) updateData.paymentStatus = paymentStatus;
-      if (notes !== undefined) updateData.notes = notes;
-
       const isDelivered = status === "DELIVERED";
       const isCancelling = status === "CANCELLED" && currentOrder.status !== "CANCELLED";
       const isUncancelling = status && status !== "CANCELLED" && currentOrder.status === "CANCELLED";
-
       const isAlreadyRegistered = (currentOrder.notes || "").includes("[VENTA_REGISTRADA#");
 
-      // Si el pedido se CANCELA, reponer stock de los productos
-      if (isCancelling) {
-        for (const item of currentOrder.items) {
-          await prisma.product.update({
-            where: { id: item.productId },
-            data: {
-              quantityStock: {
-                increment: Number(item.quantity),
-              },
-            },
-          });
-        }
-      } else if (isUncancelling) {
-        // Si el pedido se DES-CANCELANTE, volver a descontar el stock
-        for (const item of currentOrder.items) {
-          await prisma.product.update({
-            where: { id: item.productId },
-            data: {
-              quantityStock: {
-                decrement: Number(item.quantity),
-              },
-            },
-          });
-        }
-      }
-
       let createdSaleId: number | null = null;
+      let resolvedNotes = notes !== undefined ? notes : currentOrder.notes || "";
 
-      // Si el pedido se marca como ENTREGADO y aún no fue registrado en las Ventas y Movimientos de Caja
+      // Preparar datos para delivery (lecturas, fuera de la transacción)
+      let mappedPaymentType: PaymentType = PaymentType.OTHER;
+      let seller: any = { id: 1 };
+      let openRegister: any = null;
+      let saleItemsData: any[] = [];
+
       if (isDelivered && !isAlreadyRegistered) {
-        updateData.paymentStatus = "PAID";
-
-        let mappedPaymentType: PaymentType = PaymentType.OTHER;
         const pm = (currentOrder.paymentMethod || "").toUpperCase();
         if (pm.includes("MERCADO") || pm.includes("MP")) {
           mappedPaymentType = (PaymentType as any).MERCADO_PAGO || PaymentType.OTHER;
@@ -76,12 +47,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           mappedPaymentType = PaymentType.CASH;
         } else if (pm.includes("CARD") || pm.includes("TARJETA")) {
           mappedPaymentType = PaymentType.CARD;
-        } else {
-          mappedPaymentType = PaymentType.OTHER;
         }
 
-        const seller = (await prisma.seller.findFirst({ where: { isActive: true } })) || { id: 1 };
-        const openRegister = await prisma.cashRegister.findFirst({ where: { status: "OPEN" } });
+        seller = (await prisma.seller.findFirst({ where: { isActive: true } })) || { id: 1 };
+        openRegister = await prisma.cashRegister.findFirst({ where: { status: "OPEN" } });
 
         const itemProductIds = currentOrder.items.map((i) => i.productId);
         const dbProducts = await prisma.product.findMany({
@@ -90,7 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const productsMap = new Map<number, any>();
         dbProducts.forEach((p) => productsMap.set(p.id, p));
 
-        const saleItemsData = currentOrder.items.map((item) => {
+        saleItemsData = currentOrder.items.map((item) => {
           const prod = productsMap.get(item.productId);
           return {
             productId: item.productId,
@@ -99,8 +68,74 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             purchasePriceAtSale: prod ? prod.pricePurchase : 0,
           };
         });
+      }
 
-        await prisma.$transaction(async (tx) => {
+      // Reembolso MP si se cancela un pedido pagado
+      if (isCancelling && currentOrder.paymentMethod === "MERCADO_PAGO" && currentOrder.paymentStatus === "PAID") {
+        try {
+          const storeConfig = await prisma.storeConfig.findFirst();
+          const mpTokenConfig = await prisma.setting.findUnique({ where: { key: "mercadopago_access_token" } });
+          const accessToken =
+            storeConfig?.mpAccessToken ||
+            mpTokenConfig?.value ||
+            process.env.MERCADOPAGO_ACCESS_TOKEN ||
+            process.env.MP_ACCESS_TOKEN ||
+            "";
+
+          if (accessToken) {
+            const searchRes = await fetch(
+              `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(currentOrder.webOrderNumber)}`,
+              { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+            if (searchRes.ok) {
+              const searchData = await searchRes.json();
+              const payment = searchData.results?.[0];
+              if (payment?.id) {
+                const refundRes = await fetch(
+                  `https://api.mercadopago.com/v1/payments/${payment.id}/refunds`,
+                  {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${accessToken}`,
+                      "Content-Type": "application/json"
+                    }
+                  }
+                );
+                if (refundRes.ok) {
+                  console.log(`[MP Refund] Reembolso exitoso del pago ${payment.id} para orden ${currentOrder.webOrderNumber}`);
+                } else {
+                  const refundError = await refundRes.text();
+                  console.warn(`[MP Refund] Error al reembolsar pago ${payment.id}:`, refundError);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("[MP Refund] Error en proceso de reembolso:", err);
+        }
+      }
+
+      // Transacción atómica: stock + venta + status update
+      await prisma.$transaction(async (tx) => {
+        // Stock: reponer al cancelar, descontar al des-cancelar
+        if (isCancelling) {
+          for (const item of currentOrder.items) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { quantityStock: { increment: Number(item.quantity) } },
+            });
+          }
+        } else if (isUncancelling) {
+          for (const item of currentOrder.items) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { quantityStock: { decrement: Number(item.quantity) } },
+            });
+          }
+        }
+
+        // Venta + movimiento de caja si se entrega
+        if (isDelivered && !isAlreadyRegistered) {
           const sale = await tx.sale.create({
             data: {
               saleDate: new Date(),
@@ -110,9 +145,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               sellerId: seller.id,
               ...(openRegister && { cashRegisterId: openRegister.id }),
               status: "COMPLETED",
-              items: {
-                create: saleItemsData,
-              },
+              items: { create: saleItemsData },
             },
           });
 
@@ -129,23 +162,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 description: `Pedido Web #${currentOrder.webOrderNumber} (${currentOrder.clientName})`,
               },
             });
+
+            if (mappedPaymentType === PaymentType.MERCADO_PAGO && Number(currentOrder.mpFeeAmount) > 0) {
+              await tx.cashMovement.create({
+                data: {
+                  cashRegisterId: openRegister.id,
+                  type: "EXPENSE",
+                  paymentType: "MERCADO_PAGO",
+                  sourceId: sale.id,
+                  amount: -Number(currentOrder.mpFeeAmount),
+                  description: `Comisión MP Pedido Web #${currentOrder.webOrderNumber}`,
+                },
+              });
+            }
           }
 
-          const existingNotes = notes !== undefined ? notes : currentOrder.notes || "";
-          updateData.notes = `${existingNotes} [VENTA_REGISTRADA#${sale.id}]`.trim();
+          resolvedNotes = `${resolvedNotes} [VENTA_REGISTRADA#${sale.id}]`.trim();
+        }
+
+        // Status update
+        const updateData: any = { notes: resolvedNotes };
+        if (status) updateData.status = status;
+        if (paymentStatus) updateData.paymentStatus = paymentStatus;
+        if (isDelivered && !isAlreadyRegistered) updateData.paymentStatus = "PAID";
+
+        await tx.webOrder.update({
+          where: { id: orderId },
+          data: updateData,
         });
+      });
+
+      // Sync selectivo del WebOrder + Productos a Supabase para reflejar cambios en la web
+      try {
+        const { syncWebOrderToSupabase, syncSingleProduct } = require("../../../lib/syncService");
+        await syncWebOrderToSupabase(orderId);
+        for (const item of currentOrder.items) {
+          await syncSingleProduct(item.productId).catch(() => {});
+        }
+      } catch (syncErr) {
+        console.warn("Selective sync falló, ejecutando full sync forzado:", syncErr);
+        try {
+          const { runSupabaseSync } = require("../../../lib/syncService");
+          await runSupabaseSync(true);
+        } catch { /* ignore */ }
       }
 
-      const updatedOrder = await prisma.webOrder.update({
+      const updatedOrder = await prisma.webOrder.findUnique({
         where: { id: orderId },
-        data: updateData,
-        include: {
-          items: {
-            include: {
-              product: true,
-            },
-          },
-        },
+        include: { items: { include: { product: true } } },
       });
 
       return res.status(200).json({

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import pkg from "../../package.json";
 import { useModules } from "@/hooks/useModules";
@@ -261,15 +261,22 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     hasRolePermission,
   } = useModules();
   const [alertCount, setAlertCount] = useState(0);
-  const [collapsedGroups, setCollapsedGroups] =
-    useState<Set<string>>(loadCollapsed);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const hasHydratedRef = useRef(false);
   const [appVersion, setAppVersion] = useState(pkg.version);
   const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(
     null,
   );
 
   useEffect(() => {
-    saveCollapsed(collapsedGroups);
+    setCollapsedGroups(loadCollapsed());
+    hasHydratedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (hasHydratedRef.current) {
+      saveCollapsed(collapsedGroups);
+    }
   }, [collapsedGroups]);
 
   useEffect(() => {
