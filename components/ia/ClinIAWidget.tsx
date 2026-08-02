@@ -388,7 +388,7 @@ export default function ClinIAWidget() {
                           </div>
                           <div className="flex flex-col gap-1">
                             <div
-                              className={`px-3 py-2.5 rounded-2xl ${msg.role === "user" ? "bg-indigo-600 text-white rounded-tr-none" : "bg-card border border-border shadow-sm rounded-tl-none text-foreground"}`}
+                              className={`px-3 py-2.5 rounded-2xl ${msg.role === "user" ? "bg-indigo-600 text-white rounded-tr-none" : "bg-white border border-border shadow-sm rounded-tl-none text-foreground"}`}
                             >
                               {msg.role === "user" ? (
                                 <p className="text-sm whitespace-pre-wrap">
@@ -476,7 +476,7 @@ export default function ClinIAWidget() {
                       <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-blue-100 text-blue-600">
                         <Bot size={14} />
                       </div>
-                      <div className="px-4 py-3 rounded-2xl bg-card border border-border shadow-sm rounded-tl-none flex items-center gap-2 text-foreground-muted">
+                      <div className="px-4 py-3 rounded-2xl bg-white border border-border shadow-sm rounded-tl-none flex items-center gap-2 text-foreground-muted">
                         <Loader2 size={14} className="animate-spin" />
                         <span className="text-xs font-medium animate-pulse">
                           Pensando...
@@ -488,7 +488,7 @@ export default function ClinIAWidget() {
                 </div>
 
                 {/* Input Area */}
-                <div className="p-3 bg-card border-t border-border shrink-0">
+                <div className="p-3 bg-white border-t border-border shrink-0">
                   <form
                     onSubmit={sendMessage}
                     className="relative flex items-center"
@@ -517,7 +517,7 @@ export default function ClinIAWidget() {
           {/* Modal Guardar Nota */}
           {noteToSave && (
             <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-card w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                 <div className="p-4 border-b border-border flex justify-between items-center bg-muted/30">
                   <h3 className="font-semibold text-foreground flex items-center gap-2">
                     <BookmarkPlus size={18} className="text-blue-500" />

@@ -132,6 +132,17 @@ export default async function handler(
                 where: { id: item.productId },
                 data: { quantityStock: { increment: stockQty } },
               });
+              const { branchId } = req.body;
+              if (branchId) {
+                const bId = parseInt(branchId);
+                if (!isNaN(bId)) {
+                  await tx.productBranchStock.upsert({
+                    where: { productId_branchId: { productId: item.productId, branchId: bId } },
+                    update: { quantityStock: { increment: stockQty } },
+                    create: { productId: item.productId, branchId: bId, quantityStock: stockQty }
+                  });
+                }
+              }
             }
           }
 
@@ -139,6 +150,8 @@ export default async function handler(
 
         } else if (oldStatus !== newStatus) {
           // Sin cambio de items, solo ajustar stock por cambio de estado
+          const { branchId } = req.body;
+          const bId = branchId ? parseInt(branchId) : null;
           const existingItems = await tx.purchaseItem.findMany({ where: { purchaseId: id } });
           for (const item of existingItems) {
             if (oldStatus !== PurchaseStatus.RECEIVED && newStatus === PurchaseStatus.RECEIVED) {
@@ -147,6 +160,13 @@ export default async function handler(
                 where: { id: item.productId },
                 data: { quantityStock: { increment: receivedQty } },
               });
+              if (bId && !isNaN(bId)) {
+                await tx.productBranchStock.upsert({
+                  where: { productId_branchId: { productId: item.productId, branchId: bId } },
+                  update: { quantityStock: { increment: receivedQty } },
+                  create: { productId: item.productId, branchId: bId, quantityStock: receivedQty }
+                });
+              }
             } else if (oldStatus === PurchaseStatus.RECEIVED && newStatus !== PurchaseStatus.RECEIVED) {
               const revertedQty = item.quantityReceived ?? item.quantity;
               const product = await tx.product.findUnique({
@@ -160,6 +180,12 @@ export default async function handler(
                 where: { id: item.productId },
                 data: { quantityStock: { decrement: revertedQty } },
               });
+              if (bId && !isNaN(bId)) {
+                await tx.productBranchStock.updateMany({
+                  where: { productId: item.productId, branchId: bId },
+                  data: { quantityStock: { decrement: revertedQty } }
+                });
+              }
             }
           }
           updateData.totalAmount = existingPurchase.totalAmount;

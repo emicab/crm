@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/formatCurrency";
 import toast from "react-hot-toast";
 import { formatDate } from "@/lib/formatDate";
@@ -61,6 +62,7 @@ interface WebOrder {
 }
 
 export default function PedidosWebPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<WebOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -342,12 +344,13 @@ export default function PedidosWebPage() {
           >
             {autoRefresh ? "⏸ Pausar" : "▶ Auto"}
           </Button>
-          <a
-            href="/configuracion?tab=tienda_web"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition-colors flex items-center gap-2 shadow-sm"
+          <Button
+            variant="primary"
+            onClick={() => router.push("/configuracion?tab=tienda_web")}
+            className="flex items-center gap-2"
           >
             <Settings size={16} /> Configurar Tienda Web
-          </a>
+          </Button>
         </div>
       </div>
 

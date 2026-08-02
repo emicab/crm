@@ -18,7 +18,8 @@
     "build": "npm run build:next && npx electron scripts/compile-bytecode.js && electron-builder",
     "build:tauri": "powershell -Command \"$env:PATH = \\\"$env:USERPROFILE\\.cargo\\bin;$env:PATH\\\"; npx @tauri-apps/cli build\"",
     "publish": "echo 'Para publicar una release, simplemente crea un tag en git (ej. git tag v1.5.6) y haz push (git push origin v1.5.6). GitHub Actions se encargará de compilar y subir el instalador a Releases.' && exit 1",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "reset": "tsx scripts/reset_databases.ts"
   },
   "dependencies": {
     "@afipsdk/afip.js": "^1.2.3",
@@ -68,8 +69,10 @@
     "electron-builder": "^26.0.12",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
+    "playwright": "^1.62.1",
     "prisma": "^6.4.0",
     "tailwindcss": "^4",
+    "tsx": "^4.19.2",
     "typescript": "^5",
     "wait-on": "^8.0.3"
   },

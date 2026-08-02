@@ -6,7 +6,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const { ids, allPages, filters, isPublicWeb, brandId, categoryId, supplierId } = req.body;
 
-      let whereClause: any = {};
+      const whereClause: any = {};
 
       if (allPages) {
         if (filters?.search) {
@@ -30,7 +30,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ message: "Debe proporcionar una lista de IDs o seleccionar todas las páginas." });
       }
 
-      const updateData: any = {};
+      // [FIX] Recolectar las IDs afectadas antes del updateMany para sincronizarlas
+      const affectedProducts = await prisma.product.findMany({
+        where: whereClause,
+        select: { id: true },
+      });
+      const affectedIds = affectedProducts.map((p) => p.id);
+
+      if (affectedIds.length === 0) {
+        return res.status(404).json({ message: "No se encontraron productos para actualizar." });
+      }
+
+      // [FIX] Prisma updateMany NO actualiza @updatedAt automáticamente, lo agregamos explícitamente
+      const updateData: any = {
+        updatedAt: new Date(),
+      };
+
       if (isPublicWeb !== undefined) {
         updateData.isPublicWeb = Boolean(isPublicWeb);
       }
@@ -43,10 +58,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: updateData,
       });
 
+      // [FIX] Sync selectivo únicamente con las entidades modificadas
       try {
-        const { runSupabaseSync } = require("../../../lib/syncService");
-        await runSupabaseSync(true);
-      } catch { /* ignore */ }
+        const { syncProducts } = await import("../../../lib/syncService");
+        if (affectedIds.length > 0) {
+          await syncProducts(affectedIds);
+        }
+      } catch (syncErr) {
+        console.error("[BatchUpdate] Error en sync masivo:", syncErr);
+      }
 
       return res.status(200).json({ message: "Productos actualizados correctamente.", count: result.count });
     } catch (error: any) {

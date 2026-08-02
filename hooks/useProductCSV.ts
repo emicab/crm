@@ -4,7 +4,7 @@ import { exportToCSV, parseCSV } from '@/lib/csv';
 import type { Product } from '@/types';
 
 export function useProductCSV(fetchProducts: () => void) {
-  const handleExportCSV = useCallback((products: Product[]) => {
+  const handleExportCSV = useCallback(async (products: Product[]) => {
     const headers = [
       { key: 'name', label: 'Nombre' },
       { key: 'sku', label: 'SKU' },
@@ -23,8 +23,12 @@ export function useProductCSV(fetchProducts: () => void) {
       categoryName: p.category?.name || '',
       supplierName: p.supplier?.name || '',
     }));
-    exportToCSV('productos', dataToExport, headers);
-    toast.success('Productos exportados a CSV con éxito.');
+    const ok = await exportToCSV('productos', dataToExport, headers);
+    if (ok) {
+      toast.success('Productos exportados a CSV con éxito.');
+    } else {
+      toast.error('No se pudo exportar el CSV.');
+    }
   }, []);
 
   const handleImportCSV = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {

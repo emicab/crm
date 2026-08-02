@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { encryptText, decryptText } from '../../../lib/encryption';
+import { getDeviceBranchId, isMainDevice } from '../../../lib/branchIdentity';
 import os from 'os';
 
 const OFFICIAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://htroigemnwqiugieodmv.supabase.co';
@@ -46,6 +47,9 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   supabase_url: OFFICIAL_SUPABASE_URL,
   supabase_anon_key: OFFICIAL_SUPABASE_KEY,
   supabase_last_sync: '',
+  device_branch_id: '',
+  device_role: '',
+  tenant_id: '',
   admin_pin_setup: 'false',
   smtpHost: '',
   smtpPort: '587',
@@ -53,9 +57,12 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   smtpPass: '',
   smtpFromName: 'Mi Negocio - Ventas',
   geminiApiKey: '',
+  cloudinaryCloudName: '',
+  cloudinaryApiKey: '',
+  cloudinaryApiSecret: '',
 };
 
-const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey', 'smtpPass', 'geminiApiKey'];
+const ENCRYPTED_FIELDS = ['arcaCert', 'arcaKey', 'smtpPass', 'geminiApiKey', 'cloudinaryApiKey', 'cloudinaryApiSecret'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
@@ -74,6 +81,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!result.hardware_id) result.hardware_id = getHardwareId();
       if (!result.supabase_url) result.supabase_url = OFFICIAL_SUPABASE_URL;
       if (!result.supabase_anon_key) result.supabase_anon_key = OFFICIAL_SUPABASE_KEY;
+
+      // Identidad de sucursal de esta PC (server-side)
+      const deviceBranchId = await getDeviceBranchId();
+      result.device_branch_id = deviceBranchId ? String(deviceBranchId) : '';
+      result.is_main_device = (await isMainDevice()) ? 'true' : 'false';
 
       res.status(200).json(result);
     } catch (error) {

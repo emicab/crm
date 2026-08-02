@@ -96,7 +96,8 @@ export default async function handler(
         include: { items: { include: { product: true } } }
       });
 
-      // Descuenta stock automáticamente de los productos
+      // Descuenta stock automáticamente de los productos (global + sucursal principal)
+      const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
       for (const item of items) {
         try {
           await prisma.product.update({
@@ -107,6 +108,22 @@ export default async function handler(
               }
             }
           });
+          if (mainBranch) {
+            await prisma.productBranchStock.upsert({
+              where: {
+                productId_branchId: {
+                  productId: parseInt(item.productId),
+                  branchId: mainBranch.id,
+                },
+              },
+              update: { quantityStock: { decrement: parseFloat(item.quantity) } },
+              create: {
+                productId: parseInt(item.productId),
+                branchId: mainBranch.id,
+                quantityStock: -parseFloat(item.quantity),
+              },
+            });
+          }
         } catch (stkErr) {
           console.warn("Error descontando stock para item:", item, stkErr);
         }

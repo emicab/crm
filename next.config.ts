@@ -47,6 +47,19 @@ const nextConfig = {
     if (nextRuntime === 'edge') {
       config.devtool = false;
     }
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: [
+        '**/*.db',
+        '**/*.db-journal',
+        '**/*.sqlite',
+        '**/*.sqlite-journal',
+        '**/.next2/**',
+        '**/prisma/*.db*',
+        '**/*.log',
+        ...(Array.isArray(config.watchOptions?.ignored) ? config.watchOptions.ignored : []),
+      ],
+    };
     return config;
   },
 };

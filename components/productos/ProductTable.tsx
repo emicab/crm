@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import type { Product, Brand, Category, Supplier } from "@/types";
+import type { Product, Brand, Category, Supplier, Branch } from "@/types";
 import Button from "@/components/ui/Button";
 import {
   Edit3,
@@ -22,6 +22,8 @@ import ProductMobileCard from "./ProductMobileCard";
 import ProductFilters from "./ProductFilters";
 import SelectedBar from "./SelectedBar";
 import CSVImportModal from "./CSVImportModal";
+import { TransferStockModal, type TransferItem } from "./TransferStockModal";
+import { BatchPriceModal } from "./BatchPriceModal";
 
 const ProductTable = () => {
   const router = useRouter();
@@ -36,16 +38,19 @@ const ProductTable = () => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBatchSupplierModalOpen, setIsBatchSupplierModalOpen] =
     useState(false);
+  const [isBatchPriceModalOpen, setIsBatchPriceModalOpen] = useState(false);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
 
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [filters, setFilters] = useState({
     search: "",
     brandId: "",
     categoryId: "",
     supplierId: "",
+    branchId: "",
   });
 
   const [page, setPage] = useState(1);
@@ -55,14 +60,25 @@ const ProductTable = () => {
 
   const { handleExportCSV } = useProductCSV(() => fetchProducts(page));
   const [isCSVModalOpen, setIsCSVModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferInitialItems, setTransferInitialItems] = useState<
+    TransferItem[]
+  >([]);
 
   useEffect(() => {
+    // Cargar sucursal activa guardada en esta PC por defecto
+    const activeBranchId = localStorage.getItem("clinpos_active_branch_id");
+    if (activeBranchId) {
+      setFilters((prev) => ({ ...prev, branchId: activeBranchId }));
+    }
+
     const fetchFilterOptions = async () => {
       try {
-        const [brandsRes, categoriesRes, suppliersRes] = await Promise.all([
+        const [brandsRes, categoriesRes, suppliersRes, branchesRes] = await Promise.all([
           fetch("/api/brands"),
           fetch("/api/categories"),
           fetch("/api/proveedores"),
+          fetch("/api/branches"),
         ]);
         if (!brandsRes.ok || !categoriesRes.ok || !suppliersRes.ok)
           throw new Error("Error al cargar opciones de filtro.");
@@ -70,6 +86,9 @@ const ProductTable = () => {
         setBrands(await brandsRes.json());
         setCategories(await categoriesRes.json());
         setSuppliers(await suppliersRes.json());
+        if (branchesRes.ok) {
+          setBranches(await branchesRes.json());
+        }
       } catch (err: any) {
         console.error("Filtro-Error:", err);
         setError(
@@ -89,6 +108,7 @@ const ProductTable = () => {
       if (filters.brandId) params.append("brandId", filters.brandId);
       if (filters.categoryId) params.append("categoryId", filters.categoryId);
       if (filters.supplierId) params.append("supplierId", filters.supplierId);
+      if (filters.branchId) params.append("branchId", filters.branchId);
       params.append("page", String(pageNum));
       params.append("limit", "20");
       const queryString = params.toString();
@@ -140,6 +160,15 @@ const ProductTable = () => {
     };
   }, [filters, fetchProducts]);
 
+  // Escuchar eventos de sincronización en tiempo real para refrescar la tabla
+  useEffect(() => {
+    const handleSyncCompleted = () => {
+      fetchProducts(page);
+    };
+    window.addEventListener("sync-completed", handleSyncCompleted);
+    return () => window.removeEventListener("sync-completed", handleSyncCompleted);
+  }, [fetchProducts, page]);
+
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
     fetchProducts(newPage);
@@ -158,7 +187,7 @@ const ProductTable = () => {
   };
 
   const handleClearFilters = () => {
-    setFilters({ search: "", brandId: "", categoryId: "", supplierId: "" });
+    setFilters({ search: "", brandId: "", categoryId: "", supplierId: "", branchId: "" });
     setPage(1);
   };
 
@@ -192,6 +221,19 @@ const ProductTable = () => {
   const handleClearSelection = () => {
     setSelectedIds(new Set());
     setIsAllPagesSelected(false);
+  };
+
+  const handleOpenTransferForSelected = () => {
+    const items = products
+      .filter((p) => selectedIds.has(p.id))
+      .map((p) => ({ product: p, quantity: 1 }));
+    setTransferInitialItems(items);
+    if (isAllPagesSelected) {
+      toast(
+        "La selección de todas las páginas no se puede precargar en el remito. Agregá los productos desde el buscador del remito.",
+      );
+    }
+    setIsTransferModalOpen(true);
   };
 
   const handleBatchUpdate = async (data: {
@@ -304,7 +346,7 @@ const ProductTable = () => {
           ? `${data.count || totalProducts} productos publicados en Tienda Web.`
           : `${data.count || totalProducts} productos ocultados de Tienda Web.`,
       );
-    } catch (err: any) {
+    } catch {
       toast.error("Error al actualizar productos masivamente.");
     }
   };
@@ -358,16 +400,43 @@ const ProductTable = () => {
         onSuccess={() => fetchProducts(1)}
       />
 
+      <TransferStockModal
+        isOpen={isTransferModalOpen}
+        onClose={() => {
+          setIsTransferModalOpen(false);
+          setTransferInitialItems([]);
+        }}
+        products={products}
+        initialItems={transferInitialItems}
+        onTransferCompleted={() => {
+          fetchProducts(page);
+          handleClearSelection();
+        }}
+      />
+
+      <BatchPriceModal
+        isOpen={isBatchPriceModalOpen}
+        onClose={() => setIsBatchPriceModalOpen(false)}
+        selectedCount={selectedIds.size}
+        isAllPagesSelected={isAllPagesSelected}
+        totalCount={totalProducts}
+        selectedIds={selectedIds}
+        filters={filters}
+        onSuccess={() => fetchProducts(page)}
+      />
+
       <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
         <ProductFilters
           filters={filters}
           brands={brands}
           categories={categories}
           suppliers={suppliers}
+          branches={branches}
           onChange={handleFilterChange}
           onClear={handleClearFilters}
           onExportCSV={() => handleExportCSV(products)}
           onImportCSV={() => setIsCSVModalOpen(true)}
+          onTransferStock={() => setIsTransferModalOpen(true)}
         />
         {error && (
           <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md my-4">
@@ -387,8 +456,10 @@ const ProductTable = () => {
           onSelectAllPages={() => setIsAllPagesSelected(true)}
           onClear={handleClearSelection}
           onBatchUpdate={() => setIsBatchSupplierModalOpen(true)}
+          onAdjustPrices={() => setIsBatchPriceModalOpen(true)}
           onPublishWeb={() => handleBatchWebStatus(true)}
           onHideWeb={() => handleBatchWebStatus(false)}
+          onTransferStock={handleOpenTransferForSelected}
         />
         <div className="overflow-x-auto">
           <table className="hidden md:table w-full text-left table-auto">
@@ -498,13 +569,23 @@ const ProductTable = () => {
                     <td className="py-2.5 px-2 text-sm text-foreground font-bold text-right w-28 font-mono">
                       {formatCurrency(product.priceSale)}
                     </td>
-                    <td className="py-2.5 px-2 text-sm text-foreground font-semibold text-center w-20">
-                      {product.quantityStock}
-                      {product.unitType === "WEIGHT"
-                        ? "kg"
-                        : product.unitType === "VOLUME"
-                          ? "L"
-                          : ""}
+                    <td className="py-2.5 px-2 text-sm text-foreground text-center w-36">
+                      <div className="flex flex-col items-center">
+                        <span className="font-bold text-foreground">
+                          {(() => {
+                            if (filters.branchId) {
+                              const bs = product.branchStocks?.find((b: any) => b.branchId === Number(filters.branchId));
+                              return bs ? bs.quantityStock : 0;
+                            }
+                            return product.quantityStock;
+                          })()}
+                          {product.unitType === "WEIGHT"
+                            ? " kg"
+                            : product.unitType === "VOLUME"
+                              ? " L"
+                              : " u."}
+                        </span>
+                      </div>
                     </td>
                     <td className="py-2.5 px-2 text-sm text-center w-28">
                       <button

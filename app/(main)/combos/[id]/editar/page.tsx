@@ -8,6 +8,8 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { debounce } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { optimizeImage } from '@/lib/imageOptimizer';
+import toast from 'react-hot-toast';
 
 const EditarComboPage = () => {
   const router = useRouter();
@@ -79,17 +81,40 @@ const EditarComboPage = () => {
 
   useEffect(() => { searchProducts(searchTerm); }, [searchTerm, searchProducts]);
 
-  const handleLocalImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLocalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        setImageUrl(dataUrl);
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor selecciona un archivo de imagen válido.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('La imagen no debe superar los 10MB.');
+      return;
+    }
+
+    e.target.value = '';
+
+    const toastId = toast.loading('Procesando imagen...');
+    try {
+      const optimized = await optimizeImage(file);
+      const cloudRes = await fetch('/api/upload/cloudinary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: optimized.dataUrl }),
+      });
+      const cloudData = await cloudRes.json();
+      if (cloudRes.ok && cloudData.url) {
+        setImageUrl(cloudData.url);
+        toast.success('Imagen subida a Cloudinary exitosamente.', { id: toastId });
+      } else {
+        toast.error(`No se pudo subir la imagen: ${cloudData.message || 'error de Cloudinary'}. Intentá de nuevo.`, { id: toastId });
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'error desconocido';
+      toast.error(`No se pudo procesar la imagen: ${msg}. Intentá de nuevo.`, { id: toastId });
+    }
   };
 
   const addItem = (product: Product) => {

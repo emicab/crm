@@ -1,80 +1,211 @@
 // components/layout/Layout.tsx
 "use client";
 
-import React, { useState } from 'react';
-import Sidebar from './Sidebar';
-import Header from './Header';
-import KbdFooter from './KbdFooter';
-import { useModules } from '@/hooks/useModules';
-import { usePathname } from 'next/navigation';
-import { ShieldAlert } from 'lucide-react';
+import React, { useState } from "react";
+import Sidebar from "./Sidebar";
+import Header from "./Header";
+import KbdFooter from "./KbdFooter";
+import { useModules } from "@/hooks/useModules";
+import { usePathname } from "next/navigation";
+import { ShieldAlert } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
-
-
 
 const AccessDeniedView = () => (
   <div className="flex flex-col items-center justify-center p-12 py-24 text-center space-y-4">
     <div className="bg-destructive/10 text-destructive p-4 rounded-full shadow-inner animate-pulse">
       <ShieldAlert size={36} />
     </div>
-    <h2 className="text-2xl font-bold text-foreground uppercase tracking-tight">Acceso Restringido</h2>
+    <h2 className="text-2xl font-bold text-foreground uppercase tracking-tight">
+      Acceso Restringido
+    </h2>
     <p className="text-sm text-foreground-muted max-w-sm leading-relaxed">
-      Tu cuenta no tiene los permisos necesarios para acceder a esta sección. Comunicante con el administrador del sistema.
+      Tu cuenta no tiene los permisos necesarios para acceder a esta sección.
+      Comunicante con el administrador del sistema.
     </p>
   </div>
 );
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { businessProfile, isLoading, isModuleEnabled, currentUser, hasSupabaseConfig, storageMode, hasRolePermission } = useModules();
+  const {
+    businessProfile,
+    isLoading,
+    isModuleEnabled,
+    currentUser,
+    hasSupabaseConfig,
+    storageMode,
+    hasRolePermission,
+  } = useModules();
   const pathname = usePathname() || "";
 
-  // Si la configuración cargó y no hay rubro configurado, mostramos onboarding bloqueante
-  const showOnboarding = !isLoading && businessProfile === 'unset';
+  const showOnboarding = !isLoading && businessProfile === "unset";
+  const showPinLock =
+    !isLoading && !showOnboarding && isModuleEnabled("roles") && !currentUser;
 
-  // Si el módulo de roles está activo y no hay sesión iniciada, mostramos bloqueo de PIN
-  const showPinLock = !isLoading && !showOnboarding && isModuleEnabled('roles') && !currentUser;
-
-  // Sincronización automática de Supabase cada 1 minuto
+  // Sincronización Realtime con Supabase
   React.useEffect(() => {
-    if (isLoading || !hasSupabaseConfig || showOnboarding || showPinLock || storageMode === 'local') {
+    if (
+      isLoading ||
+      !hasSupabaseConfig ||
+      showOnboarding ||
+      showPinLock ||
+      storageMode === "local"
+    ) {
       return;
     }
 
+    let isMounted = true;
+    let realtimeChannel: any = null;
+    let syncTimeout: NodeJS.Timeout | null = null;
+    let initialTimeout: NodeJS.Timeout | null = null;
+
     const triggerSync = async () => {
       try {
-        await fetch("/api/sync");
+        const res = await fetch("/api/sync");
+        if (res.ok) {
+          window.dispatchEvent(new Event("sync-completed"));
+        }
       } catch (err) {
-        console.error("Error al sincronizar automáticamente con Supabase:", err);
+        console.error(
+          "Error al sincronizar automáticamente con Supabase:",
+          err,
+        );
       }
     };
 
-    // Lanzar sync inicial 5 segundos después de montar
-    const initialTimeout = setTimeout(triggerSync, 5000);
+    initialTimeout = setTimeout(triggerSync, 5000);
+    const fallbackInterval = setInterval(triggerSync, 300000);
 
-    // Programar intervalo cada 1 minuto
-    const interval = setInterval(triggerSync, 60000);
+    const setupRealtime = async () => {
+      try {
+        const res = await fetch("/api/sync/config");
+        if (!res.ok) return;
+        const config = await res.json();
+        if (
+          !config.supabaseUrl ||
+          !config.supabaseAnonKey ||
+          !config.tenantId ||
+          !isMounted
+        )
+          return;
+
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabase = createClient(
+          config.supabaseUrl,
+          config.supabaseAnonKey,
+        );
+
+        // Callback unificado con debounce de 3 segundos
+        const handlePayload = (payload: any) => {
+          if (syncTimeout) clearTimeout(syncTimeout);
+          syncTimeout = setTimeout(() => {
+            console.log(
+              "[Realtime] Cambio detectado en Supabase, sincronizando...",
+              payload.table,
+            );
+            triggerSync();
+          }, 3000);
+        };
+
+        // [CORREGIDO] Se debe especificar la 'table' al usar 'filter' en Supabase Realtime
+        realtimeChannel = supabase
+          .channel("tenant_changes")
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "ProductBranchStock",
+              filter: `tenant_id=eq.${config.tenantId}`,
+            },
+            handlePayload,
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "Product",
+              filter: `tenant_id=eq.${config.tenantId}`,
+            },
+            handlePayload,
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "Sale",
+              filter: `tenant_id=eq.${config.tenantId}`,
+            },
+            handlePayload,
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "Purchase",
+              filter: `tenant_id=eq.${config.tenantId}`,
+            },
+            handlePayload,
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "StockTransfer",
+              filter: `tenant_id=eq.${config.tenantId}`,
+            },
+            handlePayload,
+          )
+          .subscribe((status: string) => {
+            if (status === "SUBSCRIBED") {
+              console.log(
+                "[Realtime] Suscrito a eventos de Supabase exitosamente.",
+              );
+            }
+          });
+      } catch (error) {
+        console.error("Error configurando Realtime Supabase:", error);
+      }
+    };
+
+    setupRealtime();
 
     return () => {
-      clearInterval(interval);
-      clearTimeout(initialTimeout);
+      isMounted = false;
+      if (initialTimeout) clearTimeout(initialTimeout);
+      if (syncTimeout) clearTimeout(syncTimeout);
+      clearInterval(fallbackInterval);
+      if (realtimeChannel) {
+        realtimeChannel.unsubscribe();
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, hasSupabaseConfig, showOnboarding, showPinLock]);
+  }, [isLoading, hasSupabaseConfig, showOnboarding, showPinLock, storageMode]);
 
-  // Validar si el rol actual puede acceder a la ruta activa
   let isAccessAllowed = true;
-  if (!isLoading && !showOnboarding && !showPinLock && isModuleEnabled('roles') && currentUser) {
+  if (
+    !isLoading &&
+    !showOnboarding &&
+    !showPinLock &&
+    isModuleEnabled("roles") &&
+    currentUser
+  ) {
     isAccessAllowed = hasRolePermission(currentUser.role, pathname);
   }
 
   return (
     <div className="md:flex h-screen bg-background text-foreground">
       <div className="print:hidden">
-        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
       </div>
 
       <div className="flex flex-1 flex-col min-w-0 print:block">

@@ -20,7 +20,7 @@ const CombosPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/combos');
+      const res = await fetch('/api/combos?all=true');
       if (!res.ok) throw new Error('Error al cargar combos');
       const data = await res.json();
       setCombos(data.map((c: any) => ({ ...c, price: parseFloat(c.price) })));

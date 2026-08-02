@@ -25,6 +25,7 @@ import {
   RefreshCcw,
   Bookmark,
   Ticket,
+  ArrowRightLeft,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
@@ -96,6 +97,13 @@ const navGroups: NavGroup[] = [
         href: "/stock/alertas",
         label: "Alertas de Stock",
         icon: <AlertTriangle size={20} />,
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/traspasos",
+        label: "Traspasos",
+        icon: <ArrowRightLeft size={20} />,
+        moduleId: "traspasos",
         allowedRoles: ["ADMIN", "SUPERVISOR"],
       },
       {
@@ -428,6 +436,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             "analiticas",
             "consignaciones",
             "agente_ia",
+            "traspasos",
           ].includes(item.moduleId || "");
 
           // If feature belongs to Pro plan and we are in basic plan, keep item visible with lock

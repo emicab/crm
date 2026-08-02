@@ -2,7 +2,7 @@
 
 import React from "react";
 import Button from "@/components/ui/Button";
-import { X, Edit, Globe, EyeOff } from "lucide-react";
+import { X, Edit, Globe, EyeOff, ArrowRightLeft } from "lucide-react";
 
 interface SelectedBarProps {
   count: number;
@@ -11,8 +11,10 @@ interface SelectedBarProps {
   onSelectAllPages?: () => void;
   onClear: () => void;
   onBatchUpdate: () => void;
+  onAdjustPrices?: () => void;
   onPublishWeb?: () => void;
   onHideWeb?: () => void;
+  onTransferStock?: () => void;
 }
 
 const SelectedBar: React.FC<SelectedBarProps> = ({
@@ -22,8 +24,10 @@ const SelectedBar: React.FC<SelectedBarProps> = ({
   onSelectAllPages,
   onClear,
   onBatchUpdate,
+  onAdjustPrices,
   onPublishWeb,
   onHideWeb,
+  onTransferStock,
 }) => {
   if (count === 0 && !isAllPagesSelected) return null;
 
@@ -72,6 +76,27 @@ const SelectedBar: React.FC<SelectedBarProps> = ({
             className="border-gray-400 text-gray-700 hover:bg-gray-100 bg-white font-semibold flex items-center gap-1"
           >
             <EyeOff size={14} className="text-gray-600" /> Ocultar de Web
+          </Button>
+        )}
+        {onAdjustPrices && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAdjustPrices}
+            className="border-blue-600 text-blue-700 hover:bg-blue-100 bg-white font-semibold flex items-center gap-1"
+          >
+            Ajustar Precios 💲
+          </Button>
+        )}
+        {onTransferStock && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onTransferStock}
+            className="border-cyan-600 text-cyan-700 hover:bg-cyan-100 bg-white font-semibold flex items-center gap-1"
+          >
+            <ArrowRightLeft size={14} className="text-cyan-600" /> Enviar a
+            Remito de Traspaso
           </Button>
         )}
         <Button

@@ -213,6 +213,71 @@ const MIGRATIONS: &[Migration] = &[
             ALTER TABLE "Promotion" ADD COLUMN "imageUrl" TEXT;
         "#,
     },
+    Migration {
+        version: 7,
+        name: "add_store_custom_domain",
+        sql: r#"ALTER TABLE "StoreConfig" ADD COLUMN "customDomain" TEXT"#,
+    },
+    Migration {
+        version: 8,
+        name: "add_branch_to_sale",
+        sql: r#"ALTER TABLE "Sale" ADD COLUMN "branchId" INTEGER"#,
+    },
+    Migration {
+        version: 9,
+        name: "add_multi_branch_tables",
+        sql: r#"
+            CREATE TABLE IF NOT EXISTS "Branch" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "name" TEXT NOT NULL,
+                "address" TEXT,
+                "phone" TEXT,
+                "isMain" BOOLEAN NOT NULL DEFAULT 0,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS "ProductBranchStock" (
+                "productId" INTEGER NOT NULL,
+                "branchId" INTEGER NOT NULL,
+                "quantityStock" REAL NOT NULL DEFAULT 0,
+                "minStock" REAL DEFAULT 0,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY ("productId", "branchId"),
+                CONSTRAINT "ProductBranchStock_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT "ProductBranchStock_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS "StockTransfer" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "sourceBranchId" INTEGER NOT NULL,
+                "targetBranchId" INTEGER NOT NULL,
+                "status" TEXT NOT NULL DEFAULT 'COMPLETED',
+                "notes" TEXT,
+                "createdByName" TEXT,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "StockTransfer_sourceBranchId_fkey" FOREIGN KEY ("sourceBranchId") REFERENCES "Branch" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+                CONSTRAINT "StockTransfer_targetBranchId_fkey" FOREIGN KEY ("targetBranchId") REFERENCES "Branch" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS "StockTransferItem" (
+                "transferId" INTEGER NOT NULL,
+                "productId" INTEGER NOT NULL,
+                "productName" TEXT,
+                "quantity" REAL NOT NULL,
+                "receivedQuantity" REAL,
+                PRIMARY KEY ("transferId", "productId"),
+                CONSTRAINT "StockTransferItem_transferId_fkey" FOREIGN KEY ("transferId") REFERENCES "StockTransfer" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT "StockTransferItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+            );
+        "#,
+    },
+    Migration {
+        version: 10,
+        name: "add_mp_fee_amount_to_weborder",
+        sql: r#"ALTER TABLE "WebOrder" ADD COLUMN "mpFeeAmount" DECIMAL NOT NULL DEFAULT 0"#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {
@@ -297,6 +362,14 @@ struct RestoreResult {
     canceled: bool,
 }
 
+#[derive(Serialize)]
+struct SaveFileResult {
+    success: bool,
+    path: Option<String>,
+    error: Option<String>,
+    canceled: bool,
+}
+
 fn get_db_path(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
     app_handle.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir()).join("crm_prod.db")
 }
@@ -368,6 +441,58 @@ async fn restore_database(app_handle: tauri::AppHandle) -> Result<RestoreResult,
 }
 
 #[tauri::command]
+async fn save_report_file(
+    app_handle: tauri::AppHandle,
+    content_b64: String,
+    file_name: String,
+    ext: String,
+) -> Result<SaveFileResult, String> {
+    use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+    use tauri_plugin_dialog::DialogExt;
+
+    let file_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Archivo", &[ext.as_str()])
+        .set_file_name(&file_name)
+        .blocking_save_file();
+
+    match file_path {
+        Some(path) => {
+            let path_str = path.into_path().unwrap();
+            match B64.decode(&content_b64) {
+                Ok(bytes) => match fs::write(&path_str, &bytes) {
+                    Ok(_) => Ok(SaveFileResult {
+                        success: true,
+                        path: Some(path_str.to_string_lossy().into_owned()),
+                        error: None,
+                        canceled: false,
+                    }),
+                    Err(e) => Ok(SaveFileResult {
+                        success: false,
+                        path: None,
+                        error: Some(e.to_string()),
+                        canceled: false,
+                    }),
+                },
+                Err(e) => Ok(SaveFileResult {
+                    success: false,
+                    path: None,
+                    error: Some(e.to_string()),
+                    canceled: false,
+                }),
+            }
+        }
+        None => Ok(SaveFileResult {
+            success: false,
+            path: None,
+            error: None,
+            canceled: true,
+        }),
+    }
+}
+
+#[tauri::command]
 async fn kill_server(state: tauri::State<'_, ServerState>) -> Result<(), String> {
     if let Ok(mut server_state) = state.0.lock() {
         if let Some(mut child) = server_state.take() {
@@ -377,7 +502,6 @@ async fn kill_server(state: tauri::State<'_, ServerState>) -> Result<(), String>
     }
     Ok(())
 }
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -385,7 +509,7 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
     .manage(ServerState(Mutex::new(None)))
-    .invoke_handler(tauri::generate_handler![backup_database, restore_database, kill_server])
+    .invoke_handler(tauri::generate_handler![backup_database, restore_database, kill_server, save_report_file])
     .setup(|app| {
       #[cfg(debug_assertions)]
       {

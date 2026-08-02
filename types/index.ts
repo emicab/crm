@@ -36,6 +36,7 @@ export interface Brand {
     brand: Brand;
     category: Category;
     supplier?: Supplier | null;
+    branchStocks?: ProductBranchStock[];
   }
 
   export interface Client {
@@ -232,3 +233,42 @@ export interface Purchase {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Branch {
+  id: number;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  isMain: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProductBranchStock {
+  productId: number;
+  branchId: number;
+  quantityStock: number;
+  minStock?: number;
+  branch?: Branch;
+}
+
+export interface StockTransferItem {
+  transferId?: number;
+  productId: number;
+  productName?: string;
+  quantity: number;
+  receivedQuantity?: number | null;
+}
+
+export interface StockTransfer {
+  id: number;
+  sourceBranchId: number;
+  targetBranchId: number;
+  sourceBranch?: Branch;
+  targetBranch?: Branch;
+  status: 'SENT' | 'COMPLETED' | 'REJECTED' | 'CANCELLED';
+  notes?: string | null;
+  createdByName?: string | null;
+  createdAt: string;
+  items: StockTransferItem[];
+}

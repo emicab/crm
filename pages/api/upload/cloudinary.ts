@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import crypto from "crypto";
+import prisma from "../../../lib/prisma";
+import { decryptText } from "../../../lib/encryption";
 
 export const config = {
   api: {
@@ -15,18 +17,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
   const { file } = req.body;
   if (!file) {
     return res.status(400).json({ message: "Se requiere un archivo o base64 de imagen." });
   }
 
+  // Preferir variables de entorno (dev) y, si faltan, leer credenciales cifradas de la DB local.
+  const setting = await prisma.setting.findMany({ where: { key: { in: ["cloudinaryCloudName", "cloudinaryApiKey", "cloudinaryApiSecret"] } } });
+  const settingMap: Record<string, string> = {};
+  for (const s of setting) settingMap[s.key] = s.value;
+
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME || process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || settingMap.cloudinaryCloudName?.trim() || "";
+  const apiKey = process.env.CLOUDINARY_API_KEY || decryptText(settingMap.cloudinaryApiKey || "").trim() || "";
+  const apiSecret = process.env.CLOUDINARY_API_SECRET || decryptText(settingMap.cloudinaryApiSecret || "").trim() || "";
+
   if (!cloudName || !apiKey || !apiSecret) {
     return res.status(400).json({
-      message: "Cloudinary no está configurado. Asegúrate de definir CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET en el archivo .env",
+      message: "Cloudinary no está configurado. Definí las credenciales en Ajustes > Imágenes (Cloudinary) o en el archivo .env.",
       configured: false,
     });
   }

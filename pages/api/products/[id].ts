@@ -47,23 +47,17 @@ export default async function handler(
             isPublicWeb: Boolean(isPublicWeb),
             ...(webCategory !== undefined ? { webCategory: webCategory || null } : {}),
           },
-          include: { brand: true, category: true, supplier: true },
+          include: { brand: true, category: true, supplier: true, branchStocks: true },
         });
-        // Push directo a Supabase
+        
+        // [CORREGIDO] Sync ligero. Sin fallback destructivo.
         try {
-          const { syncSingleProduct, runSupabaseSync } = require("../../../lib/syncService");
-          const synced = await syncSingleProduct(id);
-          if (!synced) {
-            console.warn("syncSingleProduct falló, ejecutando full sync forzado");
-            await runSupabaseSync(true);
-          }
+          const { syncSingleProduct } = await import("../../../lib/syncService");
+          await syncSingleProduct(id);
         } catch (syncErr) {
-          console.error("Sync error, intentando full sync forzado:", syncErr);
-          try {
-            const { runSupabaseSync } = require("../../../lib/syncService");
-            await runSupabaseSync(true);
-          } catch { /* ignore */ }
+          console.error("[Productos] Error sync visibilidad web (se auto-sanará):", syncErr);
         }
+        
         res.status(200).json(updated);
         return;
       } catch (error: any) {
@@ -74,21 +68,17 @@ export default async function handler(
 
     const {
       pricePurchase, priceSale, quantityStock, stockMinAlert,
-      brandId, categoryId, supplierId, unitType,
+      brandId, categoryId, supplierId, unitType, branchStocks, branchId
     } = req.body;
     let {
       name, sku, description,
     } = req.body;
 
-    // Validaciones básicas
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ message: 'El nombre del producto es obligatorio.' });
     }
     if (priceSale === undefined || isNaN(parseFloat(priceSale))) {
       return res.status(400).json({ message: 'El precio de venta es obligatorio y debe ser un número.' });
-    }
-    if (quantityStock === undefined || isNaN(parseFloat(quantityStock))) {
-      return res.status(400).json({ message: 'La cantidad en stock es obligatoria.' });
     }
     if (brandId === undefined || isNaN(parseInt(brandId))) {
       return res.status(400).json({ message: 'La marca es obligatoria.' });
@@ -102,22 +92,64 @@ export default async function handler(
     if (description) description = sanitizeString(description);
 
     try {
-      // Validar existencia de Brand y Category
       const brandExists = await prisma.brand.findUnique({ where: { id: parseInt(brandId) }});
       if (!brandExists) return res.status(400).json({ message: `Marca con ID ${brandId} no existe.` });
       
       const categoryExists = await prisma.category.findUnique({ where: { id: parseInt(categoryId) }});
       if (!categoryExists) return res.status(400).json({ message: `Categoría con ID ${categoryId} no existe.` });
 
+      let totalStockCalculated = quantityStock !== undefined ? parseFloat(quantityStock) : undefined;
+
+      // [CORREGIDO] Lógica de recálculo de stock por sucursales
+      if (branchStocks && (Array.isArray(branchStocks) || typeof branchStocks === 'object')) {
+        const items = Array.isArray(branchStocks)
+          ? branchStocks
+          : Object.entries(branchStocks).map(([bId, s]) => ({ branchId: Number(bId), stock: s }));
+
+        for (const item of items) {
+          const bId = parseInt(String(item.branchId ?? item.id));
+          const stockVal = parseFloat(String(item.stock ?? item.quantityStock ?? 0));
+          if (!isNaN(bId) && !isNaN(stockVal)) {
+            await prisma.productBranchStock.upsert({
+              where: { productId_branchId: { productId: id, branchId: bId } },
+              update: { quantityStock: stockVal },
+              create: { productId: id, branchId: bId, quantityStock: stockVal }
+            });
+          }
+        }
+        
+        // Recalcular SIEMPRE desde la BD para no ignorar sucursales excluidas en el payload
+        const totalStockAgg = await prisma.productBranchStock.aggregate({
+          where: { productId: id },
+          _sum: { quantityStock: true }
+        });
+        totalStockCalculated = totalStockAgg._sum.quantityStock ?? 0;
+        
+      } else if (branchId && quantityStock !== undefined) {
+        const bId = parseInt(branchId);
+        if (!isNaN(bId)) {
+          await prisma.productBranchStock.upsert({
+            where: { productId_branchId: { productId: id, branchId: bId } },
+            update: { quantityStock: parseFloat(quantityStock) },
+            create: { productId: id, branchId: bId, quantityStock: parseFloat(quantityStock) }
+          });
+        }
+        
+        const totalStockAgg = await prisma.productBranchStock.aggregate({
+          where: { productId: id },
+          _sum: { quantityStock: true }
+        });
+        totalStockCalculated = totalStockAgg._sum.quantityStock ?? 0;
+      }
+
       const dataToUpdate: Prisma.ProductUpdateInput = {
         name: name.trim(),
         priceSale: new Decimal(parseFloat(priceSale)),
-        quantityStock: parseFloat(quantityStock),
+        ...(totalStockCalculated !== undefined ? { quantityStock: totalStockCalculated } : {}),
         brand: { connect: { id: parseInt(brandId) } },
         category: { connect: { id: parseInt(categoryId) } },
       };
 
-      // Manejo de campos opcionales
       if (sku !== undefined) {
         dataToUpdate.sku = typeof sku === 'string' ? (sku.trim() || null) : sku;
       }
@@ -156,22 +188,15 @@ export default async function handler(
       const updatedProduct = await prisma.product.update({
         where: { id },
         data: dataToUpdate,
-        include: { brand: true, category: true, supplier: true },
+        include: { brand: true, category: true, supplier: true, branchStocks: true },
       });
 
+      // [CORREGIDO] Push limpio a Supabase de los datos recién guardados.
       try {
-        const { syncSingleProduct, runSupabaseSync } = require("../../../lib/syncService");
-        const synced = await syncSingleProduct(id);
-        if (!synced) {
-          console.warn("syncSingleProduct falló, ejecutando full sync forzado");
-          await runSupabaseSync(true);
-        }
+        const { syncSingleProduct } = await import("../../../lib/syncService");
+        await syncSingleProduct(id);
       } catch (syncErr) {
-        console.error("Sync error, intentando full sync forzado:", syncErr);
-        try {
-          const { runSupabaseSync } = require("../../../lib/syncService");
-          await runSupabaseSync(true);
-        } catch { /* ignore */ }
+        console.error("[Productos] Sync manual error:", syncErr);
       }
 
       res.status(200).json(updatedProduct);
@@ -202,17 +227,15 @@ export default async function handler(
       await prisma.product.delete({
         where: { id },
       });
+      
       try {
-        const { deleteProductFromSupabase, runSupabaseSync } = require("../../../lib/syncService");
-        const deleted = await deleteProductFromSupabase(id);
-        if (!deleted) {
-          console.warn("deleteProductFromSupabase falló, ejecutando full sync");
-          await runSupabaseSync(false);
-        }
+        const { deleteProductFromSupabase } = await import("../../../lib/syncService");
+        await deleteProductFromSupabase(id);
       } catch (syncErr) {
-        console.error("Delete sync error:", syncErr);
+        console.error("[Productos] Delete sync error:", syncErr);
       }
-      res.status(204).end(); // No Content
+      
+      res.status(204).end();
     } catch (error: any) {
       handleApiError(res, error, `deleting product ${id}`);
     }
@@ -237,20 +260,14 @@ export default async function handler(
         where: { id },
         data: dataToUpdate,
       });
+      
       try {
-        const { syncSingleProduct, runSupabaseSync } = require("../../../lib/syncService");
-        const synced = await syncSingleProduct(id);
-        if (!synced) {
-          console.warn("syncSingleProduct falló, ejecutando full sync forzado");
-          await runSupabaseSync(true);
-        }
+        const { syncSingleProduct } = await import("../../../lib/syncService");
+        await syncSingleProduct(id);
       } catch (syncErr) {
-        console.error("Sync error en PATCH, intentando full sync forzado:", syncErr);
-        try {
-          const { runSupabaseSync } = require("../../../lib/syncService");
-          await runSupabaseSync(true);
-        } catch { /* ignore */ }
+        console.error("[Productos] Sync error en PATCH:", syncErr);
       }
+      
       res.status(200).json(updated);
     } catch (error: any) {
       handleApiError(res, error, `patching product ${id} stock`);

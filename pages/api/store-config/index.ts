@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
+import { isMainDevice, isProDevice } from '../../../lib/branchIdentity';
 import { Prisma } from '@prisma/client';
 
 export default async function handler(
@@ -31,6 +32,7 @@ export default async function handler(
       if (!config) {
         res.status(200).json({
           slug: reqSlug || '',
+          customDomain: '',
           businessName: reqSlug ? reqSlug.toUpperCase().replace(/-/g, ' ') : 'Mi Tienda',
           description: '',
           logoUrl: '',
@@ -63,8 +65,20 @@ export default async function handler(
     }
   } else if (req.method === 'PUT' || req.method === 'POST') {
     try {
+      // La tienda web es una funcionalidad del plan Pro
+      if (!(await isProDevice())) {
+        res.status(403).json({ message: 'La tienda web requiere el plan Pro.' });
+        return;
+      }
+      // La tienda web la administra SOLO la Casa Central
+      if (!(await isMainDevice())) {
+        res.status(403).json({ message: 'La tienda web solo se administra desde la Casa Central.' });
+        return;
+      }
+
       const {
         slug,
+        customDomain,
         businessName,
         description,
         logoUrl,
@@ -89,6 +103,19 @@ export default async function handler(
 
       const cleanSlug = sanitizeString(slug.trim().toLowerCase().replace(/[^a-z0-9_\-]/gi, '-'));
       const cleanBusinessName = sanitizeString(businessName || 'Mi Tienda');
+      // El dominio de la plataforma solo se actualiza si viene explícito en el body
+      // (se detecta automáticamente desde clinstore vía sync). undefined = no tocar.
+      const cleanCustomDomain = "customDomain" in req.body
+        ? (customDomain
+            ? sanitizeString(
+                String(customDomain)
+                  .trim()
+                  .replace(/^https?:\/\//i, '')
+                  .replace(/\/.*$/, '')
+                  .toLowerCase(),
+              ) || null
+            : null)
+        : undefined;
 
       const existingConfig = await prisma.storeConfig.findFirst();
 
@@ -103,6 +130,7 @@ export default async function handler(
           where: { id: existingConfig.id },
           data: {
             slug: cleanSlug,
+            customDomain: cleanCustomDomain,
             businessName: cleanBusinessName,
             description: description ? sanitizeString(description) : null,
             logoUrl: logoUrl || null,
@@ -124,6 +152,7 @@ export default async function handler(
         result = await prisma.storeConfig.create({
           data: {
             slug: cleanSlug,
+            customDomain: cleanCustomDomain,
             businessName: cleanBusinessName,
             description: description ? sanitizeString(description) : null,
             logoUrl: logoUrl || null,
@@ -143,36 +172,10 @@ export default async function handler(
         });
       }
 
-      // Actualizar mpAccessToken directamente en Supabase con upsert
-      try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-        if (supabaseUrl && supabaseKey) {
-          await fetch(`${supabaseUrl}/rest/v1/StoreConfig`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "apikey": supabaseKey,
-              "Authorization": `Bearer ${supabaseKey}`,
-              "Prefer": "resolution=merge-duplicates",
-            },
-            body: JSON.stringify({
-              tenant_id: cleanSlug,
-              slug: cleanSlug,
-              businessName: cleanBusinessName,
-              mpAccessToken: mpAccessToken ? mpAccessToken.trim() : null,
-              mpPublicKey: mpPublicKey ? mpPublicKey.trim() : null,
-              updatedAt: new Date().toISOString(),
-            }),
-          });
-        }
-      } catch (err) {
-        console.warn("Could not directly update StoreConfig in Supabase:", err);
-      }
-
       // Sincronizar inmediatamente con Supabase en segundo plano
+      // (el sync sube StoreConfig con el tenant_id real del hash de licencia)
       try {
-        const { runSupabaseSync } = require("../../../lib/syncService");
+        const { runSupabaseSync } = await import("../../../lib/syncService");
         runSupabaseSync(true).catch((err: any) => console.error("Error auto-syncing store config to Supabase:", err));
       } catch (err) {
         console.warn("Could not auto-sync store config:", err);

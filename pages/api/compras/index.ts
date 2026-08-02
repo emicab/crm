@@ -6,17 +6,16 @@ const Decimal = Prisma.Decimal;
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
 
-// --- Interfaces para los datos de entrada ---
 interface PurchaseItemInput {
   productId: number;
   quantity: number;
-  quantityReceived?: number; // Cantidad realmente recibida
-  purchasePrice: number; // Costo por unidad en esta compra
+  quantityReceived?: number; 
+  purchasePrice: number; 
 }
 
 interface CreatePurchaseInput {
   supplierId: number;
-  status?: PurchaseStatus; // Opcional, por defecto PENDING
+  status?: PurchaseStatus; 
   paymentType?: PaymentType;
   invoiceNumber?: string;
   notes?: string;
@@ -28,7 +27,6 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === 'GET') {
-    // --- Obtener Historial de Compras ---
     const page = req.query.page ? parseInt(req.query.page as string) : undefined;
     const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
     const skip = page ? (page - 1) * limit : undefined;
@@ -49,7 +47,6 @@ export default async function handler(
         }),
         prisma.purchase.count(),
       ]);
-      // Convertir Decimales a string para la respuesta JSON
       const purchasesForJson = purchases.map(p => ({
         ...p,
         totalAmount: p.totalAmount.toString(),
@@ -81,7 +78,6 @@ export default async function handler(
       handleApiError(res, error, "fetching purchases");
     }
   } else if (req.method === 'POST') {
-    // --- Registrar una Nueva Compra ---
     const { supplierId, status, paymentType, items } = req.body as CreatePurchaseInput;
     let { invoiceNumber, notes } = req.body as CreatePurchaseInput;
 
@@ -92,7 +88,6 @@ export default async function handler(
     if (invoiceNumber) invoiceNumber = sanitizeString(invoiceNumber);
     if (notes) notes = sanitizeString(notes);
 
-    // Calcular totalAmount a partir de los ítems recibidos
     let calculatedTotalAmount = new Decimal(0);
     for (const item of items) {
       if (item.quantity <= 0 || item.purchasePrice < 0) {
@@ -143,14 +138,32 @@ export default async function handler(
                 quantityStock: {
                   increment: stockQty,
                 },
-                // F2: Solo actualizar el precio de compra del producto si no tiene uno
                 ...(!product?.pricePurchase ? { pricePurchase: new Decimal(item.purchasePrice) } : {})
               },
             });
+
+            const { branchId } = req.body as any;
+            if (branchId) {
+              const bId = parseInt(branchId);
+              if (!isNaN(bId)) {
+                await tx.productBranchStock.upsert({
+                  where: {
+                    productId_branchId: { productId: item.productId, branchId: bId }
+                  },
+                  update: {
+                    quantityStock: { increment: stockQty }
+                  },
+                  create: {
+                    productId: item.productId,
+                    branchId: bId,
+                    quantityStock: stockQty
+                  }
+                });
+              }
+            }
           }
         }
 
-        // 3. Si la compra tiene medio de pago, registrar gasto automático
         if (paymentType) {
           const supplier = await tx.supplier.findUnique({ where: { id: supplierId } });
           const supplierName = supplier?.name || `Proveedor #${supplierId}`;
@@ -166,7 +179,6 @@ export default async function handler(
             },
           });
 
-          // Registrar movimiento en caja si hay una abierta
           const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
           if (openRegister) {
             await tx.cashMovement.create({
@@ -182,12 +194,20 @@ export default async function handler(
           }
         }
 
-        // Devolvemos la compra completa para la respuesta
         return tx.purchase.findUnique({
             where: { id: newPurchase.id },
             include: { supplier: true, items: { include: { product: true } } }
         });
       });
+
+      // [MODIFICADO] Sync de productos después de ingresar stock
+      try {
+        const { syncProducts } = await import('../../../lib/syncService');
+        const productIds = items.map((item: any) => item.productId);
+        await syncProducts(productIds);
+      } catch (syncErr) {
+        console.error("[Compras] Sync error post-creación:", syncErr);
+      }
 
       res.status(201).json(result);
 

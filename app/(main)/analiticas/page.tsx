@@ -5,6 +5,7 @@ import WeeklySalesCountChart from '@/components/analiticas/WeeklySalesCountChart
 import DailyRevenueChart from '@/components/analiticas/DailyRevenueChart';
 import TopSellingChart from '@/components/analiticas/TopSellingChart';
 import PaymentDistributionChart from '@/components/analiticas/PaymentDistributionChart';
+import AnaliticasExportBar from '@/components/analiticas/AnaliticasExportBar';
 import { 
   getMonthlyFinancialSummaries,
   getDailySalesCountForCurrentWeek,
@@ -66,6 +67,9 @@ export default async function AnaliticasPage() {
           Una vista completa del rendimiento de tu negocio.
         </p>
       </div>
+
+      {/* Exportar reporte de ventas a PDF */}
+      <AnaliticasExportBar />
 
       {/* --- NIVEL 1: Fila Principal de Tarjetas Financieras --- */}
       <div id="analiticas-cards" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">

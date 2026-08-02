@@ -3,9 +3,10 @@ import prisma from "@/lib/prisma";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "GET") {
+    const includeAll = req.query.all === "true" || req.query.all === "1";
     try {
       const combos = await prisma.combo.findMany({
-        where: { active: true },
+        where: includeAll ? {} : { active: true },
         include: {
           items: {
             include: {
@@ -22,6 +23,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         orderBy: { name: "asc" },
       });
+
+      // Vista de administración: todos los combos (activos e inactivos) con su forma completa
+      if (includeAll) {
+        return res.status(200).json(
+          combos.map((c) => ({
+            ...c,
+            price: c.price.toString(),
+            items: c.items.map((i) => ({
+              id: i.id,
+              productId: i.productId,
+              product: i.product ? {
+                id: i.product.id,
+                name: i.product.name,
+                priceSale: i.product.priceSale.toString(),
+              } : null,
+              quantity: i.quantity,
+              customPrice: i.customPrice ? i.customPrice.toString() : null,
+            })),
+          }))
+        );
+      }
 
       // Calcular el stock máximo disponible por combo según el stock de cada producto ingrediente
       const mappedCombos = combos.map((c) => {

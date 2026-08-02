@@ -103,3 +103,22 @@ END $$;
 ALTER TABLE IF EXISTS "StoreConfig" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "WebOrder" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "WebOrderItem" DISABLE ROW LEVEL SECURITY;
+
+-- 7. Agregar columna imageUrl a Product y Combo (para reflejar imágenes en la tienda)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'imageUrl') THEN
+        ALTER TABLE "Product" ADD COLUMN "imageUrl" TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Combo' AND column_name = 'imageUrl') THEN
+        ALTER TABLE "Combo" ADD COLUMN "imageUrl" TEXT;
+    END IF;
+END $$;
+
+-- 8. Agregar columna customDomain a StoreConfig (dominio personalizado de la tienda, ej. clinstore.com.ar)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'StoreConfig' AND column_name = 'customDomain') THEN
+        ALTER TABLE "StoreConfig" ADD COLUMN "customDomain" TEXT;
+    END IF;
+END $$;

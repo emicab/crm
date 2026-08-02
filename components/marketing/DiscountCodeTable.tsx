@@ -1,33 +1,33 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { Loader2, Edit, Trash2, RefreshCcw } from 'lucide-react';
-import toast from 'react-hot-toast';
-import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import DiscountCodeModal, { type DiscountCode } from './DiscountCodeModal';
+import React, { useState, useEffect } from "react";
+import { Loader2, Edit, Trash2, RefreshCcw } from "lucide-react";
+import toast from "react-hot-toast";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import DiscountCodeModal, { type DiscountCode } from "./DiscountCodeModal";
 
 const DiscountCodeTable = () => {
   const [codes, setCodes] = useState<DiscountCode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchCode, setSearchCode] = useState('');
-  
+  const [searchCode, setSearchCode] = useState("");
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCode, setSelectedCode] = useState<DiscountCode | null>(null);
 
   const fetchCodes = async () => {
     setIsLoading(true);
     try {
-      const url = new URL('/api/discount-codes', window.location.origin);
-      if (searchCode) url.searchParams.append('code', searchCode);
-      
+      const url = new URL("/api/discount-codes", window.location.origin);
+      if (searchCode) url.searchParams.append("code", searchCode);
+
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Error al cargar códigos');
-      
+      if (!res.ok) throw new Error("Error al cargar códigos");
+
       const data = await res.json();
-      setCodes(Array.isArray(data) ? data : (data.data || []));
+      setCodes(Array.isArray(data) ? data : data.data || []);
     } catch (err: any) {
-      toast.error(err.message || 'Error al cargar los códigos de descuento');
+      toast.error(err.message || "Error al cargar los códigos de descuento");
     } finally {
       setIsLoading(false);
     }
@@ -39,15 +39,17 @@ const DiscountCodeTable = () => {
   }, [searchCode]);
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Estás seguro de eliminar este código?')) return;
-    
+    if (!window.confirm("¿Estás seguro de eliminar este código?")) return;
+
     try {
-      const res = await fetch(`/api/discount-codes/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Error al eliminar');
-      toast.success('Código eliminado');
+      const res = await fetch(`/api/discount-codes/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Error al eliminar");
+      toast.success("Código eliminado");
       fetchCodes();
     } catch (err: any) {
-      toast.error(err.message || 'No se pudo eliminar el código');
+      toast.error(err.message || "No se pudo eliminar el código");
     }
   };
 
@@ -62,19 +64,22 @@ const DiscountCodeTable = () => {
   };
 
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('es-AR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   return (
-    <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-sm border border-border overflow-hidden">
       <div className="p-4 border-b border-border flex justify-between items-center bg-muted/20">
         <div className="flex gap-4 items-center">
-          <Input 
-            placeholder="Buscar código..." 
+          <Input
+            placeholder="Buscar código..."
             value={searchCode}
             onChange={(e) => setSearchCode(e.target.value)}
             className="w-64"
@@ -103,7 +108,10 @@ const DiscountCodeTable = () => {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-foreground-muted">
+                <td
+                  colSpan={6}
+                  className="p-8 text-center text-foreground-muted"
+                >
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 className="animate-spin" size={20} />
                     <span>Cargando códigos...</span>
@@ -112,51 +120,74 @@ const DiscountCodeTable = () => {
               </tr>
             ) : codes.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-foreground-muted">
+                <td
+                  colSpan={6}
+                  className="p-8 text-center text-foreground-muted"
+                >
                   No se encontraron códigos de descuento.
                 </td>
               </tr>
             ) : (
-              codes.map(code => (
-                <tr key={code.id} className="border-b border-border hover:bg-muted/20 transition-colors">
-                  <td className="p-4 font-bold text-foreground font-mono uppercase">{code.code}</td>
+              codes.map((code) => (
+                <tr
+                  key={code.id}
+                  className="border-b border-border hover:bg-muted/20 transition-colors"
+                >
+                  <td className="p-4 font-bold text-foreground font-mono uppercase">
+                    {code.code}
+                  </td>
                   <td className="p-4 font-semibold">
                     <span className="text-emerald-600">
-                      {code.discountType === 'FIXED_AMOUNT'
-                        ? `$${parseFloat(code.discountValue || code.discountPercent).toLocaleString('es-AR')} OFF`
+                      {code.discountType === "FIXED_AMOUNT"
+                        ? `$${parseFloat(code.discountValue || code.discountPercent).toLocaleString("es-AR")} OFF`
                         : `${parseFloat(code.discountValue || code.discountPercent)}% OFF`}
                     </span>
                     {code.minPurchase && parseFloat(code.minPurchase) > 0 ? (
                       <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                        Umbral: Mín. ${parseFloat(code.minPurchase).toLocaleString('es-AR')}
+                        Umbral: Mín. $
+                        {parseFloat(code.minPurchase).toLocaleString("es-AR")}
                       </div>
                     ) : null}
                   </td>
                   <td className="p-4 text-xs text-foreground-muted">
                     {code.validFrom || code.validUntil ? (
                       <>
-                        <div className="text-foreground">Desde: {formatDate(code.validFrom)}</div>
-                        <div className="text-foreground">Hasta: {formatDate(code.validUntil)}</div>
+                        <div className="text-foreground">
+                          Desde: {formatDate(code.validFrom)}
+                        </div>
+                        <div className="text-foreground">
+                          Hasta: {formatDate(code.validUntil)}
+                        </div>
                       </>
                     ) : (
-                      'Sin límite de fecha'
+                      "Sin límite de fecha"
                     )}
                   </td>
                   <td className="p-4 text-sm text-foreground">
-                    <span className="font-semibold">{code.currentUses}</span> 
-                    {code.maxUses ? ` / ${code.maxUses}` : ' (Ilimitado)'}
+                    <span className="font-semibold">{code.currentUses}</span>
+                    {code.maxUses ? ` / ${code.maxUses}` : " (Ilimitado)"}
                   </td>
                   <td className="p-4">
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${code.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                      {code.isActive ? 'Activo' : 'Inactivo'}
+                    <span
+                      className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${code.isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}
+                    >
+                      {code.isActive ? "Activo" : "Inactivo"}
                     </span>
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" className="p-2 h-auto" onClick={() => handleEdit(code)}>
+                      <Button
+                        variant="ghost"
+                        className="p-2 h-auto"
+                        onClick={() => handleEdit(code)}
+                      >
                         <Edit size={16} className="text-blue-600" />
                       </Button>
-                      <Button variant="ghost" className="p-2 h-auto hover:bg-red-50 hover:border-red-100" onClick={() => handleDelete(code.id)}>
+                      <Button
+                        variant="ghost"
+                        className="p-2 h-auto hover:bg-red-50 hover:border-red-100"
+                        onClick={() => handleDelete(code.id)}
+                      >
                         <Trash2 size={16} className="text-red-500" />
                       </Button>
                     </div>
@@ -168,7 +199,7 @@ const DiscountCodeTable = () => {
         </table>
       </div>
 
-      <DiscountCodeModal 
+      <DiscountCodeModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchCodes}

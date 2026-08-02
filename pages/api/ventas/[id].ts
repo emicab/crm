@@ -1,7 +1,7 @@
 // pages/api/ventas/[id].ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { Prisma } from '@prisma/client'; // Para tipar errores de Prisma
+import { Prisma } from '@prisma/client';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 
 export default async function handler(
@@ -41,7 +41,6 @@ export default async function handler(
         return res.status(404).json({ message: 'Venta no encontrada.' });
       }
 
-      // Convertir Decimal a string para una serialización JSON segura
       const saleForJson = {
         ...sale,
         totalAmount: sale.totalAmount.toString(),
@@ -124,6 +123,8 @@ export default async function handler(
     }
 
   } else if (req.method === 'DELETE') {
+    let affectedProductIds: number[] = [];
+
     try {
       const result = await prisma.$transaction(async (tx) => {
         // 1. Encontrar la venta y sus ítems
@@ -146,6 +147,8 @@ export default async function handler(
           });
         }
 
+        affectedProductIds = saleToDelete.items.map(i => i.productId);
+
         // 2. Revertir saldo de Cuenta Corriente si estuvo vinculada a un cliente
         if (saleToDelete.clientId) {
           const balanceRecord = await tx.accountBalance.findUnique({
@@ -163,7 +166,6 @@ export default async function handler(
             });
           }
 
-          // Eliminar los movimientos de cuenta corriente vinculados a esta venta
           await tx.accountMovement.deleteMany({
             where: { saleId: id },
           });
@@ -177,8 +179,12 @@ export default async function handler(
           },
         });
 
-        // 4. Reponer (incrementar) el stock de cada producto vendido
+        // 4. Reponer stock global y en la sucursal donde se vendió (fallback: principal)
+        const mainBranch = await tx.branch.findFirst({ where: { isMain: true } });
+        const restoreBranchId = saleToDelete.branchId || mainBranch?.id;
+
         for (const item of saleToDelete.items) {
+          // Reponer en stock general del producto
           await tx.product.update({
             where: { id: item.productId },
             data: {
@@ -187,6 +193,26 @@ export default async function handler(
               },
             },
           });
+
+          // Reponer en ProductBranchStock para mantener consistencia con syncService
+          if (restoreBranchId) {
+            await tx.productBranchStock.upsert({
+              where: {
+                productId_branchId: {
+                  productId: item.productId,
+                  branchId: restoreBranchId,
+                },
+              },
+              update: {
+                quantityStock: { increment: item.quantity },
+              },
+              create: {
+                productId: item.productId,
+                branchId: restoreBranchId,
+                quantityStock: item.quantity,
+              },
+            });
+          }
         }
 
         // 5. Eliminar la venta
@@ -196,6 +222,17 @@ export default async function handler(
 
         return { message: 'Venta eliminada, stock repuesto y cuenta corriente actualizada exitosamente.' };
       });
+
+      // 6. Sincronizar inmediatamente con Supabase los productos afectados
+      try {
+        const { syncProducts } = await import('../../../lib/syncService');
+        const uniqueIds = Array.from(new Set(affectedProductIds));
+        if (uniqueIds.length > 0) {
+          await syncProducts(uniqueIds);
+        }
+      } catch (syncErr) {
+        console.error("[Ventas] Sync error post-eliminación:", syncErr);
+      }
 
       res.status(200).json(result);
       return;

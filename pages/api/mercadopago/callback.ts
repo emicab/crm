@@ -1,6 +1,7 @@
 // pages/api/mercadopago/callback.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
+import { isMainDevice, isProDevice } from '../../../lib/branchIdentity';
 import { Prisma } from '@prisma/client';
 
 function renderHtmlResponse(
@@ -64,6 +65,16 @@ export default async function handler(
   const redirectUri = `${protocol}://${host}/api/mercadopago/callback`;
 
   try {
+    // La tienda web (y su Mercado Pago) es una funcionalidad del plan Pro
+    if (!(await isProDevice())) {
+      return renderHtmlResponse(
+        res,
+        false,
+        'Plan Básico',
+        'La tienda web requiere el plan Pro. Activá tu licencia Pro para vincular Mercado Pago.'
+      );
+    }
+
     if (!clientId || !clientSecret) {
       // Si no hay client secret configurado en .env, registramos el code de autorización de todas formas
       return renderHtmlResponse(
@@ -104,7 +115,8 @@ export default async function handler(
     const accessToken = tokenData.access_token;
     const publicKey = tokenData.public_key || '';
 
-    // Guardar la credencial en StoreConfig
+    // Guardar la credencial en StoreConfig (solo la Casa Central puede crearla)
+    const isMain = await isMainDevice();
     const config = await prisma.storeConfig.findFirst();
     if (config) {
       await prisma.storeConfig.update({
@@ -114,7 +126,7 @@ export default async function handler(
           mpPublicKey: publicKey,
         },
       });
-    } else {
+    } else if (isMain) {
       await prisma.storeConfig.create({
         data: {
           slug: 'mi-tienda',
@@ -125,6 +137,8 @@ export default async function handler(
           minDeliveryAmount: new Prisma.Decimal(0),
         },
       });
+    } else {
+      console.warn('[MP Callback] Esta PC es una sucursal; no se crea StoreConfig (la tienda la administra la Casa Central).');
     }
 
     return renderHtmlResponse(

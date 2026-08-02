@@ -20,7 +20,17 @@ const LicenseGate: React.FC<LicenseGateProps> = ({ children }) => {
                 const config = await res.json();
                 const hasLicense = !!config.license_key && config.license_key.trim() !== '';
                 const isFreeMode = localStorage.getItem('free_mode_active') === 'true';
-                
+
+                // Revalidar el plan online contra la nube (detecta bajas mensuales).
+                // Solo la Casa Central tiene license_key; en sucursales no cambia nada.
+                if (hasLicense) {
+                    try {
+                        await fetch('/api/license/check', { method: 'POST' });
+                    } catch (e) {
+                        console.warn('No se pudo revalidar la licencia al iniciar:', e);
+                    }
+                }
+
                 setIsLicensed(hasLicense);
                 setIsFree(!hasLicense && isFreeMode);
             } else {

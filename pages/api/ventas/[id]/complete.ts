@@ -115,6 +115,25 @@ export default async function handler(
         if (updateResult.count === 0) {
           throw new Error(`Stock insuficiente o modificado concurrentemente para el producto "${product.name}".`);
         }
+
+        if (sale.branchId) {
+          await tx.productBranchStock.upsert({
+            where: {
+              productId_branchId: {
+                productId: item.productId,
+                branchId: sale.branchId,
+              },
+            },
+            update: {
+              quantityStock: { decrement: Number(item.quantity) },
+            },
+            create: {
+              productId: item.productId,
+              branchId: sale.branchId,
+              quantityStock: -Number(item.quantity),
+            },
+          });
+        }
       }
 
       const updatedSale = await tx.sale.update({
@@ -129,6 +148,17 @@ export default async function handler(
       });
       return updatedSale;
     });
+
+    // Sync de stock liviano en background (no bloquea la respuesta de la venta)
+    try {
+      const { syncStockForProducts } = await import("../../../../lib/syncService");
+      const productIds = sale.items.map((item: any) => item.productId);
+      syncStockForProducts(productIds).catch((err) =>
+        console.error("[Ventas] Sync stock al completar venta error:", err)
+      );
+    } catch (syncErr) {
+      console.error("[Ventas] Sync error al completar venta:", syncErr);
+    }
 
     res.status(200).json(result);
   } catch (error: any) {

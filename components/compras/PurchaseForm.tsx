@@ -202,7 +202,11 @@ const PurchaseForm = () => {
       setIsLoading(false); return;
     }
     const supplier = suppliers.find(s => String(s.id) === formData.supplierId);
+    const activeBranchIdStr = typeof window !== 'undefined' ? localStorage.getItem("clinpos_active_branch_id") : null;
+    const activeBranchId = activeBranchIdStr ? parseInt(activeBranchIdStr) : null;
+
     const dataToSend = {
+      branchId: activeBranchId,
       supplierId: parseInt(formData.supplierId),
       paymentType: formData.paymentType || null,
       invoiceNumber: formData.invoiceNumber.trim() || null,

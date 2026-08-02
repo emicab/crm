@@ -5,21 +5,23 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Filter, X } from 'lucide-react';
-import type { Brand, Category, Supplier } from '@/types';
+import type { Brand, Category, Supplier, Branch } from '@/types';
 
 interface ProductFiltersProps {
-  filters: { search: string; brandId: string; categoryId: string; supplierId: string };
+  filters: { search: string; brandId: string; categoryId: string; supplierId: string; branchId?: string };
   brands: Brand[];
   categories: Category[];
   suppliers: Supplier[];
+  branches?: Branch[];
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   onClear: () => void;
   onExportCSV: () => void;
   onImportCSV: () => void;
+  onTransferStock?: () => void;
 }
 
 const ProductFilters: React.FC<ProductFiltersProps> = ({
-  filters, brands, categories, suppliers, onChange, onClear, onExportCSV, onImportCSV,
+  filters, brands, categories, suppliers, branches, onChange, onClear, onExportCSV, onImportCSV, onTransferStock,
 }) => (
   <div className="mb-6 p-4 border border-border rounded-md bg-background">
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
@@ -27,6 +29,11 @@ const ProductFilters: React.FC<ProductFiltersProps> = ({
         <Filter size={18} className="mr-2 text-primary" /> Filtros y Búsqueda
       </h3>
       <div className="flex items-center space-x-2">
+        {onTransferStock && (
+          <Button onClick={onTransferStock} variant="primary" size="sm" className="text-xs">
+            Remito Traspaso 🔁
+          </Button>
+        )}
         <Button onClick={onExportCSV} variant="outline" size="sm" className="text-xs">
           Exportar CSV
         </Button>
@@ -35,8 +42,18 @@ const ProductFilters: React.FC<ProductFiltersProps> = ({
         </Button>
       </div>
     </div>
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       <Input name="search" placeholder="Buscar por nombre o SKU..." value={filters.search} onChange={onChange} />
+      {branches && branches.length > 0 && (
+        <Select name="branchId" value={filters.branchId || ""} onChange={onChange} aria-label="Filtrar por Sucursal">
+          <option value="">Todas las Sucursales (Global)</option>
+          {branches.map((b) => (
+            <option key={b.id} value={String(b.id)}>
+              📍 {b.name} {b.isMain ? "(Principal)" : ""}
+            </option>
+          ))}
+        </Select>
+      )}
       <Select name="brandId" value={filters.brandId} onChange={onChange} aria-label="Filtrar por Marca">
         <option value="">Todas las Marcas</option>
         {brands.map((b) => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
@@ -49,9 +66,6 @@ const ProductFilters: React.FC<ProductFiltersProps> = ({
         <option value="">Todos los Proveedores</option>
         {suppliers.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
       </Select>
-      <Button onClick={onClear} variant="outline" className="h-10 self-end">
-        <X size={16} className="mr-2" /> Limpiar Filtros
-      </Button>
     </div>
   </div>
 );

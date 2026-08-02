@@ -10,6 +10,7 @@ import { Loader2, AlertCircle, Upload, Search, Image as ImageIcon, Check, X } fr
 import { useQuickCreate } from '@/hooks/useQuickCreate';
 import QuickCreateModal from './QuickCreateModal';
 import toast from 'react-hot-toast';
+import { optimizeImage } from '@/lib/imageOptimizer';
 
 interface ProductFormData {
   name: string;
@@ -32,10 +33,30 @@ interface ProductFormProps {
 
 const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const router = useRouter();
+
+  // Calcular el stock inicial correcto para la sucursal activa antes de inicializar el estado
+  let initialFormStock = initialProductData ? String(initialProductData.quantityStock) : '';
+  if (initialProductData && typeof window !== "undefined") {
+    const activeBranchId = localStorage.getItem("clinpos_active_branch_id");
+    if (activeBranchId && (initialProductData as any).branchStocks) {
+      const bs = (initialProductData as any).branchStocks.find((b: any) => b.branchId === Number(activeBranchId));
+      initialFormStock = bs ? String(bs.quantityStock) : '0';
+    }
+  }
+
   const [formData, setFormData] = useState<ProductFormData>({
-    name: '', sku: '', description: '', imageUrl: '', pricePurchase: '', priceSale: '',
-    quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
-    unitType: '',
+    name: initialProductData?.name || '',
+    sku: initialProductData?.sku || '',
+    description: initialProductData?.description || '',
+    imageUrl: initialProductData?.imageUrl || '',
+    pricePurchase: initialProductData?.pricePurchase !== null && initialProductData?.pricePurchase !== undefined ? String(initialProductData.pricePurchase) : '',
+    priceSale: initialProductData ? String(initialProductData.priceSale) : '',
+    quantityStock: initialFormStock,
+    stockMinAlert: initialProductData?.stockMinAlert !== null && initialProductData?.stockMinAlert !== undefined ? String(initialProductData.stockMinAlert) : '',
+    brandId: initialProductData ? String(initialProductData.brandId) : '',
+    categoryId: initialProductData ? String(initialProductData.categoryId) : '',
+    supplierId: initialProductData?.supplierId ? String(initialProductData.supplierId) : '',
+    unitType: initialProductData?.unitType || '',
   });
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -65,33 +86,28 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      if (!dataUrl) return;
+    e.target.value = '';
 
-      const toastId = toast.loading('Procesando imagen...');
-      try {
-        const cloudRes = await fetch('/api/upload/cloudinary', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file: dataUrl }),
-        });
+    const toastId = toast.loading('Procesando imagen...');
+    try {
+      const optimized = await optimizeImage(file);
+      const cloudRes = await fetch('/api/upload/cloudinary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: optimized.dataUrl }),
+      });
 
-        const cloudData = await cloudRes.json();
-        if (cloudRes.ok && cloudData.url) {
-          setFormData(prev => ({ ...prev, imageUrl: cloudData.url }));
-          toast.success('Imagen subida a Cloudinary exitosamente.', { id: toastId });
-        } else {
-          setFormData(prev => ({ ...prev, imageUrl: dataUrl }));
-          toast.success('Imagen cargada desde tu PC (Vista previa).', { id: toastId });
-        }
-      } catch {
-        setFormData(prev => ({ ...prev, imageUrl: dataUrl }));
-        toast.success('Imagen cargada desde tu PC.', { id: toastId });
+      const cloudData = await cloudRes.json();
+      if (cloudRes.ok && cloudData.url) {
+        setFormData(prev => ({ ...prev, imageUrl: cloudData.url }));
+        toast.success('Imagen subida a Cloudinary exitosamente.', { id: toastId });
+      } else {
+        toast.error(`No se pudo subir la imagen: ${cloudData.message || 'error de Cloudinary'}. Intentá de nuevo.`, { id: toastId });
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'error desconocido';
+      toast.error(`No se pudo procesar la imagen: ${msg}. Intentá de nuevo.`, { id: toastId });
+    }
   };
 
   const handleSearchMLImage = async () => {
@@ -164,20 +180,45 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
 
   useEffect(() => {
     if (initialProductData) {
-      setFormData({
-        name: initialProductData.name || '',
-        sku: initialProductData.sku || '',
-        description: initialProductData.description || '',
-        imageUrl: initialProductData.imageUrl || '',
-        pricePurchase: initialProductData.pricePurchase !== null && initialProductData.pricePurchase !== undefined ? String(initialProductData.pricePurchase) : '',
-        priceSale: String(initialProductData.priceSale) || '',
-        quantityStock: String(initialProductData.quantityStock) || '',
-        stockMinAlert: initialProductData.stockMinAlert !== null && initialProductData.stockMinAlert !== undefined ? String(initialProductData.stockMinAlert) : '',
-        brandId: String(initialProductData.brandId) || '',
-        categoryId: String(initialProductData.categoryId) || '',
-        supplierId: initialProductData.supplierId ? String(initialProductData.supplierId) : '',
-        unitType: initialProductData.unitType || '',
-      });
+      const refreshAndLoad = async () => {
+        let dataToUse = initialProductData;
+        try {
+          const res = await fetch(`/api/products/${initialProductData.id}/sync-pull`, { method: 'POST' });
+          if (res.ok) {
+            const body = await res.json();
+            if (body.product) {
+              dataToUse = body.product;
+            }
+          }
+        } catch {
+          // Si falla el sync express (ej: offline), continuamos con los datos locales
+        }
+
+        let initialStock = dataToUse.quantityStock;
+        if (typeof window !== "undefined") {
+          const activeBranchId = localStorage.getItem("clinpos_active_branch_id");
+          if (activeBranchId && (dataToUse as any).branchStocks) {
+            const bs = (dataToUse as any).branchStocks.find((b: any) => b.branchId === Number(activeBranchId));
+            initialStock = bs ? bs.quantityStock : 0;
+          }
+        }
+
+        setFormData({
+          name: dataToUse.name || '',
+          sku: dataToUse.sku || '',
+          description: dataToUse.description || '',
+          imageUrl: dataToUse.imageUrl || '',
+          pricePurchase: dataToUse.pricePurchase !== null && dataToUse.pricePurchase !== undefined ? String(dataToUse.pricePurchase) : '',
+          priceSale: String(dataToUse.priceSale) || '',
+          quantityStock: String(initialStock),
+          stockMinAlert: dataToUse.stockMinAlert !== null && dataToUse.stockMinAlert !== undefined ? String(dataToUse.stockMinAlert) : '',
+          brandId: String(dataToUse.brandId) || '',
+          categoryId: String(dataToUse.categoryId) || '',
+          supplierId: dataToUse.supplierId ? String(dataToUse.supplierId) : '',
+          unitType: dataToUse.unitType || '',
+        });
+      };
+      refreshAndLoad();
     }
   }, [initialProductData]);
 
@@ -205,7 +246,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       ? `/api/products/${initialProductData.id}`
       : '/api/products';
 
+    const activeBranchIdStr = typeof window !== 'undefined' ? localStorage.getItem("clinpos_active_branch_id") : null;
+    const activeBranchId = activeBranchIdStr ? parseInt(activeBranchIdStr) : null;
+
     const dataToSend = {
+        branchId: activeBranchId,
         name: formData.name,
         sku: formData.sku || null,
         description: formData.description || null,

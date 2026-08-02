@@ -30,6 +30,51 @@ export default function ConfigRubroPlanTab({
   const { refresh: refreshModules } = useModules();
   const [licenseKeyInput, setLicenseKeyInput] = useState("");
   const [activatingLicense, setActivatingLicense] = useState(false);
+  const [pairingCodeInput, setPairingCodeInput] = useState("");
+  const [connectingSucursal, setConnectingSucursal] = useState(false);
+
+  const handleConnectSucursal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pairingCodeInput.trim()) {
+      toast.error("Ingresá el código de emparejamiento.");
+      return;
+    }
+
+    setConnectingSucursal(true);
+    try {
+      const res = await fetch("/api/pairing/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: pairingCodeInput.trim() }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "El código no es válido.");
+      }
+
+      setPairingCodeInput("");
+      toast.success(data.message || "¡Sucursal conectada!");
+
+      toast.loading("Descargando datos desde la nube...", { id: "pairing-sync-toast" });
+      try {
+        const syncRes = await fetch("/api/sync?force=true");
+        if (syncRes.ok) {
+          toast.success("¡Datos descargados! El local está listo.", { id: "pairing-sync-toast" });
+        } else {
+          toast.error("Los datos se descargarán automáticamente. Revisá Configuración → Sucursales.", { id: "pairing-sync-toast" });
+        }
+      } catch {
+        toast.error("No se pudo sincronizar automáticamente.", { id: "pairing-sync-toast" });
+      }
+
+      await refreshModules();
+    } catch (err: any) {
+      toast.error(err.message || "No se pudo conectar la sucursal.");
+    } finally {
+      setConnectingSucursal(false);
+    }
+  };
 
   const handleActivateLicense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +105,19 @@ export default function ConfigRubroPlanTab({
         handleChange("storage_mode", activePlan === "pro" ? "seguro" : "local");
         setLicenseKeyInput("");
         await handleSave();
+        
+        toast.loading("Descargando sucursales y productos desde la nube...", { id: "sync-toast" });
+        try {
+          const syncRes = await fetch("/api/sync?force=true");
+          if (syncRes.ok) {
+            toast.success("¡Datos descargados con éxito! El local está listo.", { id: "sync-toast" });
+          } else {
+            toast.error("Hubo un problema al sincronizar los datos. Intentá desde Configuración -> Sucursales.", { id: "sync-toast" });
+          }
+        } catch (e) {
+          toast.error("No se pudo conectar para sincronizar automáticamente.", { id: "sync-toast" });
+        }
+
         await refreshModules();
       } else {
         toast.error(data.message || "La clave de licencia no es válida.");
@@ -270,6 +328,42 @@ export default function ConfigRubroPlanTab({
               className="shrink-0 font-bold"
             >
               {activatingLicense ? "Verificando..." : "Activar Licencia"}
+            </Button>
+          </form>
+        </div>
+
+        {/* Conectar Sucursal con Código de Emparejamiento */}
+        <div className="p-5 bg-background border border-emerald-500/40 rounded-xl space-y-3">
+          <div className="flex items-center gap-2">
+            <Key size={18} className="text-emerald-600" />
+            <h3 className="text-sm font-bold text-foreground">
+              Conectar sucursal con código
+            </h3>
+          </div>
+          <p className="text-xs text-foreground-muted">
+            Si sos un local nuevo y la Casa Central te dio un código de
+            emparejamiento (ej. PKG-AB12CD34), ingresalo acá para conectarte a
+            tu negocio sin necesidad de la clave de licencia.
+          </p>
+
+          <form
+            onSubmit={handleConnectSucursal}
+            className="flex flex-col sm:flex-row gap-3 pt-2"
+          >
+            <div className="flex-1">
+              <Input
+                placeholder="Ej: PKG-AB12CD34"
+                value={pairingCodeInput}
+                onChange={(e) => setPairingCodeInput(e.target.value)}
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={connectingSucursal}
+              className="shrink-0 font-bold"
+            >
+              {connectingSucursal ? "Conectando..." : "Conectar Sucursal"}
             </Button>
           </form>
         </div>

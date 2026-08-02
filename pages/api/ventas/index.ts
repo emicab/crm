@@ -1,4 +1,3 @@
-// pages/api/ventas/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { Prisma, PaymentType } from '@prisma/client';
@@ -7,6 +6,7 @@ import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
 import { getArcaConfig, createElectronicInvoice } from '../../../lib/arcaService';
 import { getPaymentTypeDisplay } from '../../../lib/displayTexts';
+import { getDeviceBranchId } from '../../../lib/branchIdentity';
 
 interface SaleItemInput {
   productId: number;
@@ -43,9 +43,9 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === 'GET') {
-    const { clientId, sellerId } = req.query; // Nuevos query params para filtrar
+    const { clientId, sellerId, from, to, sort } = req.query; 
 
-    const whereClause: Prisma.SaleWhereInput = {}; // Cláusula 'where' para Prisma
+    const whereClause: Prisma.SaleWhereInput = {}; 
 
     if (clientId && typeof clientId === 'string') {
       const parsedClientId = parseInt(clientId);
@@ -65,6 +65,21 @@ export default async function handler(
       }
     }
 
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (typeof from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
+      const [y, m, d] = from.split('-').map(Number);
+      dateFilter.gte = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) + 3 * 60 * 60 * 1000);
+    }
+    if (typeof to === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      const [y, m, d] = to.split('-').map(Number);
+      dateFilter.lte = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) + 3 * 60 * 60 * 1000);
+    }
+    if (Object.keys(dateFilter).length > 0) {
+      whereClause.saleDate = dateFilter;
+    }
+
+    const sortOrder: 'asc' | 'desc' = sort === 'asc' ? 'asc' : 'desc';
+
     const page = req.query.page ? parseInt(req.query.page as string) : undefined;
     const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
     const skip = page ? (page - 1) * limit : undefined;
@@ -72,7 +87,7 @@ export default async function handler(
     try {
       const [sales, total] = await Promise.all([
         prisma.sale.findMany({
-          where: whereClause, // Aplicar los filtros si existen
+          where: whereClause,
           include: {
             client: true,
             seller: true,
@@ -83,20 +98,19 @@ export default async function handler(
               },
             },
           },
-          orderBy: { saleDate: 'desc' },
+          orderBy: { saleDate: sortOrder },
           ...(skip !== undefined && { skip, take: limit }),
         }),
         prisma.sale.count({ where: whereClause }),
       ]);
 
-      // Convertir Decimales a string para la respuesta JSON
       const salesForJson = sales.map(sale => ({
         ...sale,
         totalAmount: sale.totalAmount.toString(),
         items: sale.items.map(item => ({
           ...item,
           priceAtSale: item.priceAtSale.toString(),
-          product: item.product ? { // Asegurarse que producto no es null
+          product: item.product ? { 
             ...item.product,
             pricePurchase: item.product.pricePurchase?.toString() || null,
             priceSale: item.product.priceSale.toString(),
@@ -178,11 +192,9 @@ export default async function handler(
       discountPercent = parseFloat(discountCodeRecord.discountPercent.toString());
     }
 
-    // Validar y aplicar promociones
     let promotionsAppliedJson: string | null = null;
     if (promotionsApplied && Array.isArray(promotionsApplied) && promotionsApplied.length > 0) {
       for (const promo of promotionsApplied) {
-        // COMBO discounts are auto-calculated from the combo, skip DB validation
         if (promo.type === 'COMBO') continue;
 
         const promoRecord = await prisma.promotion.findUnique({ where: { id: promo.promotionId } });
@@ -198,7 +210,6 @@ export default async function handler(
         }
       }
 
-      // Recalcular descuento total de promos (server-side)
       let totalPromoDiscount = new Decimal(0);
       for (const promo of promotionsApplied) {
         totalPromoDiscount = totalPromoDiscount.plus(new Decimal(promo.discountAmount));
@@ -211,13 +222,11 @@ export default async function handler(
       promotionsAppliedJson = JSON.stringify(promotionsApplied);
     }
 
-    // Aplicar descuento por código de descuento en cascada
     if (discountPercent > 0) {
       const discountAmount = calculatedTotalAmount.times(discountPercent).div(100);
       calculatedTotalAmount = calculatedTotalAmount.minus(discountAmount);
     }
 
-    // Aplicar descuento por método de pago
     const paymentMethodDiscountDecimal = new Decimal(paymentMethodDiscount || 0);
     if (paymentMethodDiscountDecimal.greaterThan(0)) {
       calculatedTotalAmount = calculatedTotalAmount.minus(paymentMethodDiscountDecimal);
@@ -227,6 +236,24 @@ export default async function handler(
     }
 
     try {
+      // Sucursal efectiva: solicitada > sucursal de esta PC > principal
+      let effectiveBranchId: number | undefined;
+      if (req.body.branchId && !isNaN(parseInt(req.body.branchId))) {
+        const requestedBranch = await prisma.branch.findUnique({ where: { id: parseInt(req.body.branchId) } });
+        if (requestedBranch) effectiveBranchId = requestedBranch.id;
+      }
+      if (!effectiveBranchId) {
+        const deviceBranchId = await getDeviceBranchId();
+        if (deviceBranchId) {
+          const deviceBranch = await prisma.branch.findUnique({ where: { id: deviceBranchId } });
+          if (deviceBranch) effectiveBranchId = deviceBranch.id;
+        }
+      }
+      if (!effectiveBranchId) {
+        const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
+        if (mainBranch) effectiveBranchId = mainBranch.id;
+      }
+
       const result = await prisma.$transaction(async (tx) => {
         if (discountCodeRecord) {
           await tx.discountCode.update({
@@ -235,7 +262,6 @@ export default async function handler(
           });
         }
 
-        // Registrar movimiento en caja si hay una abierta
         const openRegister = await tx.cashRegister.findFirst({ where: { status: 'OPEN' } });
 
         const isAccountSale = paymentType === PaymentType.ON_ACCOUNT || req.body.onAccount === true;
@@ -254,6 +280,7 @@ export default async function handler(
             ...(clientId && { client: { connect: { id: clientId } } }),
             seller: { connect: { id: sellerId } },
             ...(openRegister && { cashRegister: { connect: { id: openRegister.id } } }),
+            ...(effectiveBranchId ? { branch: { connect: { id: effectiveBranchId } } } : {}),
             status: (req.body.status === 'PENDING' ? 'PENDING' : 'COMPLETED') as any,
           },
         });
@@ -357,9 +384,28 @@ export default async function handler(
             if (updateResult.count === 0) {
               throw new Error(`Stock insuficiente o modificado concurrentemente para el producto "${product.name}".`);
             }
+            
+            const bId = effectiveBranchId ?? (req.body.branchId ? parseInt(req.body.branchId) : undefined);
+            if (bId && !isNaN(bId)) {
+              await tx.productBranchStock.upsert({
+                where: {
+                  productId_branchId: {
+                    productId: item.productId,
+                    branchId: bId
+                  }
+                },
+                update: {
+                  quantityStock: { decrement: item.quantity }
+                },
+                create: {
+                  productId: item.productId,
+                  branchId: bId,
+                  quantityStock: -item.quantity
+                }
+              });
+            }
           }
 
-          // Alerta de stock mínimo con log local y mock email (solo si no es pendiente)
           if (!isPending) {
             const updatedProduct = await tx.product.findUnique({
               where: { id: item.productId },
@@ -377,7 +423,6 @@ export default async function handler(
         });
       });
 
-      // Intentar generar factura electrónica si corresponde y está habilitada (y no es pedido)
       let invoice = null;
       let arcaError = null;
 
@@ -394,6 +439,18 @@ export default async function handler(
       } catch (err: any) {
         console.error("Error al generar factura electrónica al cerrar venta:", err);
         arcaError = err.message || "No se pudo comunicar con ARCA.";
+      }
+
+      // [MODIFICADO BUG 1] Sync de stock liviano de los productos vendidos a Supabase
+      // (en background, sin demorar la respuesta de la venta)
+      try {
+        const { syncStockForProducts } = await import("../../../lib/syncService");
+        const productIds = items.map((item: any) => item.productId);
+        syncStockForProducts(productIds).catch((err) =>
+          console.error("[Ventas] Sync stock post-venta error:", err)
+        );
+      } catch (syncErr) {
+        console.error("[Ventas] Sync error post-venta:", syncErr);
       }
 
       res.status(201).json({

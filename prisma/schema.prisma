@@ -53,6 +53,8 @@ model Product {
   promotionConditions PromotionCondition[]
   consignmentItems ConsignmentItem[]
   webOrderItems    WebOrderItem[]
+  branchStocks     ProductBranchStock[]
+  stockTransferItems StockTransferItem[]
 }
 
 model Client {
@@ -95,6 +97,7 @@ model Sale {
   clientId            Int?
   sellerId            Int
   cashRegisterId      Int?
+  branchId            Int?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   discountCodeApplied String?
@@ -105,6 +108,7 @@ model Sale {
   seller              Seller            @relation(fields: [sellerId], references: [id])
   client              Client?           @relation(fields: [clientId], references: [id])
   cashRegister        CashRegister?     @relation(fields: [cashRegisterId], references: [id])
+  branch              Branch?           @relation(fields: [branchId], references: [id])
   items               SaleItem[]
   invoice             Invoice?
   accountMovements    AccountMovement[]
@@ -447,6 +451,7 @@ enum WebOrderStatus {
 model StoreConfig {
   id              Int      @id @default(autoincrement())
   slug            String   @unique
+  customDomain    String?
   businessName    String
   description     String?
   logoUrl         String?
@@ -495,3 +500,56 @@ model WebOrderItem {
   webOrder    WebOrder @relation(fields: [webOrderId], references: [id], onDelete: Cascade)
   product     Product  @relation(fields: [productId], references: [id])
 }
+
+model Branch {
+  id            Int                  @id @default(autoincrement())
+  name          String
+  address       String?
+  phone         String?
+  isMain        Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  productStocks ProductBranchStock[]
+  transfersFrom StockTransfer[]      @relation("SourceBranch")
+  transfersTo   StockTransfer[]      @relation("TargetBranch")
+  sales         Sale[]
+}
+
+model ProductBranchStock {
+  productId     Int
+  branchId      Int
+  quantityStock Float                @default(0)
+  minStock      Float?               @default(0)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  product       Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branch        Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([productId, branchId])
+}
+
+model StockTransfer {
+  id             Int                 @id @default(autoincrement())
+  sourceBranchId Int
+  targetBranchId Int
+  status         String              @default("COMPLETED")
+  notes          String?
+  createdByName  String?
+  createdAt      DateTime            @default(now())
+  sourceBranch   Branch              @relation("SourceBranch", fields: [sourceBranchId], references: [id])
+  targetBranch   Branch              @relation("TargetBranch", fields: [targetBranchId], references: [id])
+  items          StockTransferItem[]
+}
+
+model StockTransferItem {
+  transferId       Int
+  productId        Int
+  productName      String?
+  quantity         Float
+  receivedQuantity Float?
+  transfer         StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product          Product       @relation(fields: [productId], references: [id])
+
+  @@id([transferId, productId])
+}
+

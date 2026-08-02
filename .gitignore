@@ -60,3 +60,5 @@ dist_electron
 ~/*.tauri
 DOCS
 app_standalone
+dist_tauri
+electron

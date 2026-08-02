@@ -116,14 +116,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Transacción atómica: stock + venta + status update
+      const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
+      const mainBranchId = mainBranch?.id;
+
       await prisma.$transaction(async (tx) => {
-        // Stock: reponer al cancelar, descontar al des-cancelar
+        // Stock: reponer al cancelar, descontar al des-cancelar (global + sucursal principal)
         if (isCancelling) {
           for (const item of currentOrder.items) {
             await tx.product.update({
               where: { id: item.productId },
               data: { quantityStock: { increment: Number(item.quantity) } },
             });
+            if (mainBranchId) {
+              await tx.productBranchStock.upsert({
+                where: {
+                  productId_branchId: {
+                    productId: item.productId,
+                    branchId: mainBranchId,
+                  },
+                },
+                update: { quantityStock: { increment: Number(item.quantity) } },
+                create: {
+                  productId: item.productId,
+                  branchId: mainBranchId,
+                  quantityStock: Number(item.quantity),
+                },
+              });
+            }
           }
         } else if (isUncancelling) {
           for (const item of currentOrder.items) {
@@ -131,10 +150,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               where: { id: item.productId },
               data: { quantityStock: { decrement: Number(item.quantity) } },
             });
+            if (mainBranchId) {
+              await tx.productBranchStock.upsert({
+                where: {
+                  productId_branchId: {
+                    productId: item.productId,
+                    branchId: mainBranchId,
+                  },
+                },
+                update: { quantityStock: { decrement: Number(item.quantity) } },
+                create: {
+                  productId: item.productId,
+                  branchId: mainBranchId,
+                  quantityStock: -Number(item.quantity),
+                },
+              });
+            }
           }
         }
 
-        // Venta + movimiento de caja si se entrega
+        // Venta + movimiento de caja si se entrega (atribuida a la sucursal principal)
         if (isDelivered && !isAlreadyRegistered) {
           const sale = await tx.sale.create({
             data: {
@@ -144,6 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               notes: `Pedido Web #${currentOrder.webOrderNumber} (${currentOrder.clientName})`,
               sellerId: seller.id,
               ...(openRegister && { cashRegisterId: openRegister.id }),
+              ...(mainBranchId && { branchId: mainBranchId }),
               status: "COMPLETED",
               items: { create: saleItemsData },
             },
@@ -194,7 +230,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Sync selectivo del WebOrder + Productos a Supabase para reflejar cambios en la web
       try {
-        const { syncWebOrderToSupabase, syncSingleProduct } = require("../../../lib/syncService");
+        const { syncWebOrderToSupabase, syncSingleProduct } = await import("../../../lib/syncService");
         await syncWebOrderToSupabase(orderId);
         for (const item of currentOrder.items) {
           await syncSingleProduct(item.productId).catch(() => {});
@@ -202,7 +238,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch (syncErr) {
         console.warn("Selective sync falló, ejecutando full sync forzado:", syncErr);
         try {
-          const { runSupabaseSync } = require("../../../lib/syncService");
+          const { runSupabaseSync } = await import("../../../lib/syncService");
           await runSupabaseSync(true);
         } catch { /* ignore */ }
       }
@@ -211,6 +247,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         where: { id: orderId },
         include: { items: { include: { product: true } } },
       });
+
+      if (!updatedOrder) {
+        return res.status(500).json({ message: "No se pudo obtener el pedido actualizado." });
+      }
 
       return res.status(200).json({
         ...updatedOrder,

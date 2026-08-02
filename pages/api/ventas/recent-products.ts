@@ -11,9 +11,13 @@ export default async function handler(
   }
 
   try {
+    const { branchId } = req.query;
+    const parsedBranchId = branchId ? parseInt(String(branchId), 10) : null;
+
     const recentSales = await prisma.sale.findMany({
       take: 20,
       orderBy: { saleDate: 'desc' },
+      where: parsedBranchId && !isNaN(parsedBranchId) ? { branchId: parsedBranchId } : undefined,
       include: {
         items: {
           include: {
@@ -27,6 +31,7 @@ export default async function handler(
                 unitType: true,
                 brand: { select: { name: true } },
                 category: { select: { name: true } },
+                branchStocks: true,
               },
             },
           },

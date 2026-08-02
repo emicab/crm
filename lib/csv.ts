@@ -1,11 +1,12 @@
 // lib/csv.ts
+import { saveFile } from "./saveFile";
 
-export function exportToCSV(filename: string, data: any[], headers: { key: string, label: string }[]) {
+export async function exportToCSV(filename: string, data: any[], headers: { key: string, label: string }[]): Promise<boolean> {
   const csvRows = [];
-  
+
   // Header row
   csvRows.push(headers.map(h => `"${h.label.replace(/"/g, '""')}"`).join(','));
-  
+
   // Data rows
   for (const row of data) {
     const values = headers.map(h => {
@@ -15,17 +16,11 @@ export function exportToCSV(filename: string, data: any[], headers: { key: strin
     });
     csvRows.push(values.join(','));
   }
-  
+
   const csvContent = '\ufeff' + csvRows.join('\n'); // Adding BOM for Excel UTF-8 support
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `${filename}.csv`);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const bytes = new TextEncoder().encode(csvContent);
+  const result = await saveFile(bytes, `${filename}.csv`, 'text/csv;charset=utf-8;');
+  return result.success;
 }
 
 export function parseCSV(text: string): string[][] {

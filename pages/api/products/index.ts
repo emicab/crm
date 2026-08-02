@@ -45,6 +45,19 @@ export default async function handler(
         }
     }
 
+    // Filtro por Sucursal (branchId)
+    const { branchId } = req.query;
+    if (branchId && typeof branchId === 'string' && branchId !== '') {
+        const parsedBranchId = parseInt(branchId);
+        if (!isNaN(parsedBranchId)) {
+            whereClause.branchStocks = {
+              some: {
+                branchId: parsedBranchId
+              }
+            };
+        }
+    }
+
     const page = req.query.page ? parseInt(req.query.page as string) : undefined;
     const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
 
@@ -56,6 +69,11 @@ export default async function handler(
           brand: true,
           category: true,
           supplier: true,
+          branchStocks: {
+            include: {
+              branch: true,
+            },
+          },
         },
         orderBy: {
           name: 'asc',
@@ -160,6 +178,13 @@ export default async function handler(
     const resolvedUnitType = validUnitTypes.includes(unitType) ? (unitType || null) : null;
 
     try {
+      // Determinar la sucursal para asignar el stock inicial
+      let targetBranchId: number | null = req.body.branchId ? parseInt(req.body.branchId) : null;
+      if (!targetBranchId || isNaN(targetBranchId)) {
+        const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
+        targetBranchId = mainBranch?.id || null;
+      }
+
       const newProduct = await prisma.product.create({
         data: {
           name: name.trim(),
@@ -176,15 +201,24 @@ export default async function handler(
           brand: { connect: { id: brandIdInt } },
           category: { connect: { id: categoryIdInt } },
           ...(supplierId ? { supplier: { connect: { id: parseInt(supplierId) } } } : {}),
+          ...(targetBranchId ? {
+            branchStocks: {
+              create: {
+                branchId: targetBranchId,
+                quantityStock: quantityStockNum
+              }
+            }
+          } : {})
         },
         include: {
             brand: true,
             category: true,
             supplier: true,
+            branchStocks: true,
         }
       });
       try {
-        const { syncSingleProduct, runSupabaseSync } = require("../../../lib/syncService");
+        const { syncSingleProduct, runSupabaseSync } = await import("../../../lib/syncService");
         const synced = await syncSingleProduct(newProduct.id);
         if (!synced) {
           console.warn("syncSingleProduct falló, ejecutando full sync forzado");
@@ -193,7 +227,7 @@ export default async function handler(
       } catch (syncErr) {
         console.error("Sync error, intentando full sync forzado:", syncErr);
         try {
-          const { runSupabaseSync } = require("../../../lib/syncService");
+          const { runSupabaseSync } = await import("../../../lib/syncService");
           await runSupabaseSync(true);
         } catch { /* ignore */ }
       }

@@ -4,12 +4,24 @@ import React, { useState, useEffect } from "react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
-import { Loader2, Globe, ShoppingBag, CreditCard, ExternalLink, CheckCircle2, ShieldCheck, Smartphone, RefreshCw } from "lucide-react";
+import {
+  Loader2,
+  Globe,
+  ShoppingBag,
+  CreditCard,
+  ExternalLink,
+  CheckCircle2,
+  ShieldCheck,
+  Smartphone,
+  RefreshCw,
+} from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ConfigTiendaWebTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isMainDevice, setIsMainDevice] = useState(true);
+  const [platformDomain, setPlatformDomain] = useState("");
   const [formData, setFormData] = useState({
     slug: "",
     businessName: "",
@@ -35,6 +47,7 @@ export default function ConfigTiendaWebTab() {
       const res = await fetch("/api/store-config");
       if (res.ok) {
         const data = await res.json();
+        setPlatformDomain(data.customDomain || "");
         setFormData({
           slug: data.slug || "",
           businessName: data.businessName || "",
@@ -48,8 +61,12 @@ export default function ConfigTiendaWebTab() {
           mpFeePercent: parseFloat(data.mpFeePercent) || 0,
           whatsappPhone: data.whatsappPhone || "",
           minStockBuffer: parseFloat(data.minStockBuffer) || 0,
-          allowPickup: data.allowPickup !== undefined ? Boolean(data.allowPickup) : true,
-          allowDelivery: data.allowDelivery !== undefined ? Boolean(data.allowDelivery) : true,
+          allowPickup:
+            data.allowPickup !== undefined ? Boolean(data.allowPickup) : true,
+          allowDelivery:
+            data.allowDelivery !== undefined
+              ? Boolean(data.allowDelivery)
+              : true,
           deliveryFee: parseFloat(data.deliveryFee) || 0,
           minDeliveryAmount: parseFloat(data.minDeliveryAmount) || 0,
         });
@@ -64,9 +81,21 @@ export default function ConfigTiendaWebTab() {
 
   useEffect(() => {
     fetchConfig();
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((data) => {
+        setIsMainDevice(data.is_main_device !== "false");
+      })
+      .catch(() => {
+        // si falla, se asume Casa Central
+      });
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
+  ) => {
     const { name, value, type } = e.target;
     if (type === "checkbox") {
       const checked = (e.target as HTMLInputElement).checked;
@@ -92,7 +121,9 @@ export default function ConfigTiendaWebTab() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || "Error al guardar la configuración.");
+        throw new Error(
+          errData.message || "Error al guardar la configuración.",
+        );
       }
 
       toast.success("¡Configuración de ClinStore guardada con éxito!");
@@ -104,13 +135,40 @@ export default function ConfigTiendaWebTab() {
     }
   };
 
-  const storeUrl = formData.slug ? `https://${formData.slug.toLowerCase()}.clinstore.app` : "";
+  const storeBase = (platformDomain || "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .toLowerCase() || "clinstore.vercel.app";
+  const storeUrl = formData.slug
+    ? `https://${storeBase}/${formData.slug.toLowerCase()}`
+    : "";
 
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
         <Loader2 size={32} className="animate-spin text-primary" />
-        <span className="ml-3 text-foreground-muted">Cargando datos de ClinStore...</span>
+        <span className="ml-3 text-foreground-muted">
+          Cargando datos de ClinStore...
+        </span>
+      </div>
+    );
+  }
+
+  if (!isMainDevice) {
+    return (
+      <div className="bg-muted p-6 rounded-2xl border border-border space-y-3">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="text-primary shrink-0" size={22} />
+          <h3 className="text-lg font-bold text-foreground">
+            Tienda Web administrada por la Casa Central
+          </h3>
+        </div>
+        <p className="text-sm text-foreground-muted">
+          Esta computadora opera como sucursal. La configuración de ClinStore
+          (subdominio, datos públicos, Mercado Pago) solo se administra desde
+          la Casa Central.
+        </p>
       </div>
     );
   }
@@ -125,7 +183,8 @@ export default function ConfigTiendaWebTab() {
             <h2 className="text-2xl font-bold">Módulo ClinStore E-Commerce</h2>
           </div>
           <p className="text-blue-100 text-sm max-w-xl">
-            Publicá tu catálogo de productos, precios y stock en tiempo real en tu tienda online propia conectada a ClinPOS.
+            Publicá tu catálogo de productos, precios y stock en tiempo real en
+            tu tienda online propia conectada a ClinPOS.
           </p>
         </div>
         <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20">
@@ -140,7 +199,9 @@ export default function ConfigTiendaWebTab() {
             />
             <div className="w-11 h-6 bg-white/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
           </label>
-          <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${formData.isWebActive ? "bg-emerald-500 text-white" : "bg-white/20 text-white"}`}>
+          <span
+            className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${formData.isWebActive ? "bg-emerald-500 text-white" : "bg-white/20 text-white"}`}
+          >
             {formData.isWebActive ? "Activa" : "Inactiva"}
           </span>
         </div>
@@ -151,7 +212,9 @@ export default function ConfigTiendaWebTab() {
         <div className="bg-muted p-4 rounded-xl border border-border flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 truncate">
             <Globe className="text-primary shrink-0" size={20} />
-            <span className="text-sm font-semibold text-foreground truncate">Tu enlace público:</span>
+            <span className="text-sm font-semibold text-foreground truncate">
+              Tu enlace público:
+            </span>
             <a
               href={storeUrl}
               target="_blank"
@@ -178,7 +241,8 @@ export default function ConfigTiendaWebTab() {
       {/* Configuración Básica */}
       <div className="bg-muted p-6 rounded-xl border border-border space-y-4">
         <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-          <Globe size={18} className="text-primary" /> Datos Públicos de la Tienda
+          <Globe size={18} className="text-primary" /> Datos Públicos de la
+          Tienda
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -201,7 +265,9 @@ export default function ConfigTiendaWebTab() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-foreground-muted mb-1">Descripción Breve o Eslogan</label>
+          <label className="block text-sm font-medium text-foreground-muted mb-1">
+            Descripción Breve o Eslogan
+          </label>
           <textarea
             name="description"
             rows={2}
@@ -234,14 +300,16 @@ export default function ConfigTiendaWebTab() {
       <div className="bg-muted p-6 rounded-xl border border-border space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <CreditCard size={18} className="text-blue-600" /> Cobros Online con Mercado Pago
+            <CreditCard size={18} className="text-blue-600" /> Cobros Online con
+            Mercado Pago
           </h3>
           <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">
             Integración Directa
           </span>
         </div>
         <p className="text-xs text-foreground-muted">
-          Los pagos ingresarán de forma instantánea a tu propia cuenta de Mercado Pago cuando tus clientes compren en ClinStore.
+          Los pagos ingresarán de forma instantánea a tu propia cuenta de
+          Mercado Pago cuando tus clientes compren en ClinStore.
         </p>
 
         {/* OAuth Button */}
@@ -251,35 +319,72 @@ export default function ConfigTiendaWebTab() {
               <ShieldCheck size={24} />
             </div>
             <div>
-              <p className="text-sm font-bold text-foreground">Vinculación Oficial 1-Clic (OAuth 2.0)</p>
-              <p className="text-xs text-foreground-muted">Conectá tu cuenta de Mercado Pago con 1 clic sin copiar claves secretas.</p>
+              <p className="text-sm font-bold text-foreground">
+                Vinculación Oficial 1-Clic (OAuth 2.0)
+              </p>
+              <p className="text-xs text-foreground-muted">
+                Conectá tu cuenta de Mercado Pago con 1 clic sin copiar claves
+                secretas.
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={async () => {
-                if (formData.mpAccessToken) {
-                  toast.success("Ya hay un token configurado.", { duration: 3000 });
+                // Un token de TEST no sirve en producción: se sigue al OAuth real
+                if (
+                  formData.mpAccessToken &&
+                  !formData.mpAccessToken.startsWith("TEST")
+                ) {
+                  toast.success("Ya hay un token configurado.", {
+                    duration: 3000,
+                  });
                   return;
                 }
+
+                // En producción el botón siempre lleva al OAuth oficial de
+                // Mercado Pago (cada usuario conecta SU cuenta). El atajo de
+                // credenciales de .env queda solo para desarrollo.
+                if (process.env.NODE_ENV === "production") {
+                  window.open(
+                    `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`,
+                    "_blank",
+                  );
+                  return;
+                }
+
                 try {
                   const res = await fetch("/api/mp/env-credentials");
                   if (!res.ok) throw new Error("No hay credenciales en .env");
                   const data = await res.json();
-                  if (!data.accessToken) throw new Error("Token inválido en .env");
+                  if (!data.accessToken)
+                    throw new Error("Token inválido en .env");
 
                   // Guardar directo sin esperar que el usuario haga submit
                   const saveRes = await fetch("/api/store-config", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ...formData, mpAccessToken: data.accessToken, mpPublicKey: data.publicKey || formData.mpPublicKey }),
+                    body: JSON.stringify({
+                      ...formData,
+                      mpAccessToken: data.accessToken,
+                      mpPublicKey: data.publicKey || formData.mpPublicKey,
+                    }),
                   });
                   if (!saveRes.ok) throw new Error("Error al guardar");
-                  toast.success("Token cargado desde .env y sincronizado a Supabase.", { duration: 5000 });
+                  toast.success(
+                    "Token cargado desde .env y sincronizado a Supabase.",
+                    { duration: 5000 },
+                  );
                   fetchConfig();
                 } catch (err: any) {
-                  toast.error(err.message || "Error al conectar. Usá OAuth en producción.");
-                  window.open(`https://clinstore.vercel.app/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`, "_blank");
+                  toast.error(
+                    err.message ||
+                      "Error al conectar. Usá OAuth en producción.",
+                  );
+                  window.open(
+                    `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`,
+                    "_blank",
+                  );
                 }
               }}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
@@ -316,14 +421,17 @@ export default function ConfigTiendaWebTab() {
           />
         </div>
         <p className="text-xs text-foreground-muted italic">
-          💡 La comisión estimada (ej. 6.49% en el acto o 3.99% a 14 días) te permite visualizar la deducción retenida por MP al evaluar tus ventas netas del día.
+          💡 La comisión estimada (ej. 6.49% en el acto o 3.99% a 14 días) te
+          permite visualizar la deducción retenida por MP al evaluar tus ventas
+          netas del día.
         </p>
       </div>
 
       {/* Reglas de Stock y Envíos */}
       <div className="bg-muted p-6 rounded-xl border border-border space-y-4">
         <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-          <Smartphone size={18} className="text-emerald-600" /> Stock de Seguridad y Envíos
+          <Smartphone size={18} className="text-emerald-600" /> Stock de
+          Seguridad y Envíos
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -378,11 +486,20 @@ export default function ConfigTiendaWebTab() {
 
       {/* Botón Guardar */}
       <div className="flex justify-end gap-3 pt-4 border-t border-border">
-        <Button type="button" variant="outline" onClick={fetchConfig} disabled={saving}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={fetchConfig}
+          disabled={saving}
+        >
           <RefreshCw size={16} className="mr-2" /> Cancelar
         </Button>
         <Button type="submit" variant="primary" disabled={saving}>
-          {saving ? <Loader2 className="animate-spin mr-2" size={16} /> : <CheckCircle2 size={16} className="mr-2" />}
+          {saving ? (
+            <Loader2 className="animate-spin mr-2" size={16} />
+          ) : (
+            <CheckCircle2 size={16} className="mr-2" />
+          )}
           {saving ? "Guardando..." : "Guardar Cambios"}
         </Button>
       </div>

@@ -8,6 +8,7 @@ import {
   Database,
   ShieldCheck,
   CreditCard,
+  Image as ImageIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -20,19 +21,24 @@ import ConfigBackupTab from "@/components/configuracion/tabs/ConfigBackupTab";
 import ConfigArcaTab from "@/components/configuracion/tabs/ConfigArcaTab";
 import ConfigPromocionesTarjetasTab from "@/components/configuracion/tabs/ConfigPromocionesTarjetasTab";
 import ConfigTiendaWebTab from "@/components/configuracion/tabs/ConfigTiendaWebTab";
+import ConfigSucursalesTab from "@/components/configuracion/tabs/ConfigSucursalesTab";
+import ConfigCloudinaryTab from "@/components/configuracion/tabs/ConfigCloudinaryTab";
 import ConfigPaymentModal from "@/components/configuracion/modals/ConfigPaymentModal";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, Store, Lock } from "lucide-react";
 
 
 export default function ConfiguracionPage() {
-  const { refresh: refreshModules } = useModules();
+  const { refresh: refreshModules, plan } = useModules();
   const [form, setForm] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "tienda_web" | "promociones_tarjetas" | "usuarios" | "backup" | "arca" | "suscripciones">(
+  const [activeTab, setActiveTab] = useState<"general" | "sucursales" | "tienda_web" | "promociones_tarjetas" | "usuarios" | "backup" | "arca" | "suscripciones" | "imagenes">(
     "general",
   );
   const [isSyncing, setIsSyncing] = useState(false);
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+
+  const isPlanPro = plan === "pro";
 
   // Modal de Pago
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -56,11 +62,29 @@ export default function ConfiguracionPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab");
-      if (tabParam === "tienda_web" || tabParam === "general" || tabParam === "promociones_tarjetas" || tabParam === "usuarios" || tabParam === "backup" || tabParam === "arca" || tabParam === "suscripciones") {
-        setActiveTab(tabParam as any);
-      }
+      if (tabParam) setPendingTab(tabParam);
     }
   }, []);
+
+  useEffect(() => {
+    if (!pendingTab) return;
+    const validTabs = ["general", "sucursales", "tienda_web", "promociones_tarjetas", "usuarios", "backup", "arca", "suscripciones", "imagenes"];
+    if (!validTabs.includes(pendingTab)) return;
+    const proTabs = ["sucursales", "tienda_web"];
+    if (proTabs.includes(pendingTab) && plan === "basico") {
+      setActiveTab("general");
+    } else {
+      setActiveTab(pendingTab as any);
+    }
+  }, [pendingTab, plan]);
+
+  const handleTabClick = (tab: "general" | "sucursales" | "tienda_web" | "promociones_tarjetas" | "usuarios" | "backup" | "arca" | "suscripciones" | "imagenes") => {
+    if ((tab === "sucursales" || tab === "tienda_web") && plan === "basico") {
+      toast.error("Esta sección requiere el plan Pro.");
+      return;
+    }
+    setActiveTab(tab);
+  };
 
   const handleChange = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -159,14 +183,25 @@ export default function ConfiguracionPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab("tienda_web")}
+          onClick={() => handleTabClick("sucursales")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
+            activeTab === "sucursales"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
+          }`}
+        >
+          <Store size={16} /> Locales y Sucursales {!isPlanPro && <Lock size={13} className="text-foreground-muted" />}
+        </button>
+
+        <button
+          onClick={() => handleTabClick("tienda_web")}
           className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
             activeTab === "tienda_web"
               ? "border-primary text-primary font-semibold"
               : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
           }`}
         >
-          <ShoppingBag size={16} /> Tienda ClinStore (Web)
+          <ShoppingBag size={16} /> Tienda ClinStore (Web) {!isPlanPro && <Lock size={13} className="text-foreground-muted" />}
         </button>
 
         <button
@@ -223,6 +258,17 @@ export default function ConfiguracionPage() {
         >
           <LayoutDashboard size={16} /> Suscripciones
         </button>
+
+        <button
+          onClick={() => setActiveTab("imagenes")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 cursor-pointer ${
+            activeTab === "imagenes"
+              ? "border-primary text-primary font-semibold"
+              : "border-transparent text-foreground-muted hover:text-foreground hover:border-border"
+          }`}
+        >
+          <ImageIcon size={16} /> Imágenes
+        </button>
       </div>
 
       {/* Content Area */}
@@ -233,6 +279,10 @@ export default function ConfiguracionPage() {
           handleSave={handleSave}
           isSaving={isSaving}
         />
+      )}
+
+      {activeTab === "sucursales" && (
+        <ConfigSucursalesTab />
       )}
 
       {activeTab === "tienda_web" && (
@@ -269,6 +319,15 @@ export default function ConfiguracionPage() {
 
       {activeTab === "suscripciones" && (
         <ConfigRubroPlanTab
+          form={form}
+          handleChange={handleChange}
+          handleSave={handleSave}
+          isSaving={isSaving}
+        />
+      )}
+
+      {activeTab === "imagenes" && (
+        <ConfigCloudinaryTab
           form={form}
           handleChange={handleChange}
           handleSave={handleSave}

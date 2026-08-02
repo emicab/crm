@@ -1,16 +1,18 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import type { Sale } from "@/types";
 import Button from "@/components/ui/Button";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
-import { Loader2, AlertCircle, Eye, Trash2, Download, Printer, CheckCircle } from "lucide-react";
+import { Loader2, AlertCircle, Eye, Trash2, Download, FileText, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { getPaymentTypeDisplay } from "@/lib/displayTexts";
 import { exportToCSV } from "@/lib/csv";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { formatDate } from "@/lib/formatDate";
+import { generateSalesPdf, type PdfSaleRowInput } from "@/lib/pdfSalesReport";
+import { saveFile } from "@/lib/saveFile";
 
 const SalesHistoryTable = () => {
   const router = useRouter();
@@ -23,7 +25,6 @@ const SalesHistoryTable = () => {
   const [itemToDelete, setItemToDelete] = useState<Sale | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<'COMPLETED' | 'PENDING'>('COMPLETED');
-  const printRef = useRef<HTMLDivElement>(null);
 
   const fetchSales = useCallback(async () => {
     setLoading(true);
@@ -59,35 +60,80 @@ const SalesHistoryTable = () => {
     fetchSales();
   }, [fetchSales]);
 
-  const handleExportCSV = () => {
-    const headers = [
-      { key: 'id', label: 'ID Venta' },
-      { key: 'saleDate', label: 'Fecha' },
-      { key: 'clientName', label: 'Cliente' },
-      { key: 'sellerName', label: 'Vendedor' },
-      { key: 'totalAmount', label: 'Monto Total' },
-      { key: 'paymentType', label: 'Tipo Pago' },
-      { key: 'itemCount', label: 'Nº Ítems' },
-      { key: 'discountCode', label: 'Cód. Desc.' },
-      { key: 'cajaId', label: 'Caja' },
-    ];
-    const dataToExport = sales.map(sale => ({
-      id: sale.id,
-      saleDate: formatDate(sale.saleDate),
-      clientName: sale.client ? `${sale.client.firstName} ${sale.client.lastName || ''}`.trim() : 'N/A',
-      sellerName: sale.seller?.name || 'N/A',
-      totalAmount: formatCurrency(sale.totalAmount),
-      paymentType: getPaymentTypeDisplay(sale.paymentType),
-      itemCount: sale.items.length,
-      discountCode: sale.discountCodeApplied || '-',
-      cajaId: sale.cashRegister ? `#${sale.cashRegister.id}` : '-',
-    }));
-    exportToCSV('historial_ventas', dataToExport, headers);
-    toast.success('Historial exportado a CSV.');
+  const handleExportCSV = async () => {
+    try {
+      const headers = [
+        { key: 'id', label: 'ID Venta' },
+        { key: 'saleDate', label: 'Fecha' },
+        { key: 'clientName', label: 'Cliente' },
+        { key: 'sellerName', label: 'Vendedor' },
+        { key: 'totalAmount', label: 'Monto Total' },
+        { key: 'paymentType', label: 'Tipo Pago' },
+        { key: 'itemCount', label: 'Nº Ítems' },
+        { key: 'discountCode', label: 'Cód. Desc.' },
+        { key: 'cajaId', label: 'Caja' },
+      ];
+      const dataToExport = sales.map(sale => ({
+        id: sale.id,
+        saleDate: formatDate(sale.saleDate),
+        clientName: sale.client ? `${sale.client.firstName} ${sale.client.lastName || ''}`.trim() : 'N/A',
+        sellerName: sale.seller?.name || 'N/A',
+        totalAmount: formatCurrency(sale.totalAmount),
+        paymentType: getPaymentTypeDisplay(sale.paymentType),
+        itemCount: sale.items.length,
+        discountCode: sale.discountCodeApplied || '-',
+        cajaId: sale.cashRegister ? `#${sale.cashRegister.id}` : '-',
+      }));
+      const ok = await exportToCSV('historial_ventas', dataToExport, headers);
+      if (ok) {
+        toast.success('Historial exportado a CSV.');
+      } else {
+        toast.error('No se pudo exportar el CSV.');
+      }
+    } catch {
+      toast.error('No se pudo exportar el CSV.');
+    }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleExportPdf = async () => {
+    const visibleSales = sales.filter((s) => (s.status || 'COMPLETED') === activeTab);
+    if (visibleSales.length === 0) {
+      toast('No hay ventas para exportar en esta pestaña.', { icon: 'ℹ️' });
+      return;
+    }
+
+    try {
+      const rows: PdfSaleRowInput[] = visibleSales.map((sale) => ({
+        id: sale.id,
+        saleDate: sale.saleDate,
+        clientName: sale.client
+          ? `${sale.client.firstName} ${sale.client.lastName || ''}`.trim()
+          : 'N/A',
+        sellerName: sale.seller?.name || 'N/A',
+        paymentTypeDisplay: getPaymentTypeDisplay(sale.paymentType),
+        itemCount: sale.items.length,
+        totalAmount: sale.totalAmount,
+      }));
+
+      const configRes = await fetch('/api/config');
+      const config = configRes.ok ? await configRes.json() : {};
+
+      const pdfBytes = await generateSalesPdf({
+        sales: rows,
+        rangeLabel: activeTab === 'PENDING' ? 'Pedidos Pendientes' : 'Historial de Ventas',
+        businessName: config.businessName || '',
+      });
+
+      const tabLabel = activeTab === 'PENDING' ? 'Pendientes' : 'Completadas';
+      const result = await saveFile(pdfBytes, `Historial_Ventas_${tabLabel}.pdf`, 'application/pdf');
+      if (result.success) {
+        toast.success('Historial exportado a PDF.');
+      } else if (!result.canceled) {
+        toast.error(result.error || 'No se pudo exportar el PDF.');
+      }
+    } catch {
+      toast.error('No se pudo exportar el PDF.');
+    }
   };
 
   const handleViewDetails = (saleId: number) => {
@@ -172,14 +218,6 @@ const SalesHistoryTable = () => {
 
   return (
     <>
-      <style>{`
-        @media print {
-          .print-hidden { display: none !important; }
-          body { background: white; }
-          table { font-size: 11px; width: 100%; border-collapse: collapse; }
-          th, td { padding: 6px 8px; border-bottom: 1px solid #ddd; }
-        }
-      `}</style>
       <ConfirmationModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -197,8 +235,8 @@ const SalesHistoryTable = () => {
         </span>
       </ConfirmationModal>
 
-      <div className="bg-muted p-4 sm:p-6 rounded-lg shadow" ref={printRef}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 print-hidden">
+      <div className="bg-muted p-4 sm:p-6 rounded-lg shadow">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <div className="flex gap-4 border-b border-border w-full sm:w-auto">
             <button
               className={`pb-2 px-2 text-sm font-semibold transition-colors ${
@@ -225,8 +263,8 @@ const SalesHistoryTable = () => {
             <Button variant="outline" size="sm" onClick={handleExportCSV}>
               <Download size={14} className="mr-1.5" /> Exportar CSV
             </Button>
-            <Button variant="outline" size="sm" onClick={handlePrint}>
-              <Printer size={14} className="mr-1.5" /> Imprimir
+            <Button variant="outline" size="sm" onClick={handleExportPdf}>
+              <FileText size={14} className="mr-1.5" /> Exportar PDF
             </Button>
           </div>
         </div>

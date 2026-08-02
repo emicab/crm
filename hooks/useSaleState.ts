@@ -1,3 +1,4 @@
+// hooks/useSaleState.ts
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
@@ -39,7 +40,21 @@ const initialFormData: SaleFormData = {
 export const useSaleState = () => {
   const { isModuleEnabled } = useModules();
   
-  // Ref para persistencia del carrito en local storage
+  // Obtenemos la sucursal activa configurada en esta PC
+  const activeBranchIdStr = typeof window !== 'undefined' ? localStorage.getItem("clinpos_active_branch_id") : null;
+
+  // Helper centralizado para extraer el stock de la sucursal activa
+  const getLocalStock = useCallback((product: any) => {
+    if (!product) return 0;
+    if (activeBranchIdStr && product.branchStocks && Array.isArray(product.branchStocks)) {
+      const bs = product.branchStocks.find((b: any) => String(b.branchId) === String(activeBranchIdStr));
+      if (bs) return parseFloat(String(bs.quantityStock).replace(",", "."));
+      // Si la sucursal activa no tiene entrada, caemos al stock global en vez de 0
+    }
+    // Fallback al global si no hay sucursal activa o la API no devolvió branchStocks
+    return parseFloat(String(product.quantityStock || 0).replace(",", "."));
+  }, [activeBranchIdStr]);
+
   const savedCart = useRef<any>(null);
   if (typeof window !== "undefined") {
     savedCart.current = loadCart();
@@ -72,7 +87,6 @@ export const useSaleState = () => {
   const [config, setConfig] = useState<Record<string, string>>({});
   const [hasOpenCaja, setHasOpenCaja] = useState(false);
 
-  // Productos Quick-Add (sin badges de categorías)
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
   const [isLoadingCategoryProducts, setIsLoadingCategoryProducts] =
     useState<boolean>(false);
@@ -135,7 +149,6 @@ export const useSaleState = () => {
   const appliedPromotionRef = useRef(appliedPromotion);
   appliedPromotionRef.current = appliedPromotion;
 
-  // Carga de datos iniciales
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -187,7 +200,6 @@ export const useSaleState = () => {
           }));
         }
 
-        // Apply default payment type from config if not already set in persisted cart
         const defaultPT = configData.defaultPaymentType;
         if (defaultPT) {
           setFormData((prev) => ({
@@ -236,10 +248,10 @@ export const useSaleState = () => {
     fetchData();
   }, []);
 
-  // Carga de catálogo rápido
-  useEffect(() => {
+  // Refresco centralizado del catálogo rápido y últimos vendidos (inyectando sucursal)
+  const refreshCatalogs = useCallback(() => {
     setIsLoadingCategoryProducts(true);
-    fetch("/api/products?limit=24")
+    fetch(`/api/products?limit=24${activeBranchIdStr ? `&branchId=${activeBranchIdStr}` : ''}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data)) {
@@ -247,18 +259,44 @@ export const useSaleState = () => {
             data.map((p: any) => ({
               ...p,
               priceSale: parseFloat(p.priceSale),
-              quantityStock: parseFloat(
-                String(p.quantityStock).replace(",", "."),
-              ),
+              // PISAMOS quantityStock con el valor local
+              quantityStock: getLocalStock(p),
             })),
           );
         }
       })
       .catch(() => {})
       .finally(() => setIsLoadingCategoryProducts(false));
-  }, []);
 
-  // Carga del cliente guardado en carrito local
+    fetch(`/api/ventas/recent-products${activeBranchIdStr ? `&branchId=${activeBranchIdStr}` : ''}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setRecentProducts(
+            data.map((p: any) => ({
+              ...p,
+              priceSale: parseFloat(p.priceSale),
+              // PISAMOS quantityStock con el valor local
+              quantityStock: getLocalStock(p),
+            })),
+          );
+        }
+      })
+      .catch(() => {});
+  }, [activeBranchIdStr, getLocalStock]);
+
+  // Carga inicial de catálogos
+  useEffect(() => {
+    refreshCatalogs();
+  }, [refreshCatalogs]);
+
+  // Refrescar en tiempo real cuando el sync trae stock nuevo (multi-sucursal, sin F5)
+  useEffect(() => {
+    const handleSync = () => refreshCatalogs();
+    window.addEventListener("sync-completed", handleSync);
+    return () => window.removeEventListener("sync-completed", handleSync);
+  }, [refreshCatalogs]);
+
   useEffect(() => {
     if (formData.clientId && !selectedClient) {
       fetch(`/api/clients/${formData.clientId}`)
@@ -275,31 +313,12 @@ export const useSaleState = () => {
     }
   }, [formData.clientId, selectedClient]);
 
-  // Carga de productos vendidos recientemente
-  useEffect(() => {
-    fetch("/api/ventas/recent-products")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        if (Array.isArray(data))
-          setRecentProducts(
-            data.map((p: any) => ({
-              ...p,
-              priceSale: parseFloat(p.priceSale),
-              quantityStock: parseFloat(p.quantityStock),
-            })),
-          );
-      })
-      .catch(() => {});
-  }, []);
-
-  // Auto-foco al terminar la carga inicial
   useEffect(() => {
     if (!isFetchingInitialData) {
       setTimeout(() => productInputRef.current?.focus(), 150);
     }
   }, [isFetchingInitialData]);
 
-  // Buscador de clientes (debounce)
   useEffect(() => {
     if (clientSearchTerm.trim() === "" || selectedClient) {
       setSearchedClients([]);
@@ -316,7 +335,7 @@ export const useSaleState = () => {
     return () => clearTimeout(timer);
   }, [clientSearchTerm, selectedClient]);
 
-  // Buscador de productos (debounce)
+  // Buscador de productos INYECTANDO SUCURSAL
   useEffect(() => {
     if (!productSearchTerm.trim()) {
       setSearchedProducts([]);
@@ -325,7 +344,7 @@ export const useSaleState = () => {
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/products?search=${encodeURIComponent(productSearchTerm)}`,
+          `/api/products?search=${encodeURIComponent(productSearchTerm)}${activeBranchIdStr ? `&branchId=${activeBranchIdStr}` : ''}`,
         );
         if (res.ok) {
           const data = await res.json();
@@ -338,9 +357,8 @@ export const useSaleState = () => {
               .map((p: any) => ({
                 ...p,
                 priceSale: parseFloat(p.priceSale),
-                quantityStock: parseFloat(
-                  String(p.quantityStock).replace(",", "."),
-                ),
+                // PISAMOS quantityStock con el valor local
+                quantityStock: getLocalStock(p),
               }))
               .slice(0, 5),
           );
@@ -348,9 +366,8 @@ export const useSaleState = () => {
       } catch {}
     }, 300);
     return () => clearTimeout(timer);
-  }, [productSearchTerm, formData.items]);
+  }, [productSearchTerm, formData.items, activeBranchIdStr, getLocalStock]);
 
-  // Validación de cupones (debounce)
   useEffect(() => {
     const code = formData.discountCode.trim().toUpperCase();
     if (!code) {
@@ -378,7 +395,6 @@ export const useSaleState = () => {
     return () => clearTimeout(timer);
   }, [formData.discountCode]);
 
-  // Persistencia local
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -419,7 +435,6 @@ export const useSaleState = () => {
     setTimeout(() => productInputRef.current?.focus(), 50);
   }, [sellers]);
 
-  // Atajos de teclado
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "F8" || (e.ctrlKey && e.key === "k")) {
@@ -501,12 +516,13 @@ export const useSaleState = () => {
     } else barcodeInput.current = "";
   };
 
+  // Escaneo de código de barras INYECTANDO SUCURSAL
   const handleProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && barcodeInput.current.length > 0) {
       e.preventDefault();
       const code = barcodeInput.current;
       barcodeInput.current = "";
-      fetch(`/api/products?search=${encodeURIComponent(code)}`)
+      fetch(`/api/products?search=${encodeURIComponent(code)}${activeBranchIdStr ? `&branchId=${activeBranchIdStr}` : ''}`)
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => {
           const product = data?.[0];
@@ -514,9 +530,8 @@ export const useSaleState = () => {
             handleSelectProduct({
               ...product,
               priceSale: parseFloat(product.priceSale),
-              quantityStock: parseFloat(
-                String(product.quantityStock).replace(",", "."),
-              ),
+              // PISAMOS quantityStock con el valor local
+              quantityStock: getLocalStock(product),
             });
           else toast.error(`Producto con código "${code}" no encontrado.`);
         })
@@ -543,7 +558,6 @@ export const useSaleState = () => {
     setProductSearchTerm("");
     setSearchedProducts([]);
 
-    // Foco en el input de cantidad del item agregado
     setTimeout(() => {
       const el = document.getElementById(`qty-input-${tempId}`);
       if (el) {
@@ -555,7 +569,7 @@ export const useSaleState = () => {
 
   const handleSelectProduct = (product: Product) => {
     if (product.quantityStock <= 0) {
-      toast.error(`"${product.name}" no tiene stock disponible.`);
+      toast.error(`"${product.name}" no tiene stock disponible en este local.`);
       setProductSearchTerm("");
       setSearchedProducts([]);
       productInputRef.current?.focus();
@@ -590,7 +604,6 @@ export const useSaleState = () => {
       setProductSearchTerm("");
       setSearchedProducts([]);
 
-      // Foco en el input de cantidad del item existente
       setTimeout(() => {
         const el = document.getElementById(`qty-input-${existing.tempId}`);
         if (el) {
@@ -750,7 +763,8 @@ export const useSaleState = () => {
     const newItems: SaleItemInCart[] = combo.items.map((item) => ({
       productId: String(item.productId),
       productName: `${item.product?.name || `#${item.productId}`} (Combo: ${combo.name})`,
-      availableStock: item.product?.quantityStock ?? 999,
+      // PISAMOS availableStock del combo con el valor local
+      availableStock: item.product ? getLocalStock(item.product) : 999,
       quantity: item.quantity,
       priceAtSale: item.customPrice ?? item.product?.priceSale ?? 0,
       tempId: batchId + item.productId,
@@ -802,7 +816,6 @@ export const useSaleState = () => {
       return;
     }
 
-    // Validar requerimientos de Factura A
     if (config.arcaEnabled === 'true' && invoiceType === 'A') {
       if (!clientCuit.trim() || clientCuit.replace(/\D/g, '').length !== 11) {
         toast.error("El CUIT del cliente es requerido y debe tener 11 dígitos para Factura A.");
@@ -817,7 +830,12 @@ export const useSaleState = () => {
     }
 
     const promo = appliedPromotionRef.current;
+    
+    // Convertimos la sucursal activa a número para la DB
+    const activeBranchId = activeBranchIdStr ? parseInt(activeBranchIdStr) : null;
+
     const dataToSend = {
+      branchId: activeBranchId,
       clientId: formData.clientId ? parseInt(formData.clientId) : null,
       sellerId: parseInt(activeSellerId),
       paymentType: formData.paymentType as PaymentTypeEnum,
@@ -881,20 +899,8 @@ export const useSaleState = () => {
 
       clearCart();
 
-      // Refrescar la lista de productos vendidos recientemente
-      fetch("/api/ventas/recent-products")
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data) => {
-          if (Array.isArray(data))
-            setRecentProducts(
-              data.map((p: any) => ({
-                ...p,
-                priceSale: parseFloat(p.priceSale),
-                quantityStock: parseFloat(p.quantityStock),
-              })),
-            );
-        })
-        .catch(() => {});
+      // Refresco post-venta (catálogo rápido + recientes, con inyección de sucursal)
+      refreshCatalogs();
 
       setTimeout(() => productInputRef.current?.focus(), 50);
     } catch (err: unknown) {
