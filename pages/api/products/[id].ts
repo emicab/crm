@@ -205,31 +205,72 @@ export default async function handler(
     }
   } else if (req.method === 'DELETE') {
     try {
-      const [saleItemsCount, purchaseItemsCount] = await Promise.all([
-        prisma.saleItem.count({
-          where: { productId: id },
-        }),
-        prisma.purchaseItem.count({
-          where: { productId: id },
-        }),
+      const [saleItemsCount, purchaseItemsCount, comboItemsCount, promotionConditionsCount, consignmentItemsCount, stockTransferItemsCount] = await Promise.all([
+        prisma.saleItem.count({ where: { productId: id } }),
+        prisma.purchaseItem.count({ where: { productId: id } }),
+        prisma.comboItem.count({ where: { productId: id } }),
+        prisma.promotionCondition.count({ where: { productId: id } }),
+        prisma.consignmentItem.count({ where: { productId: id } }),
+        prisma.stockTransferItem.count({ where: { productId: id } }),
       ]);
 
-      if (saleItemsCount > 0 || purchaseItemsCount > 0) {
-        const relations = [];
-        if (saleItemsCount > 0) relations.push(`${saleItemsCount} ítem(s) de venta`);
-        if (purchaseItemsCount > 0) relations.push(`${purchaseItemsCount} ítem(s) de compra`);
+      const relations = [];
+      if (saleItemsCount > 0) relations.push(`${saleItemsCount} ítem(s) de venta`);
+      if (purchaseItemsCount > 0) relations.push(`${purchaseItemsCount} ítem(s) de compra`);
+      if (comboItemsCount > 0) relations.push(`${comboItemsCount} ítem(s) de combo`);
+      if (promotionConditionsCount > 0) relations.push(`${promotionConditionsCount} condición(es) de promoción`);
+      if (consignmentItemsCount > 0) relations.push(`${consignmentItemsCount} ítem(s) de consignación`);
+      if (stockTransferItemsCount > 0) relations.push(`${stockTransferItemsCount} ítem(s) de traspaso de stock`);
 
+      if (relations.length > 0) {
         return res.status(409).json({
-          message: `No se puede eliminar el producto porque está asociado a ${relations.join(' y ')}. Considere marcarlo como no disponible o discontinuado.`
+          message: `No se puede eliminar el producto porque está asociado a ${relations.join(', ')}. Considere marcarlo como no disponible o discontinuado.`
         });
       }
-      
-      await prisma.product.delete({
-        where: { id },
+
+      // Pedidos web que referencian este producto. Solo se limpian automáticamente
+      // los que están PENDIENTES y NO pagados (ej. un checkout que falló).
+      const webOrderItems = await prisma.webOrderItem.findMany({
+        where: { productId: id },
+        select: { webOrderId: true },
       });
-      
+      const webOrderIds = [...new Set(webOrderItems.map(i => i.webOrderId))];
+
+      let webOrderNumbersToDelete: string[] = [];
+      if (webOrderIds.length > 0) {
+        const webOrders = await prisma.webOrder.findMany({
+          where: { id: { in: webOrderIds } },
+          select: { id: true, webOrderNumber: true, status: true, paymentStatus: true },
+        });
+
+        const blocked = webOrders.filter(o =>
+          o.paymentStatus === "PAID" || o.status === "DELIVERED"
+        );
+        if (blocked.length > 0) {
+          return res.status(409).json({
+            message: `No se puede eliminar el producto porque está asociado a pedidos web confirmados (${blocked.map(o => o.webOrderNumber).join(', ')}). Considere marcarlo como no disponible.`
+          });
+        }
+
+        webOrderNumbersToDelete = webOrders.map(o => o.webOrderNumber);
+      }
+
+      // Borrar dependencias de órdenes web pendientes y el producto (transacción atómica).
+      await prisma.$transaction(async (tx) => {
+        if (webOrderIds.length > 0) {
+          await tx.webOrderItem.deleteMany({ where: { webOrderId: { in: webOrderIds } } });
+          await tx.webOrder.deleteMany({ where: { id: { in: webOrderIds } } });
+        }
+        await tx.productBranchStock.deleteMany({ where: { productId: id } });
+        await tx.product.delete({ where: { id } });
+      });
+
+      // Reflejar la eliminación en la nube (pedidos pendientes + producto).
       try {
-        const { deleteProductFromSupabase } = await import("../../../lib/syncService");
+        const { deleteWebOrdersFromSupabase, deleteProductFromSupabase } = await import("../../../lib/syncService");
+        if (webOrderNumbersToDelete.length > 0) {
+          await deleteWebOrdersFromSupabase(webOrderNumbersToDelete);
+        }
         await deleteProductFromSupabase(id);
       } catch (syncErr) {
         console.error("[Productos] Delete sync error:", syncErr);

@@ -441,14 +441,20 @@ export default async function handler(
         arcaError = err.message || "No se pudo comunicar con ARCA.";
       }
 
-      // [MODIFICADO BUG 1] Sync de stock liviano de los productos vendidos a Supabase
-      // (en background, sin demorar la respuesta de la venta)
+      // [MODIFICADO] Sync de stock liviano de los productos vendidos a Supabase.
+      // Ahora se espera el push liviano para que la nube quede actualizada de
+      // inmediato; si falla, cae a un sync completo en background.
       try {
-        const { syncStockForProducts } = await import("../../../lib/syncService");
+        const { syncStockForProducts, runSupabaseSync } = await import("../../../lib/syncService");
         const productIds = items.map((item: any) => item.productId);
-        syncStockForProducts(productIds).catch((err) =>
-          console.error("[Ventas] Sync stock post-venta error:", err)
-        );
+        try {
+          await syncStockForProducts(productIds);
+        } catch (err) {
+          console.error("[Ventas] Sync stock post-venta error:", err);
+          runSupabaseSync(true).catch((e: any) =>
+            console.error("[Ventas] Sync completo fallback error:", e)
+          );
+        }
       } catch (syncErr) {
         console.error("[Ventas] Sync error post-venta:", syncErr);
       }

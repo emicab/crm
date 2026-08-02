@@ -149,13 +149,19 @@ export default async function handler(
       return updatedSale;
     });
 
-    // Sync de stock liviano en background (no bloquea la respuesta de la venta)
+    // Sync de stock liviano al completar la venta (esperado para dejar la nube
+    // actualizada al instante; si falla, sync completo en background)
     try {
-      const { syncStockForProducts } = await import("../../../../lib/syncService");
+      const { syncStockForProducts, runSupabaseSync } = await import("../../../../lib/syncService");
       const productIds = sale.items.map((item: any) => item.productId);
-      syncStockForProducts(productIds).catch((err) =>
-        console.error("[Ventas] Sync stock al completar venta error:", err)
-      );
+      try {
+        await syncStockForProducts(productIds);
+      } catch (err) {
+        console.error("[Ventas] Sync stock al completar venta error:", err);
+        runSupabaseSync(true).catch((e: any) =>
+          console.error("[Ventas] Sync completo fallback error:", e)
+        );
+      }
     } catch (syncErr) {
       console.error("[Ventas] Sync error al completar venta:", syncErr);
     }

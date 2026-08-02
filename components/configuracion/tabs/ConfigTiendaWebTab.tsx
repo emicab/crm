@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Smartphone,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -22,6 +23,7 @@ export default function ConfigTiendaWebTab() {
   const [saving, setSaving] = useState(false);
   const [isMainDevice, setIsMainDevice] = useState(true);
   const [platformDomain, setPlatformDomain] = useState("");
+  const [showMpChangeModal, setShowMpChangeModal] = useState(false);
   const [formData, setFormData] = useState({
     slug: "",
     businessName: "",
@@ -130,6 +132,48 @@ export default function ConfigTiendaWebTab() {
       fetchConfig();
     } catch (err: any) {
       toast.error(err.message || "Ocurrió un error al guardar.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const disconnectMp = async () => {
+    if (!formData.slug.trim()) {
+      toast.error("Guardá primero el subdominio de la tienda.");
+      return;
+    }
+    if (!formData.mpAccessToken) {
+      toast.error("No hay una cuenta de Mercado Pago conectada.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "¿Desconectar la cuenta de Mercado Pago? Los cobros online quedarán desactivados.",
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/store-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          mpAccessToken: "",
+          mpPublicKey: "",
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(
+          errData.message || "Error al desconectar Mercado Pago.",
+        );
+      }
+      toast.success("Mercado Pago desconectado.");
+      fetchConfig();
+    } catch (err: any) {
+      toast.error(err.message || "Ocurrió un error al desconectar.");
     } finally {
       setSaving(false);
     }
@@ -330,26 +374,38 @@ export default function ConfigTiendaWebTab() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
+              type="button"
               onClick={() => {
-                // El botón SIEMPRE relanza el OAuth oficial de Mercado Pago
-                // (cada usuario conecta o cambia SU cuenta). El atajo de .env
-                // queda fuera del flujo de la app de escritorio.
-                window.open(
-                  `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`,
-                  "_blank",
-                );
+                if (formData.mpAccessToken?.trim()) {
+                  // Ya hay cuenta conectada → mostrar modal de confirmación
+                  setShowMpChangeModal(true);
+                } else {
+                  // Primera conexión → OAuth directo
+                  const url = `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`;
+                  import("@tauri-apps/plugin-shell")
+                    .then(({ open }) => open(url))
+                    .catch(() => window.open(url, "_blank"));
+                }
               }}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
             >
-              {
-                // Las credenciales de MP (prod y test) empiezan con APP_USR,
-                // por lo que detectar "cuenta conectada" por prefijo es inválido.
-                // Una cuenta real conectada = hay access token guardado.
-                formData.mpAccessToken?.trim()
-                  ? "Cambiar cuenta conectada (OAuth 2.0)"
-                  : "Conectar Mercado Pago (OAuth 2.0) 🔗"
-              }
+              {formData.mpAccessToken?.trim()
+                ? "Cambiar cuenta conectada (OAuth 2.0)"
+                : "Conectar Mercado Pago (OAuth 2.0) 🔗"}
             </button>
+            {formData.mpAccessToken?.trim() ? (
+              <button
+                type="button"
+                onClick={disconnectMp}
+                disabled={saving}
+                className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : null}
+                Desconectar Mercado Pago
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -462,6 +518,48 @@ export default function ConfigTiendaWebTab() {
           {saving ? "Guardando..." : "Guardar Cambios"}
         </Button>
       </div>
+      {/* Modal de confirmación para cambiar cuenta MP */}
+      {showMpChangeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-muted border border-border rounded-2xl p-6 max-w-md mx-4 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-foreground">
+                Cambiar Cuenta de Mercado Pago
+              </h3>
+            </div>
+            <p className="text-sm text-foreground-muted leading-relaxed">
+              Para vincular una cuenta diferente, se abrirá una ventana donde
+              primero se cerrará tu sesión actual en Mercado Pago y luego
+              podrás iniciar sesión con la nueva cuenta.
+            </p>
+            <div className="flex items-center gap-3 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowMpChangeModal(false)}
+                className="px-4 py-2 text-sm font-medium text-foreground-muted hover:text-foreground transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMpChangeModal(false);
+                  const url = `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}&change_account=true`;
+                  import("@tauri-apps/plugin-shell")
+                    .then(({ open }) => open(url))
+                    .catch(() => window.open(url, "_blank"));
+                }}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

@@ -433,3 +433,37 @@ ALTER TABLE "Setting" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "StoreConfig" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WebOrder" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WebOrderItem" DISABLE ROW LEVEL SECURITY;
+
+-- 26. Habilitar Realtime para que el POS y ClinStore escuchen cambios de stock
+-- (si la publicación supabase_realtime existe, que es lo habitual en Supabase).
+DO $$
+DECLARE
+  t TEXT;
+  pub_exists BOOLEAN;
+  tables_to_add TEXT[] := ARRAY[
+    'Product',
+    'ProductBranchStock',
+    'Sale',
+    'Purchase',
+    'StockTransfer',
+    'WebOrder',
+    'WebOrderItem',
+    'StoreConfig'
+  ];
+BEGIN
+  SELECT EXISTS(SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') INTO pub_exists;
+  IF NOT pub_exists THEN
+    RETURN;
+  END IF;
+  FOREACH t IN ARRAY tables_to_add
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime'
+        AND schemaname = 'public'
+        AND tablename = t
+    ) THEN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', t);
+    END IF;
+  END LOOP;
+END $$;

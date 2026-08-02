@@ -363,8 +363,11 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         })),
       WebOrderItem: webOrders
         .filter(o => supabaseWebOrderIds[o.webOrderNumber] !== undefined)
-        .flatMap(o => o.items.map(i => ({
-          id: i.id,
+        .flatMap(o => o.items.map((i, index) => ({
+          // El id de nube se calcula con el mismo esquema que usa clinstore
+          // (orderId * 100 + index) para que el upsert (PK tenant_id+id) sea
+          // idempotente y no duplique items en cada sync.
+          id: supabaseWebOrderIds[o.webOrderNumber] * 100 + index,
           webOrderId: supabaseWebOrderIds[o.webOrderNumber],
           productId: i.productId,
           quantity: i.quantity,
@@ -517,22 +520,30 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
               console.log(`[Sync] Esta PC es una sucursal y no tiene StoreConfig local; la tienda web la administra la Casa Central (tenant ${tenantId}).`);
             }
           } else if (
-            remoteConfig.mpAccessToken !== firstStoreConfig.mpAccessToken &&
-            isCloudNewer(remoteConfig.updatedAt, firstStoreConfig.updatedAt)
+            remoteConfig.mpAccessToken !== firstStoreConfig.mpAccessToken
           ) {
-            // Último escritor gana: si en la nube se apuntó o se BORRÓ el token,
-            // eso prevalece sobre el valor local. Sin el guard de token no nulo,
-            // una limpieza en Supabase también vacía el local y no se re-subía.
-            await prisma.storeConfig.update({
-              where: { id: firstStoreConfig.id },
-              data: {
-                mpAccessToken: remoteConfig.mpAccessToken || null,
-                mpPublicKey: remoteConfig.mpPublicKey || "",
-              },
-            });
-            console.log(
-              `[Sync] mpAccessToken${remoteConfig.mpAccessToken ? " actualizado" : " borrado"} desde Supabase para tenant ${tenantId}`
-            );
+            // La nube es la fuente de verdad para las credenciales de MP:
+            // - Si la nube BORRÓ el token (mpAccessToken vacío), el borrado se
+            //   propaga SIEMPRE al local, aunque su timestamp sea viejo (un
+            //   UPDATE manual en Supabase no actualiza updatedAt). Sin esto, el
+            //   local conservaba el token y el PUSH lo volvía a subir.
+            // - Si la nube tiene un token NUEVO, solo se aplica si es más nuevo
+            //   que el local (isCloudNewer), para no pisar una escritura local
+            //   reciente (ej. OAuth legacy que aún no se subió).
+            const cloudHasToken = Boolean(remoteConfig.mpAccessToken);
+            const cloudIsNewer = isCloudNewer(remoteConfig.updatedAt, firstStoreConfig.updatedAt);
+            if (!cloudHasToken || cloudIsNewer) {
+              await prisma.storeConfig.update({
+                where: { id: firstStoreConfig.id },
+                data: {
+                  mpAccessToken: remoteConfig.mpAccessToken || null,
+                  mpPublicKey: remoteConfig.mpPublicKey || "",
+                },
+              });
+              console.log(
+                `[Sync] mpAccessToken${cloudHasToken ? " actualizado" : " borrado"} desde Supabase para tenant ${tenantId}`
+              );
+            }
           }
         }
       }
@@ -1030,9 +1041,29 @@ export async function syncWebOrderToSupabase(orderId: number): Promise<boolean> 
     });
     if (!order) return false;
 
+    // [FIX 409] Las órdenes creadas por clinstore tienen un id distinto al local.
+    // Hay que mapear webOrderNumber -> id de nube (como hace el full sync) para
+    // que el upsert por PK (tenant_id, id) actualice en vez de intentar insertar
+    // y violar el UNIQUE (tenant_id, webOrderNumber).
+    const headers = { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` };
+    let cloudId = order.id;
+    try {
+      const idRes = await fetch(
+        `${supabaseUrl}/rest/v1/WebOrder?tenant_id=eq.${encodeURIComponent(tenantId)}&select=id,webOrderNumber`,
+        { headers }
+      );
+      if (idRes.ok) {
+        const existing: { id: number; webOrderNumber: string }[] = await idRes.json();
+        const match = existing.find(o => o.webOrderNumber === order.webOrderNumber);
+        if (match) cloudId = match.id;
+      }
+    } catch (mapErr) {
+      console.warn("[Sync] No se pudieron mapear ids de WebOrders:", mapErr);
+    }
+
     const payload: Record<string, any[]> = {
       WebOrder: [{
-        id: order.id,
+        id: cloudId,
         webOrderNumber: order.webOrderNumber,
         clientName: order.clientName,
         clientEmail: order.clientEmail,
@@ -1049,9 +1080,9 @@ export async function syncWebOrderToSupabase(orderId: number): Promise<boolean> 
         createdAt: order.createdAt.toISOString(),
         updatedAt: order.updatedAt.toISOString()
       }],
-      WebOrderItem: order.items.map(i => ({
-        id: i.id,
-        webOrderId: order.id,
+      WebOrderItem: order.items.map((i, index) => ({
+        id: cloudId * 100 + index,
+        webOrderId: cloudId,
         productId: i.productId,
         quantity: i.quantity,
         unitPrice: fmtDec(i.unitPrice),

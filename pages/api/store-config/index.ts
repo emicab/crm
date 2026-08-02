@@ -181,6 +181,43 @@ export default async function handler(
         console.warn("Could not auto-sync store config:", err);
       }
 
+      // Si el token de MP pasó de no-vacío a vacío, propagar el borrado a la
+      // nube de forma determinística y verificada (upsert directo con
+      // updatedAt = now()), para que no dependa del sync fire-and-forget ni de
+      // que un sync en curso re-subiera el token desde un local desactualizado.
+      // Si el token de MP pasó de no-vacío a vacío, propagar el borrado a la
+      // nube usando PATCH para una actualización parcial segura.
+      if (existingConfig?.mpAccessToken && !result.mpAccessToken) {
+        try {
+          const { getSelectiveSyncCredentials } = await import("../../../lib/syncService");
+          const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
+          
+          // Cambiamos a PATCH y agregamos el filtro por tenant_id en la URL
+          const patchRes = await fetch(`${supabaseUrl}/rest/v1/StoreConfig?tenant_id=eq.${tenantId}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": supabaseKey,
+              "Authorization": `Bearer ${supabaseKey}`,
+            },
+            // Al usar PATCH, enviamos un objeto directo en lugar de un array
+            body: JSON.stringify({
+              mpAccessToken: null,
+              mpPublicKey: null,
+              updatedAt: new Date().toISOString(),
+            }),
+          });
+          
+          if (!patchRes.ok) {
+            console.error("Error al borrar credenciales MP en Supabase:", await patchRes.text());
+          } else {
+            console.log(`[StoreConfig] Credenciales MP borradas en Supabase (tenant ${tenantId})`);
+          }
+        } catch (err) {
+          console.warn("No se pudo borrar las credenciales MP en Supabase:", err);
+        }
+      }
+
       res.status(200).json({
         ...result,
         deliveryFee: result.deliveryFee.toString(),
