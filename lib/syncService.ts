@@ -516,7 +516,11 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
             } else {
               console.log(`[Sync] Esta PC es una sucursal y no tiene StoreConfig local; la tienda web la administra la Casa Central (tenant ${tenantId}).`);
             }
-          } else if (remoteConfig.mpAccessToken && remoteConfig.mpAccessToken !== firstStoreConfig.mpAccessToken) {
+          } else if (
+            remoteConfig.mpAccessToken &&
+            remoteConfig.mpAccessToken !== firstStoreConfig.mpAccessToken &&
+            isCloudNewer(remoteConfig.updatedAt, firstStoreConfig.updatedAt)
+          ) {
             await prisma.storeConfig.update({
               where: { id: firstStoreConfig.id },
               data: {
