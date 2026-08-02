@@ -13,15 +13,14 @@ export default async function handler(
   try {
     const { itemType } = req.body; // 'basico_mensual' | 'basico_unico' | 'pro_mensual'
 
-    // Obtener Access Token de configuración o env var
+    // Obtener Access Token de configuración (la cuenta conectada por OAuth).
+    // No se usa el .env como respaldo: la app de escritorio cobra solo con la
+    // cuenta vinculada del StoreConfig.
     const mpTokenConfig = await prisma.setting.findUnique({
       where: { key: "mercadopago_access_token" },
     });
 
-    const accessToken =
-      mpTokenConfig?.value ||
-      process.env.MERCADOPAGO_ACCESS_TOKEN ||
-      "";
+    const accessToken = mpTokenConfig?.value || "";
 
     let title = "ClinPOS - Plan Básico";
     let price = 9900;

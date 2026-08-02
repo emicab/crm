@@ -53,8 +53,6 @@ export default async function handler(
       const accessToken =
         storeConfig?.mpAccessToken ||
         mpTokenConfig?.value ||
-        process.env.MERCADOPAGO_ACCESS_TOKEN ||
-        process.env.MP_ACCESS_TOKEN ||
         "";
 
       if (accessToken && (accessToken.startsWith("APP_USR") || accessToken.startsWith("TEST-"))) {

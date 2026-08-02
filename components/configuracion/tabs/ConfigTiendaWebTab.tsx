@@ -330,66 +330,21 @@ export default function ConfigTiendaWebTab() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={async () => {
-                // Un token de TEST no sirve en producción: se sigue al OAuth real
-                if (
-                  formData.mpAccessToken &&
-                  !formData.mpAccessToken.startsWith("TEST")
-                ) {
-                  toast.success("Ya hay un token configurado.", {
-                    duration: 3000,
-                  });
-                  return;
-                }
-
-                // En producción el botón siempre lleva al OAuth oficial de
-                // Mercado Pago (cada usuario conecta SU cuenta). El atajo de
-                // credenciales de .env queda solo para desarrollo.
-                if (process.env.NODE_ENV === "production") {
-                  window.open(
-                    `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`,
-                    "_blank",
-                  );
-                  return;
-                }
-
-                try {
-                  const res = await fetch("/api/mp/env-credentials");
-                  if (!res.ok) throw new Error("No hay credenciales en .env");
-                  const data = await res.json();
-                  if (!data.accessToken)
-                    throw new Error("Token inválido en .env");
-
-                  // Guardar directo sin esperar que el usuario haga submit
-                  const saveRes = await fetch("/api/store-config", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      ...formData,
-                      mpAccessToken: data.accessToken,
-                      mpPublicKey: data.publicKey || formData.mpPublicKey,
-                    }),
-                  });
-                  if (!saveRes.ok) throw new Error("Error al guardar");
-                  toast.success(
-                    "Token cargado desde .env y sincronizado a Supabase.",
-                    { duration: 5000 },
-                  );
-                  fetchConfig();
-                } catch (err: any) {
-                  toast.error(
-                    err.message ||
-                      "Error al conectar. Usá OAuth en producción.",
-                  );
-                  window.open(
-                    `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`,
-                    "_blank",
-                  );
-                }
+              onClick={() => {
+                // El botón SIEMPRE relanza el OAuth oficial de Mercado Pago
+                // (cada usuario conecta o cambia SU cuenta). El atajo de .env
+                // queda fuera del flujo de la app de escritorio.
+                window.open(
+                  `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`,
+                  "_blank",
+                );
               }}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
             >
-              Conectar Mercado Pago (OAuth 2.0) 🔗
+              {formData.mpAccessToken &&
+              !formData.mpAccessToken.startsWith("TEST")
+                ? "Cambiar cuenta conectada (OAuth 2.0)"
+                : "Conectar Mercado Pago (OAuth 2.0) 🔗"}
             </button>
           </div>
         </div>

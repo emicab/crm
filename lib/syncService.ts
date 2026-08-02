@@ -517,18 +517,22 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
               console.log(`[Sync] Esta PC es una sucursal y no tiene StoreConfig local; la tienda web la administra la Casa Central (tenant ${tenantId}).`);
             }
           } else if (
-            remoteConfig.mpAccessToken &&
             remoteConfig.mpAccessToken !== firstStoreConfig.mpAccessToken &&
             isCloudNewer(remoteConfig.updatedAt, firstStoreConfig.updatedAt)
           ) {
+            // Último escritor gana: si en la nube se apuntó o se BORRÓ el token,
+            // eso prevalece sobre el valor local. Sin el guard de token no nulo,
+            // una limpieza en Supabase también vacía el local y no se re-subía.
             await prisma.storeConfig.update({
               where: { id: firstStoreConfig.id },
               data: {
-                mpAccessToken: remoteConfig.mpAccessToken,
+                mpAccessToken: remoteConfig.mpAccessToken || null,
                 mpPublicKey: remoteConfig.mpPublicKey || "",
               },
             });
-            console.log(`[Sync] mpAccessToken actualizado desde Supabase para tenant ${tenantId}`);
+            console.log(
+              `[Sync] mpAccessToken${remoteConfig.mpAccessToken ? " actualizado" : " borrado"} desde Supabase para tenant ${tenantId}`
+            );
           }
         }
       }
@@ -737,6 +741,31 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       }
     } catch (pullErr) {
       console.warn("[Sync] Error al descargar entidades desde Supabase:", pullErr);
+    }
+
+    // Reconstruir StoreConfig justo antes del PUSH usando el estado local tras el
+    // PULL ("último escritor gana"). Evita re-subir un mpAccessToken que acaba de
+    // borrarse en la nube: si el pull lo vació localmente, acá se sube vacío.
+    if (isMainDeviceFlag) {
+      try {
+        const freshConfigs = await prisma.storeConfig.findMany();
+        if (freshConfigs.length > 0) {
+          payload.StoreConfig = freshConfigs.map(sc => ({
+            id: sc.id, slug: sc.slug, businessName: sc.businessName, description: sc.description,
+            logoUrl: sc.logoUrl, bannerUrl: sc.bannerUrl,
+            primaryColor: sc.primaryColor, isWebActive: sc.isWebActive,
+            mpAccessToken: sc.mpAccessToken, mpPublicKey: sc.mpPublicKey,
+            mpFeePercent: fmtDec(sc.mpFeePercent), whatsappPhone: sc.whatsappPhone,
+            minStockBuffer: sc.minStockBuffer, allowPickup: sc.allowPickup,
+            allowDelivery: sc.allowDelivery, deliveryFee: fmtDec(sc.deliveryFee),
+            minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
+            tenant_id: tenantId, createdAt: sc.createdAt.toISOString(),
+            updatedAt: sc.updatedAt.toISOString()
+          }));
+        }
+      } catch (err) {
+        console.warn("[Sync] Error al reconstruir StoreConfig para el push:", err);
+      }
     }
 
     // 6c. Recalcular el total (PULL PUSH fix)
