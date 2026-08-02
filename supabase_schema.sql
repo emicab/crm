@@ -390,7 +390,8 @@ CREATE TABLE "WebOrder" (
     "notes" TEXT,
     "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    PRIMARY KEY ("tenant_id", "id")
+    PRIMARY KEY ("tenant_id", "id"),
+    CONSTRAINT "WebOrder_webOrderNumber_unique" UNIQUE ("tenant_id", "webOrderNumber")
 );
 
 -- 24. Tabla WebOrderItem (Detalle de Pedidos Web)
