@@ -341,10 +341,14 @@ export default function ConfigTiendaWebTab() {
               }}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
             >
-              {formData.mpAccessToken &&
-              !formData.mpAccessToken.startsWith("TEST")
-                ? "Cambiar cuenta conectada (OAuth 2.0)"
-                : "Conectar Mercado Pago (OAuth 2.0) 🔗"}
+              {
+                // Las credenciales de MP (prod y test) empiezan con APP_USR,
+                // por lo que detectar "cuenta conectada" por prefijo es inválido.
+                // Una cuenta real conectada = hay access token guardado.
+                formData.mpAccessToken?.trim()
+                  ? "Cambiar cuenta conectada (OAuth 2.0)"
+                  : "Conectar Mercado Pago (OAuth 2.0) 🔗"
+              }
             </button>
           </div>
         </div>
