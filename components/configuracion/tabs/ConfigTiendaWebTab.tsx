@@ -36,7 +36,7 @@ export default function ConfigTiendaWebTab() {
     mpPublicKey: "",
     mpFeePercent: 0,
     whatsappPhone: "",
-    minStockBuffer: 0,
+    minStockBuffer: 1,
     allowPickup: true,
     allowDelivery: true,
     deliveryFee: 0,
@@ -62,7 +62,7 @@ export default function ConfigTiendaWebTab() {
           mpPublicKey: data.mpPublicKey || "",
           mpFeePercent: parseFloat(data.mpFeePercent) || 0,
           whatsappPhone: data.whatsappPhone || "",
-          minStockBuffer: parseFloat(data.minStockBuffer) || 0,
+          minStockBuffer: parseFloat(data.minStockBuffer) || 1,
           allowPickup:
             data.allowPickup !== undefined ? Boolean(data.allowPickup) : true,
           allowDelivery:
@@ -450,14 +450,19 @@ export default function ConfigTiendaWebTab() {
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Input
-            label="Buffer de Stock de Seguridad"
-            type="number"
-            name="minStockBuffer"
-            value={String(formData.minStockBuffer)}
-            onChange={handleChange}
-            placeholder="0"
-          />
+          <div>
+            <Input
+              label="Buffer de Stock de Seguridad"
+              type="number"
+              name="minStockBuffer"
+              value={String(formData.minStockBuffer)}
+              onChange={handleChange}
+              placeholder="1"
+            />
+            <p className="text-[11px] text-foreground-muted mt-1">
+              Unidades reservadas para el local (por defecto 1). La tienda nunca vende la última unidad física.
+            </p>
+          </div>
           <Input
             label="Costo de Envío ($)"
             type="number"

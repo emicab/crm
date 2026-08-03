@@ -465,7 +465,7 @@ model StoreConfig {
   mpPublicKey     String?
   mpFeePercent    Decimal  @default(0)
   whatsappPhone   String?
-  minStockBuffer  Float    @default(0)
+  minStockBuffer  Float    @default(1)
   allowPickup       Boolean  @default(true)
   allowDelivery     Boolean  @default(true)
   deliveryFee       Decimal  @default(0)

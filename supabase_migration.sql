@@ -172,3 +172,44 @@ BEGIN
         ALTER TABLE "SaleItem" ALTER COLUMN "productId" DROP NOT NULL;
     END IF;
 END $$;
+
+-- 11. Margen de stock mínimo por defecto = 1 (respaldo: la tienda nunca vende la
+--     última unidad del local si el usuario no configura el margen).
+DO $$
+BEGIN
+    UPDATE "StoreConfig" SET "minStockBuffer" = 1 WHERE "minStockBuffer" IS NULL OR "minStockBuffer" = 0;
+END $$;
+
+-- 12. RPC atómica de decremento de stock. Garantiza que ante dos pedidos web
+--     simultáneos por el mismo producto, solo uno descuente el stock (el otro
+--     recibe FALSE y el pedido se rechaza). Elimina la race condition por 1 unidad.
+CREATE OR REPLACE FUNCTION decrement_stock(
+    p_tenant_id TEXT,
+    p_product_id INTEGER,
+    p_qty NUMERIC,
+    p_branch_id INTEGER
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE ok INTEGER;
+BEGIN
+    UPDATE "Product"
+    SET "quantityStock" = "quantityStock" - p_qty, "updatedAt" = NOW()
+    WHERE "tenant_id" = p_tenant_id AND "id" = p_product_id AND "quantityStock" >= p_qty;
+    GET DIAGNOSTICS ok = ROW_COUNT;
+    IF ok = 0 THEN
+        RETURN FALSE;
+    END IF;
+
+    IF p_branch_id IS NOT NULL THEN
+        UPDATE "ProductBranchStock"
+        SET "quantityStock" = "quantityStock" - p_qty, "updatedAt" = NOW()
+        WHERE "tenant_id" = p_tenant_id
+          AND "productId" = p_product_id
+          AND "branchId" = p_branch_id;
+    END IF;
+
+    RETURN TRUE;
+END $$;
+
+GRANT EXECUTE ON FUNCTION decrement_stock(TEXT, INTEGER, NUMERIC, INTEGER) TO anon, authenticated;

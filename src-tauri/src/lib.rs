@@ -96,7 +96,7 @@ const MIGRATIONS: &[Migration] = &[
                 "mpPublicKey" TEXT,
                 "mpFeePercent" DECIMAL NOT NULL DEFAULT 0,
                 "whatsappPhone" TEXT,
-                "minStockBuffer" REAL NOT NULL DEFAULT 0,
+                "minStockBuffer" REAL NOT NULL DEFAULT 1,
                 "allowPickup" BOOLEAN NOT NULL DEFAULT 1,
                 "allowDelivery" BOOLEAN NOT NULL DEFAULT 1,
                 "deliveryFee" DECIMAL NOT NULL DEFAULT 0,

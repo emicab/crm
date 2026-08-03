@@ -12,7 +12,7 @@ CREATE TABLE "StoreConfig" (
   "mpPublicKey" TEXT,
   "mpFeePercent" DECIMAL(10, 2) NOT NULL DEFAULT 0,
   "whatsappPhone" TEXT,
-  "minStockBuffer" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  "minStockBuffer" DECIMAL(10, 2) NOT NULL DEFAULT 1,
   "allowPickup" BOOLEAN NOT NULL DEFAULT true,
   "allowDelivery" BOOLEAN NOT NULL DEFAULT true,
   "deliveryFee" DECIMAL(10, 2) NOT NULL DEFAULT 0,

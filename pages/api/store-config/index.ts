@@ -43,7 +43,7 @@ export default async function handler(
           mpPublicKey: '',
           mpFeePercent: '0',
           whatsappPhone: '',
-          minStockBuffer: 0,
+          minStockBuffer: 1,
           allowPickup: true,
           allowDelivery: true,
           deliveryFee: '0',
@@ -122,7 +122,7 @@ export default async function handler(
       const parsedMpFeePercent = new Prisma.Decimal(parseFloat(mpFeePercent) || 0);
       const parsedDeliveryFee = new Prisma.Decimal(parseFloat(deliveryFee) || 0);
       const parsedMinDeliveryAmount = new Prisma.Decimal(parseFloat(minDeliveryAmount) || 0);
-      const parsedMinStockBuffer = parseFloat(minStockBuffer) || 0;
+      const parsedMinStockBuffer = minStockBuffer !== undefined && minStockBuffer !== '' ? (parseFloat(minStockBuffer) || 1) : 1;
 
       let result;
       if (existingConfig) {

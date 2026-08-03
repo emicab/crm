@@ -368,7 +368,7 @@ CREATE TABLE "StoreConfig" (
     "mpPublicKey" TEXT,
     "mpFeePercent" NUMERIC(12, 2) DEFAULT 0,
     "whatsappPhone" TEXT,
-    "minStockBuffer" DOUBLE PRECISION DEFAULT 0,
+    "minStockBuffer" DOUBLE PRECISION DEFAULT 1,
     "allowPickup" BOOLEAN DEFAULT TRUE,
     "allowDelivery" BOOLEAN DEFAULT TRUE,
     "deliveryFee" NUMERIC(12, 2) DEFAULT 0,
@@ -474,3 +474,35 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+-- 13. RPC atómica de decremento de stock (race condition por 1 unidad)
+CREATE OR REPLACE FUNCTION decrement_stock(
+    p_tenant_id TEXT,
+    p_product_id INTEGER,
+    p_qty NUMERIC,
+    p_branch_id INTEGER
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE ok INTEGER;
+BEGIN
+    UPDATE "Product"
+    SET "quantityStock" = "quantityStock" - p_qty, "updatedAt" = NOW()
+    WHERE "tenant_id" = p_tenant_id AND "id" = p_product_id AND "quantityStock" >= p_qty;
+    GET DIAGNOSTICS ok = ROW_COUNT;
+    IF ok = 0 THEN
+        RETURN FALSE;
+    END IF;
+
+    IF p_branch_id IS NOT NULL THEN
+        UPDATE "ProductBranchStock"
+        SET "quantityStock" = "quantityStock" - p_qty, "updatedAt" = NOW()
+        WHERE "tenant_id" = p_tenant_id
+          AND "productId" = p_product_id
+          AND "branchId" = p_branch_id;
+    END IF;
+
+    RETURN TRUE;
+END $$;
+
+GRANT EXECUTE ON FUNCTION decrement_stock(TEXT, INTEGER, NUMERIC, INTEGER) TO anon, authenticated;
