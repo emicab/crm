@@ -59,6 +59,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } else if (req.method === 'DELETE') {
     try {
       await prisma.combo.delete({ where: { id } });
+      // Fire-and-forget: encolar el borrado para que la nube lo refleje y el
+      // PULL no vuelva a importar el combo en el próximo sync.
+      try {
+        const { enqueueOutbox } = await import('../../../lib/syncOutbox');
+        await enqueueOutbox('Combo', 'DELETE', String(id));
+      } catch (enqErr) {
+        console.warn('[Combos] Error al encolar borrado:', enqErr);
+      }
       res.status(204).end();
     } catch (error: unknown) {
       handleApiError(res, error, `deleting combo ${id}`);

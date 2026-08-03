@@ -448,6 +448,11 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       if (resWebOrders.ok) {
         const cloudOrders = await resWebOrders.json();
         for (const order of cloudOrders) {
+          // Si el pedido web se marcó para borrar (outbox), no lo re-importemos.
+          const { isOutboxDeletePending } = await import("./syncOutbox");
+          if (await isOutboxDeletePending("WebOrder", String(order.webOrderNumber))) {
+            continue;
+          }
           const exists = await prisma.webOrder.findFirst({
             where: { webOrderNumber: order.webOrderNumber }
           });
@@ -710,6 +715,12 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       const cloudProducts = await fetchAllRows(`${supabaseUrl}/rest/v1/Product?${tenantParam}&select=*`, headers);
       if (cloudProducts) {
         for (const p of cloudProducts) {
+          // Si el producto se marcó para borrar (outbox), no lo re-importemos
+          // (evita que "reviva" en el mismo sync antes de que el drain lo borre).
+          const { isOutboxDeletePending } = await import("./syncOutbox");
+          if (await isOutboxDeletePending("Product", String(p.id))) {
+            continue;
+          }
           const brandExists = await prisma.brand.findUnique({ where: { id: p.brandId } });
           const categoryExists = await prisma.category.findUnique({ where: { id: p.categoryId } });
           const supplierExists = p.supplierId ? await prisma.supplier.findUnique({ where: { id: p.supplierId } }) : null;
@@ -859,6 +870,11 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         if (resCombo.ok) {
           const cloudCombos = await resCombo.json();
           for (const co of cloudCombos) {
+            // Si el combo se marcó para borrar (outbox), no lo re-importemos.
+            const { isOutboxDeletePending } = await import("./syncOutbox");
+            if (await isOutboxDeletePending("Combo", String(co.id))) {
+              continue;
+            }
             const existingCombo = await prisma.combo.findUnique({ where: { id: co.id }, select: { updatedAt: true } });
             if (existingCombo && !isCloudNewer(co.updatedAt, existingCombo.updatedAt)) {
               continue;
@@ -898,6 +914,11 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         if (resPromo.ok) {
           const cloudPromos = await resPromo.json();
           for (const pr of cloudPromos) {
+            // Si la promoción se marcó para borrar (outbox), no la re-importemos.
+            const { isOutboxDeletePending } = await import("./syncOutbox");
+            if (await isOutboxDeletePending("Promotion", String(pr.id))) {
+              continue;
+            }
             const existingPromo = await prisma.promotion.findUnique({ where: { id: pr.id }, select: { updatedAt: true } });
             if (existingPromo && !isCloudNewer(pr.updatedAt, existingPromo.updatedAt)) {
               continue;
@@ -1232,6 +1253,42 @@ export async function deleteProductFromSupabase(productId: number): Promise<bool
     return res.ok;
   } catch (error) {
     console.error("Error en deleteProductFromSupabase:", error);
+    return false;
+  }
+}
+
+export async function deleteComboFromSupabase(comboId: number): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
+  try {
+    const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
+    const headers = { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` };
+    const tenantParam = `tenant_id=eq.${encodeURIComponent(tenantId)}`;
+
+    // Borrar items del combo y el combo.
+    await fetch(`${supabaseUrl}/rest/v1/ComboItem?${tenantParam}&comboId=eq.${comboId}`, { method: "DELETE", headers });
+    const res = await fetch(`${supabaseUrl}/rest/v1/Combo?${tenantParam}&id=eq.${comboId}`, { method: "DELETE", headers });
+
+    return res.ok;
+  } catch (error) {
+    console.error("Error en deleteComboFromSupabase:", error);
+    return false;
+  }
+}
+
+export async function deletePromotionFromSupabase(promotionId: number): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
+  try {
+    const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
+    const headers = { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` };
+    const tenantParam = `tenant_id=eq.${encodeURIComponent(tenantId)}`;
+
+    // PromotionCondition no existe como tabla en Supabase (las condiciones viajan
+    // embebidas en Promotion.conditions), así que solo se borra la promoción.
+    const res = await fetch(`${supabaseUrl}/rest/v1/Promotion?${tenantParam}&id=eq.${promotionId}`, { method: "DELETE", headers });
+
+    return res.ok;
+  } catch (error) {
+    console.error("Error en deletePromotionFromSupabase:", error);
     return false;
   }
 }

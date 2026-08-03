@@ -26,6 +26,20 @@ export async function getPendingCount(): Promise<number> {
   }
 }
 
+// True si existe una operación DELETE pendiente para esa entidad+clave.
+// Se usa en el PULL para no re-importar datos que se marcaron para borrar.
+export async function isOutboxDeletePending(entity: string, entityKey: string): Promise<boolean> {
+  try {
+    const found = await prisma.syncOutbox.findFirst({
+      where: { entity, entityKey, operation: "DELETE", status: "PENDING" },
+      select: { id: true },
+    });
+    return !!found;
+  } catch {
+    return false;
+  }
+}
+
 async function markDone(id: number): Promise<void> {
   await prisma.syncOutbox.update({ where: { id }, data: { status: "DONE", updatedAt: new Date() } });
 }
@@ -113,11 +127,15 @@ export async function drainOutbox(limit = 100): Promise<{ drained: number; remai
       let ok = false;
 
       if (record.operation === "DELETE") {
-        const { deleteProductFromSupabase, deleteWebOrdersFromSupabase } = await import("./syncService");
+        const { deleteProductFromSupabase, deleteWebOrdersFromSupabase, deleteComboFromSupabase, deletePromotionFromSupabase } = await import("./syncService");
         if (record.entity === "Product") {
           ok = await deleteProductFromSupabase(Number(record.entityKey));
         } else if (record.entity === "WebOrder") {
           ok = await deleteWebOrdersFromSupabase([record.entityKey]);
+        } else if (record.entity === "Combo") {
+          ok = await deleteComboFromSupabase(Number(record.entityKey));
+        } else if (record.entity === "Promotion") {
+          ok = await deletePromotionFromSupabase(Number(record.entityKey));
         }
       } else {
         // UPSERT
