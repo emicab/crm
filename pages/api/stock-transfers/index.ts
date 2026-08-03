@@ -113,14 +113,17 @@ export default async function handler(
         return transfer;
       });
 
-      // [MODIFICADO] Sync de stock de los productos afectados + push del traspaso
+      // [MODIFICADO] Fire-and-forget: encolar traspaso + productos (outbox)
       try {
-        const { syncStockForProducts, syncStockTransferToSupabase } = await import('../../../lib/syncService');
+        const { enqueueOutbox } = await import('../../../lib/syncOutbox');
+        await enqueueOutbox('StockTransfer', 'UPSERT', String(transferResult.id));
         const productIds = items.map((i: any) => Number(i.productId));
-        await syncStockForProducts(productIds);
-        await syncStockTransferToSupabase(transferResult.id);
-      } catch (syncErr) {
-        console.error("[Transferencias] Sync error:", syncErr);
+        for (const pid of productIds) {
+          await enqueueOutbox('Product', 'UPSERT', String(pid));
+          await enqueueOutbox('ProductBranchStock', 'UPSERT', String(pid));
+        }
+      } catch (enqErr) {
+        console.error('[Transferencias] Error al encolar traspaso:', enqErr);
       }
 
       res.status(201).json(transferResult);

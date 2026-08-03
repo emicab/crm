@@ -64,12 +64,15 @@ export default async function handler(
     });
 
     try {
-      const { syncStockForProducts, syncStockTransferToSupabase } = await import('../../../../lib/syncService');
+      const { enqueueOutbox } = await import('../../../../lib/syncOutbox');
+      await enqueueOutbox('StockTransfer', 'UPSERT', String(transferId));
       const productIds = transfer.items.map((i: any) => i.productId);
-      await syncStockForProducts(productIds);
-      await syncStockTransferToSupabase(transferId);
-    } catch (syncErr) {
-      console.error('[Traspasos] Sync post-cancelación error:', syncErr);
+      for (const pid of productIds) {
+        await enqueueOutbox('Product', 'UPSERT', String(pid));
+        await enqueueOutbox('ProductBranchStock', 'UPSERT', String(pid));
+      }
+    } catch (enqErr) {
+      console.error('[Traspasos] Error al encolar post-cancelación:', enqErr);
     }
 
     res.status(200).json({ success: true, status: 'CANCELLED' });

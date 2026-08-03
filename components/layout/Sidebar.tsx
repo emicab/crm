@@ -257,8 +257,10 @@ function saveCollapsed(groups: Set<string>) {
 }
 
 import ProUpgradeModal from "@/components/ui/ProUpgradeModal";
+import { useSyncStatus } from "@/hooks/useSyncStatus";
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+  const { online, pendingSync } = useSyncStatus();
   const {
     isModuleEnabled,
     currentUser,
@@ -619,31 +621,43 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <div className="flex items-center justify-center gap-1.5 text-[9px] text-foreground-muted/70 font-semibold mb-1">
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  !hasSupabaseConfig
+                  !online
                     ? "bg-amber-400 animate-pulse"
-                    : !supabaseLastSync
-                      ? "bg-amber-400 animate-pulse"
-                      : Date.now() - new Date(supabaseLastSync).getTime() <
-                          24 * 60 * 60 * 1000
-                        ? "bg-emerald-500"
-                        : "bg-amber-400"
+                    : pendingSync > 0
+                      ? "bg-blue-500"
+                      : !hasSupabaseConfig
+                        ? "bg-amber-400 animate-pulse"
+                        : !supabaseLastSync
+                          ? "bg-amber-400 animate-pulse"
+                          : Date.now() - new Date(supabaseLastSync).getTime() <
+                              24 * 60 * 60 * 1000
+                            ? "bg-emerald-500"
+                            : "bg-amber-400"
                 }`}
               />
               <span
                 className="truncate max-w-[160px]"
                 title={
-                  !hasSupabaseConfig
-                    ? "Nube sin configurar"
-                    : !supabaseLastSync
-                      ? "Sincronización pendiente"
-                      : `Último backup: ${new Date(supabaseLastSync).toLocaleString("es-AR")}`
+                  !online
+                    ? "Sin conexión"
+                    : pendingSync > 0
+                      ? `${pendingSync} operación(es) pendiente(s) de sincronizar`
+                      : !hasSupabaseConfig
+                        ? "Nube sin configurar"
+                        : !supabaseLastSync
+                          ? "Sincronización pendiente"
+                          : `Último backup: ${new Date(supabaseLastSync).toLocaleString("es-AR")}`
                 }
               >
-                {!hasSupabaseConfig
-                  ? "Nube sin configurar"
-                  : !supabaseLastSync
-                    ? "Sincronización pendiente"
-                    : `Nube: ${new Date(supabaseLastSync).toLocaleDateString("es-AR")} ${new Date(supabaseLastSync).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`}
+                {!online
+                  ? "Sin conexión"
+                  : pendingSync > 0
+                    ? `${pendingSync} pendiente${pendingSync !== 1 ? "s" : ""}`
+                    : !hasSupabaseConfig
+                      ? "Nube sin configurar"
+                      : !supabaseLastSync
+                        ? "Sincronización pendiente"
+                        : `Nube: ${new Date(supabaseLastSync).toLocaleDateString("es-AR")} ${new Date(supabaseLastSync).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`}
               </span>
             </div>
           )}

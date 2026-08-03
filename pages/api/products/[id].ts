@@ -50,12 +50,12 @@ export default async function handler(
           include: { brand: true, category: true, supplier: true, branchStocks: true },
         });
         
-        // [CORREGIDO] Sync ligero. Sin fallback destructivo.
+        // Fire-and-forget: encolar el cambio en el outbox.
         try {
-          const { syncSingleProduct } = await import("../../../lib/syncService");
-          await syncSingleProduct(id);
-        } catch (syncErr) {
-          console.error("[Productos] Error sync visibilidad web (se auto-sanará):", syncErr);
+          const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+          await enqueueOutbox("Product", "UPSERT", String(id));
+        } catch (enqErr) {
+          console.error("[Productos] Error al encolar visibilidad web:", enqErr);
         }
         
         res.status(200).json(updated);
@@ -191,12 +191,12 @@ export default async function handler(
         include: { brand: true, category: true, supplier: true, branchStocks: true },
       });
 
-      // [CORREGIDO] Push limpio a Supabase de los datos recién guardados.
+      // Fire-and-forget: encolar el cambio en el outbox.
       try {
-        const { syncSingleProduct } = await import("../../../lib/syncService");
-        await syncSingleProduct(id);
-      } catch (syncErr) {
-        console.error("[Productos] Sync manual error:", syncErr);
+        const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+        await enqueueOutbox("Product", "UPSERT", String(id));
+      } catch (enqErr) {
+        console.error("[Productos] Error al encolar producto:", enqErr);
       }
 
       res.status(200).json(updatedProduct);
@@ -265,15 +265,16 @@ export default async function handler(
         await tx.product.delete({ where: { id } });
       });
 
-      // Reflejar la eliminación en la nube (pedidos pendientes + producto).
+      // Reflejar la eliminación en la nube vía outbox (fire-and-forget). Así un
+      // borrado offline no se pierde: el drain lo aplica al reconectar.
       try {
-        const { deleteWebOrdersFromSupabase, deleteProductFromSupabase } = await import("../../../lib/syncService");
-        if (webOrderNumbersToDelete.length > 0) {
-          await deleteWebOrdersFromSupabase(webOrderNumbersToDelete);
+        const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+        for (const num of webOrderNumbersToDelete) {
+          await enqueueOutbox("WebOrder", "DELETE", num);
         }
-        await deleteProductFromSupabase(id);
-      } catch (syncErr) {
-        console.error("[Productos] Delete sync error:", syncErr);
+        await enqueueOutbox("Product", "DELETE", String(id));
+      } catch (enqErr) {
+        console.error("[Productos] Error al encolar borrado:", enqErr);
       }
       
       res.status(204).end();
@@ -296,20 +297,20 @@ export default async function handler(
     if (Object.keys(dataToUpdate).length === 0) {
       return res.status(400).json({ message: 'No hay campos para actualizar.' });
     }
-    try {
-      const updated = await prisma.product.update({
-        where: { id },
-        data: dataToUpdate,
-      });
-      
       try {
-        const { syncSingleProduct } = await import("../../../lib/syncService");
-        await syncSingleProduct(id);
-      } catch (syncErr) {
-        console.error("[Productos] Sync error en PATCH:", syncErr);
-      }
+        const updated = await prisma.product.update({
+          where: { id },
+          data: dataToUpdate,
+        });
       
-      res.status(200).json(updated);
+        try {
+          const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+          await enqueueOutbox("Product", "UPSERT", String(id));
+        } catch (enqErr) {
+          console.error("[Productos] Error al encolar PATCH:", enqErr);
+        }
+      
+        res.status(200).json(updated);
     } catch (error: any) {
       handleApiError(res, error, `patching product ${id} stock`);
     }

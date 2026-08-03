@@ -149,21 +149,17 @@ export default async function handler(
       return updatedSale;
     });
 
-    // Sync de stock liviano al completar la venta (esperado para dejar la nube
-    // actualizada al instante; si falla, sync completo en background)
+    // Fire-and-forget: encolar venta + productos vendidos en el outbox.
     try {
-      const { syncStockForProducts, runSupabaseSync } = await import("../../../../lib/syncService");
+      const { enqueueOutbox } = await import("../../../../lib/syncOutbox");
+      await enqueueOutbox("Sale", "UPSERT", String(sale.id));
       const productIds = sale.items.map((item: any) => item.productId);
-      try {
-        await syncStockForProducts(productIds);
-      } catch (err) {
-        console.error("[Ventas] Sync stock al completar venta error:", err);
-        runSupabaseSync(true).catch((e: any) =>
-          console.error("[Ventas] Sync completo fallback error:", e)
-        );
+      for (const pid of productIds) {
+        await enqueueOutbox("Product", "UPSERT", String(pid));
+        await enqueueOutbox("ProductBranchStock", "UPSERT", String(pid));
       }
-    } catch (syncErr) {
-      console.error("[Ventas] Sync error al completar venta:", syncErr);
+    } catch (enqErr) {
+      console.error("[Ventas] Error al encolar venta completada:", enqErr);
     }
 
     res.status(200).json(result);

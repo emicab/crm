@@ -441,22 +441,20 @@ export default async function handler(
         arcaError = err.message || "No se pudo comunicar con ARCA.";
       }
 
-      // [MODIFICADO] Sync de stock liviano de los productos vendidos a Supabase.
-      // Ahora se espera el push liviano para que la nube quede actualizada de
-      // inmediato; si falla, cae a un sync completo en background.
+      // [MODIFICADO] Fire-and-forget: encolar venta + productos vendidos en el
+      // outbox. El sync a la nube lo hace el auto-sync/drain sin bloquear la venta.
       try {
-        const { syncStockForProducts, runSupabaseSync } = await import("../../../lib/syncService");
-        const productIds = items.map((item: any) => item.productId);
-        try {
-          await syncStockForProducts(productIds);
-        } catch (err) {
-          console.error("[Ventas] Sync stock post-venta error:", err);
-          runSupabaseSync(true).catch((e: any) =>
-            console.error("[Ventas] Sync completo fallback error:", e)
-          );
+        const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+        if (result?.id) {
+          await enqueueOutbox("Sale", "UPSERT", String(result.id));
         }
-      } catch (syncErr) {
-        console.error("[Ventas] Sync error post-venta:", syncErr);
+        const productIds = items.map((item: any) => item.productId);
+        for (const pid of productIds) {
+          await enqueueOutbox("Product", "UPSERT", String(pid));
+          await enqueueOutbox("ProductBranchStock", "UPSERT", String(pid));
+        }
+      } catch (enqErr) {
+        console.error("[Ventas] Error al encolar venta:", enqErr);
       }
 
       res.status(201).json({

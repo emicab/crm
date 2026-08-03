@@ -98,12 +98,22 @@ async function adjustBranchStock(productId: number, branchId: number, delta: num
   });
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchAllRows(url: string, headers: Record<string, string>): Promise<any[] | null> {
   const rows: any[] = [];
   const pageSize = 1000;
   let from = 0;
   for (;;) {
-    const res = await fetch(url, { headers: { ...headers, Range: `${from}-${from + pageSize - 1}` } });
+    const res = await fetchWithTimeout(url, { headers: { ...headers, Range: `${from}-${from + pageSize - 1}` } });
     if (!res.ok) {
       console.warn(`[Sync] GET ${res.status} al descargar ${url.split("?")[0]}.`);
       return null;
@@ -973,6 +983,28 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
     // 6. Enviar datos a Supabase tabla por tabla (StoreConfig primero)
     const summary = await pushEntitiesToSupabase(supabaseUrl, supabaseKey, payload);
 
+    // 6b. Drenar el outbox (operaciones que el watermark no cubre: borrados,
+    //     pedidos web creados localmente, etc.). Si hay error de red, dejamos
+    //     el watermark sin actualizar para reintentar en el próximo sync.
+    let outboxNetworkError = false;
+    try {
+      const { drainOutbox } = await import("./syncOutbox");
+      const outboxResult = await drainOutbox(200);
+      outboxNetworkError = outboxResult.networkError;
+      if (outboxResult.drained > 0) {
+        console.log(`[Sync] Outbox drenado: ${outboxResult.drained} operación(es). Pendientes: ${outboxResult.remaining}`);
+      }
+    } catch (outboxErr) {
+      console.warn("[Sync] Error al drenar el outbox:", outboxErr);
+    }
+
+    if (outboxNetworkError) {
+      return {
+        success: false,
+        message: "Sincronización parcial: quedaron operaciones pendientes por falta de conexión.",
+      };
+    }
+
     // 7. Actualizar marca de tiempo de última sincronización
     const syncTimeString = syncStartTime.toISOString();
     console.log(`[Sync] Saving lastSync: ${syncTimeString}`);
@@ -1002,7 +1034,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
 
 // ===== SELECTIVE SYNC HELPERS =====
 
-async function pushEntitiesToSupabase(
+export async function pushEntitiesToSupabase(
   supabaseUrl: string,
   supabaseKey: string,
   payload: Record<string, any[]>
@@ -1019,7 +1051,7 @@ async function pushEntitiesToSupabase(
     if (!records || records.length === 0) continue;
 
     const url = `${supabaseUrl}/rest/v1/${tableName}`;
-    let res = await fetch(url, {
+    let res = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1038,7 +1070,7 @@ async function pushEntitiesToSupabase(
           const { isPublicWeb, webCategory, ...rest } = r;
           return rest;
         });
-        res = await fetch(url, {
+        res = await fetchWithTimeout(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

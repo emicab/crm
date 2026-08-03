@@ -283,6 +283,24 @@ const MIGRATIONS: &[Migration] = &[
         name: "add_branch_to_weborder",
         sql: r#"ALTER TABLE "WebOrder" ADD COLUMN "branchId" INTEGER"#,
     },
+    Migration {
+        version: 12,
+        name: "add_sync_outbox",
+        sql: r#"
+            CREATE TABLE IF NOT EXISTS "SyncOutbox" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "operation" TEXT NOT NULL,
+                "entity" TEXT NOT NULL,
+                "entityKey" TEXT NOT NULL,
+                "status" TEXT NOT NULL DEFAULT 'PENDING',
+                "attempts" INTEGER NOT NULL DEFAULT 0,
+                "lastError" TEXT,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS "SyncOutbox_status_idx" ON "SyncOutbox" ("status");
+        "#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {

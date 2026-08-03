@@ -223,15 +223,16 @@ export default async function handler(
         return { message: 'Venta eliminada, stock repuesto y cuenta corriente actualizada exitosamente.' };
       });
 
-      // 6. Sincronizar inmediatamente con Supabase los productos afectados
+      // 6. Encolar los productos afectados (fire-and-forget vía outbox)
       try {
-        const { syncProducts } = await import('../../../lib/syncService');
+        const { enqueueOutbox } = await import('../../../lib/syncOutbox');
         const uniqueIds = Array.from(new Set(affectedProductIds));
-        if (uniqueIds.length > 0) {
-          await syncProducts(uniqueIds);
+        for (const pid of uniqueIds) {
+          await enqueueOutbox('Product', 'UPSERT', String(pid));
+          await enqueueOutbox('ProductBranchStock', 'UPSERT', String(pid));
         }
-      } catch (syncErr) {
-        console.error("[Ventas] Sync error post-eliminación:", syncErr);
+      } catch (enqErr) {
+        console.error('[Ventas] Error al encolar post-eliminación:', enqErr);
       }
 
       res.status(200).json(result);

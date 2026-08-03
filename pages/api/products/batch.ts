@@ -58,14 +58,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: updateData,
       });
 
-      // [FIX] Sync selectivo únicamente con las entidades modificadas
+      // [FIX] Sync selectivo únicamente con las entidades modificadas (fire-and-forget vía outbox)
       try {
-        const { syncProducts } = await import("../../../lib/syncService");
-        if (affectedIds.length > 0) {
-          await syncProducts(affectedIds);
+        const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+        for (const pid of affectedIds) {
+          await enqueueOutbox("Product", "UPSERT", String(pid));
         }
-      } catch (syncErr) {
-        console.error("[BatchUpdate] Error en sync masivo:", syncErr);
+      } catch (enqErr) {
+        console.error("[BatchUpdate] Error al encolar productos:", enqErr);
       }
 
       return res.status(200).json({ message: "Productos actualizados correctamente.", count: result.count });

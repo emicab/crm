@@ -217,19 +217,18 @@ export default async function handler(
             branchStocks: true,
         }
       });
+      // Fire-and-forget: encolar la creación en el outbox. El sync real lo sube
+      // (auto-sync periódico / manual), sin bloquear la respuesta.
       try {
-        const { syncSingleProduct, runSupabaseSync } = await import("../../../lib/syncService");
-        const synced = await syncSingleProduct(newProduct.id);
-        if (!synced) {
-          console.warn("syncSingleProduct falló, ejecutando full sync forzado");
-          await runSupabaseSync(true);
+        const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+        await enqueueOutbox("Product", "UPSERT", String(newProduct.id));
+        if (newProduct.branchStocks && newProduct.branchStocks.length > 0) {
+          for (const bs of newProduct.branchStocks) {
+            await enqueueOutbox("ProductBranchStock", "UPSERT", String(newProduct.id));
+          }
         }
-      } catch (syncErr) {
-        console.error("Sync error, intentando full sync forzado:", syncErr);
-        try {
-          const { runSupabaseSync } = await import("../../../lib/syncService");
-          await runSupabaseSync(true);
-        } catch { /* ignore */ }
+      } catch (enqErr) {
+        console.error("[Products] Error al encolar producto en outbox:", enqErr);
       }
 
       res.status(201).json(newProduct);

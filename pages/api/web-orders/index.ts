@@ -141,6 +141,15 @@ export default async function handler(
         }
       }
 
+      // Fire-and-forget: encolar el pedido web en el outbox para que el drain lo
+      // suba a la nube (hoy el sync global solo sube pedidos que ya existen en la nube).
+      try {
+        const { enqueueOutbox } = await import('../../../lib/syncOutbox');
+        await enqueueOutbox('WebOrder', 'UPSERT', String(newOrder.id));
+      } catch (enqErr) {
+        console.warn('[WebOrders] Error al encolar pedido web:', enqErr);
+      }
+
       return res.status(201).json(newOrder);
     } catch (error) {
       handleApiError(res, error, "creating web order");

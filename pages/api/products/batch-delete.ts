@@ -105,18 +105,17 @@ export default async function handler(
       await tx.product.deleteMany({ where: { id: { in: candidateIds } } });
     });
 
-    // Reflejar la eliminación en la nube.
+    // Reflejar la eliminación en la nube vía outbox (fire-and-forget, tolerante offline).
     try {
-      const { deleteProductFromSupabase, deleteWebOrdersFromSupabase } = await import('../../../lib/syncService');
-      if (webOrderNumbersToDelete.length > 0) {
-        await deleteWebOrdersFromSupabase(webOrderNumbersToDelete);
+      const { enqueueOutbox } = await import('../../../lib/syncOutbox');
+      for (const num of webOrderNumbersToDelete) {
+        await enqueueOutbox('WebOrder', 'DELETE', num);
       }
-      // Eliminar uno por uno en la nube (cada borrado respeta su tenant_id).
       for (const pid of candidateIds) {
-        await deleteProductFromSupabase(pid);
+        await enqueueOutbox('Product', 'DELETE', String(pid));
       }
-    } catch (syncErr) {
-      console.error('[BatchDelete] Error de sync en nube:', syncErr);
+    } catch (enqErr) {
+      console.error('[BatchDelete] Error al encolar borrado en outbox:', enqErr);
     }
 
     return res.status(200).json({

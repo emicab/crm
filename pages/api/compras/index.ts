@@ -200,13 +200,19 @@ export default async function handler(
         });
       });
 
-      // [MODIFICADO] Sync de productos después de ingresar stock
+      // [MODIFICADO] Fire-and-forget: encolar compra + productos (outbox)
       try {
-        const { syncProducts } = await import('../../../lib/syncService');
+        const { enqueueOutbox } = await import('../../../lib/syncOutbox');
+        if (result?.id) {
+          await enqueueOutbox('Purchase', 'UPSERT', String(result.id));
+        }
         const productIds = items.map((item: any) => item.productId);
-        await syncProducts(productIds);
-      } catch (syncErr) {
-        console.error("[Compras] Sync error post-creación:", syncErr);
+        for (const pid of productIds) {
+          await enqueueOutbox('Product', 'UPSERT', String(pid));
+          await enqueueOutbox('ProductBranchStock', 'UPSERT', String(pid));
+        }
+      } catch (enqErr) {
+        console.error('[Compras] Error al encolar compra:', enqErr);
       }
 
       res.status(201).json(result);

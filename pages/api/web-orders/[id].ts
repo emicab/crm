@@ -294,19 +294,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       });
 
-      // Sync selectivo del WebOrder + Productos a Supabase para reflejar cambios en la web
+      // Fire-and-forget: encolar el pedido web + productos en el outbox.
       try {
-        const { syncWebOrderToSupabase, syncSingleProduct } = await import("../../../lib/syncService");
-        await syncWebOrderToSupabase(orderId);
+        const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+        await enqueueOutbox("WebOrder", "UPSERT", String(orderId));
         for (const item of currentOrder.items) {
-          await syncSingleProduct(item.productId).catch(() => {});
+          await enqueueOutbox("Product", "UPSERT", String(item.productId));
+          await enqueueOutbox("ProductBranchStock", "UPSERT", String(item.productId));
         }
-      } catch (syncErr) {
-        console.warn("Selective sync falló, ejecutando full sync forzado:", syncErr);
-        try {
-          const { runSupabaseSync } = await import("../../../lib/syncService");
-          await runSupabaseSync(true);
-        } catch { /* ignore */ }
+      } catch (enqErr) {
+        console.warn("Error al encolar pedido web actualizado:", enqErr);
       }
 
       const updatedOrder = await prisma.webOrder.findUnique({

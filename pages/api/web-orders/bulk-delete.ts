@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
-import { deleteWebOrdersFromSupabase } from '../../../lib/syncService';
 import { isProDevice } from '../../../lib/branchIdentity';
 
 export default async function handler(
@@ -35,12 +34,14 @@ export default async function handler(
 
     const webOrderNumbers = ordersToDelete.map(o => o.webOrderNumber);
 
-    const supabaseOk = await deleteWebOrdersFromSupabase(webOrderNumbers);
-
-    if (!supabaseOk) {
-      return res.status(502).json({
-        message: 'No se pudo eliminar el/los pedido(s) en la nube. Reintente de nuevo.',
-      });
+    // Fire-and-forget: encolar los borrados en el outbox (tolerante offline).
+    try {
+      const { enqueueOutbox } = await import('../../../lib/syncOutbox');
+      for (const num of webOrderNumbers) {
+        await enqueueOutbox('WebOrder', 'DELETE', num);
+      }
+    } catch (enqErr) {
+      console.warn('[BulkDelete] Error al encolar borrado de pedidos:', enqErr);
     }
 
     const result = await prisma.webOrder.deleteMany({

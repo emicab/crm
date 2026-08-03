@@ -147,10 +147,13 @@ export default async function handler(
 
 async function runPostSync(productIds: number[], transferId: number) {
   try {
-    const { syncStockForProducts, syncStockTransferToSupabase } = await import('../../../../lib/syncService');
-    await syncStockForProducts(productIds);
-    await syncStockTransferToSupabase(transferId);
-  } catch (syncErr) {
-    console.error('[Traspasos] Sync post-respuesta error:', syncErr);
+    const { enqueueOutbox } = await import('../../../../lib/syncOutbox');
+    await enqueueOutbox('StockTransfer', 'UPSERT', String(transferId));
+    for (const pid of productIds) {
+      await enqueueOutbox('Product', 'UPSERT', String(pid));
+      await enqueueOutbox('ProductBranchStock', 'UPSERT', String(pid));
+    }
+  } catch (enqErr) {
+    console.error('[Traspasos] Error al encolar post-respuesta:', enqErr);
   }
 }

@@ -85,13 +85,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // [FIX] Sync directo y selectivo solo de los productos cuyos precios cambiaron
+    // (fire-and-forget vía outbox)
     try {
-      const { syncProducts } = await import("../../../lib/syncService");
-      if (updatedIds.length > 0) {
-        await syncProducts(updatedIds);
+      const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+      for (const pid of updatedIds) {
+        await enqueueOutbox("Product", "UPSERT", String(pid));
       }
-    } catch (syncErr) {
-      console.error("[BatchPrice] Error en sync de precios:", syncErr);
+    } catch (enqErr) {
+      console.error("[BatchPrice] Error al encolar precios:", enqErr);
     }
 
     return res.status(200).json({
