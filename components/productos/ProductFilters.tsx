@@ -4,7 +4,7 @@ import React from 'react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Filter, X } from 'lucide-react';
+import { Filter, X, RefreshCw } from 'lucide-react';
 import type { Brand, Category, Supplier, Branch } from '@/types';
 
 interface ProductFiltersProps {
@@ -18,10 +18,12 @@ interface ProductFiltersProps {
   onExportCSV: () => void;
   onImportCSV: () => void;
   onTransferStock?: () => void;
+  onSync?: () => void;
+  isSyncing?: boolean;
 }
 
 const ProductFilters: React.FC<ProductFiltersProps> = ({
-  filters, brands, categories, suppliers, branches, onChange, onClear, onExportCSV, onImportCSV, onTransferStock,
+  filters, brands, categories, suppliers, branches, onChange, onClear, onExportCSV, onImportCSV, onTransferStock, onSync, isSyncing,
 }) => (
   <div className="mb-6 p-4 border border-border rounded-md bg-background">
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
@@ -32,6 +34,12 @@ const ProductFilters: React.FC<ProductFiltersProps> = ({
         {onTransferStock && (
           <Button onClick={onTransferStock} variant="primary" size="sm" className="text-xs">
             Remito Traspaso 🔁
+          </Button>
+        )}
+        {onSync && (
+          <Button onClick={onSync} variant="outline" size="sm" className="text-xs" disabled={isSyncing}>
+            <RefreshCw size={14} className={`mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar con la Nube'}
           </Button>
         )}
         <Button onClick={onExportCSV} variant="outline" size="sm" className="text-xs">

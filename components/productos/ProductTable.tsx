@@ -36,6 +36,7 @@ const ProductTable = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBatchSupplierModalOpen, setIsBatchSupplierModalOpen] =
@@ -330,6 +331,23 @@ const ProductTable = () => {
     }
   };
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/sync", { method: "POST" });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Error al sincronizar.");
+      }
+      toast.success("Sincronización completada.");
+      fetchProducts(page);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "No se pudo sincronizar.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleToggleWebPublic = async (
     productId: number,
     newStatus: boolean,
@@ -488,6 +506,8 @@ const ProductTable = () => {
           onExportCSV={() => handleExportCSV(products)}
           onImportCSV={() => setIsCSVModalOpen(true)}
           onTransferStock={() => setIsTransferModalOpen(true)}
+          onSync={handleManualSync}
+          isSyncing={isSyncing}
         />
         {error && (
           <div className="text-center text-destructive p-4 bg-destructive/10 rounded-md my-4">

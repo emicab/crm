@@ -45,12 +45,14 @@ export default async function handler(
     }
 
     // Validar dependencias de negocio (los ítems de venta se desvinculan en vez
-    // de bloquear; el resto sí bloquea).
-    const [purchaseItemsCount, comboItemsCount, promotionConditionsCount, consignmentItemsCount, stockTransferItemsCount] = await Promise.all([
+    // de bloquear; las consignaciones canceladas se limpian; el resto sí bloquea).
+    const [purchaseItemsCount, comboItemsCount, promotionConditionsCount, activeConsignmentItemsCount, stockTransferItemsCount] = await Promise.all([
       prisma.purchaseItem.count({ where: { productId: { in: candidateIds } } }),
       prisma.comboItem.count({ where: { productId: { in: candidateIds } } }),
       prisma.promotionCondition.count({ where: { productId: { in: candidateIds } } }),
-      prisma.consignmentItem.count({ where: { productId: { in: candidateIds } } }),
+      prisma.consignmentItem.count({
+        where: { productId: { in: candidateIds }, consignment: { status: { in: ['DELIVERED', 'SETTLED'] } } },
+      }),
       prisma.stockTransferItem.count({ where: { productId: { in: candidateIds } } }),
     ]);
 
@@ -58,7 +60,7 @@ export default async function handler(
     if (purchaseItemsCount > 0) relations.push(`${purchaseItemsCount} ítem(s) de compra`);
     if (comboItemsCount > 0) relations.push(`${comboItemsCount} ítem(s) de combo`);
     if (promotionConditionsCount > 0) relations.push(`${promotionConditionsCount} condición(es) de promoción`);
-    if (consignmentItemsCount > 0) relations.push(`${consignmentItemsCount} ítem(s) de consignación`);
+    if (activeConsignmentItemsCount > 0) relations.push(`${activeConsignmentItemsCount} ítem(s) de consignación activa`);
     if (stockTransferItemsCount > 0) relations.push(`${stockTransferItemsCount} ítem(s) de traspaso de stock`);
 
     if (relations.length > 0) {
@@ -118,6 +120,10 @@ export default async function handler(
           }
         }
       }
+      // Limpiar ítems de consignaciones CANCELADAS (no impiden el borrado).
+      await tx.consignmentItem.deleteMany({
+        where: { productId: { in: candidateIds }, consignment: { status: 'CANCELLED' } },
+      });
       await tx.productBranchStock.deleteMany({ where: { productId: { in: candidateIds } } });
       await tx.product.deleteMany({ where: { id: { in: candidateIds } } });
     });

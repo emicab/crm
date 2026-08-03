@@ -205,12 +205,16 @@ export default async function handler(
     }
   } else if (req.method === 'DELETE') {
     try {
-      const [saleItemsCount, purchaseItemsCount, comboItemsCount, promotionConditionsCount, consignmentItemsCount, stockTransferItemsCount] = await Promise.all([
+      const [saleItemsCount, purchaseItemsCount, comboItemsCount, promotionConditionsCount, activeConsignmentItemsCount, stockTransferItemsCount] = await Promise.all([
         prisma.saleItem.count({ where: { productId: id } }),
         prisma.purchaseItem.count({ where: { productId: id } }),
         prisma.comboItem.count({ where: { productId: id } }),
         prisma.promotionCondition.count({ where: { productId: id } }),
-        prisma.consignmentItem.count({ where: { productId: id } }),
+        // Solo bloquean las consignaciones ACTIVAS (DELIVERED/SETTLED). Las
+        // canceladas se limpian automáticamente para no impedir el borrado.
+        prisma.consignmentItem.count({
+          where: { productId: id, consignment: { status: { in: ['DELIVERED', 'SETTLED'] } } },
+        }),
         prisma.stockTransferItem.count({ where: { productId: id } }),
       ]);
 
@@ -221,7 +225,7 @@ export default async function handler(
       if (purchaseItemsCount > 0) relations.push(`${purchaseItemsCount} ítem(s) de compra`);
       if (comboItemsCount > 0) relations.push(`${comboItemsCount} ítem(s) de combo`);
       if (promotionConditionsCount > 0) relations.push(`${promotionConditionsCount} condición(es) de promoción`);
-      if (consignmentItemsCount > 0) relations.push(`${consignmentItemsCount} ítem(s) de consignación`);
+      if (activeConsignmentItemsCount > 0) relations.push(`${activeConsignmentItemsCount} ítem(s) de consignación activa`);
       if (stockTransferItemsCount > 0) relations.push(`${stockTransferItemsCount} ítem(s) de traspaso de stock`);
 
       if (relations.length > 0) {
@@ -272,6 +276,10 @@ export default async function handler(
             data: { productId: null, productName: productToDelete?.name || null },
           });
         }
+        // Limpiar ítems de consignaciones CANCELADAS (no impiden el borrado).
+        await tx.consignmentItem.deleteMany({
+          where: { productId: id, consignment: { status: 'CANCELLED' } },
+        });
         await tx.productBranchStock.deleteMany({ where: { productId: id } });
         await tx.product.delete({ where: { id } });
       });
