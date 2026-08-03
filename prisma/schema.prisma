@@ -479,6 +479,7 @@ model WebOrder {
   clientPhone     String
   shippingAddress String?
   deliveryType    String         // "PICKUP" | "DELIVERY"
+  branchId        Int?           // sucursal que despacha/prepara (null = sin asignar)
   paymentMethod   String         // "MERCADO_PAGO" | "CASH_ON_DELIVERY"
   paymentStatus   String         // "PENDING" | "PAID" | "REJECTED"
   status          WebOrderStatus @default(PENDING_PREPARATION)

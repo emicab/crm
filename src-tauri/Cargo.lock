@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "clinpos"
-version = "1.10.11"
+version = "1.10.15"
 dependencies = [
  "base64 0.22.1",
  "chrono",

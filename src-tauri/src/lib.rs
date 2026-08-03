@@ -278,6 +278,11 @@ const MIGRATIONS: &[Migration] = &[
         name: "add_mp_fee_amount_to_weborder",
         sql: r#"ALTER TABLE "WebOrder" ADD COLUMN "mpFeeAmount" DECIMAL NOT NULL DEFAULT 0"#,
     },
+    Migration {
+        version: 11,
+        name: "add_branch_to_weborder",
+        sql: r#"ALTER TABLE "WebOrder" ADD COLUMN "branchId" INTEGER"#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {

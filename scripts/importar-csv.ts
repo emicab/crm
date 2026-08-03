@@ -128,6 +128,12 @@ async function main() {
       }
     }
 
+    const parsePrice = (value: any): number => {
+  if (!value) return 0;
+  const parsed = parseFloat(value.toString().replace(',', '.'));
+  return isNaN(parsed) ? 0 : parsed;
+};
+
     // Create product
     await prisma.product.create({
       data: {

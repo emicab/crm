@@ -11,7 +11,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { webOrderNumber, total, clientName, clientPhone, orderPayload } = req.body;
     const cleanOrderNum = webOrderNumber || orderPayload?.webOrderNumber || `WEB-${Date.now()}`;
-
     if (!total || total <= 0) {
       return res.status(400).json({ message: "Monto total inválido para el checkout." });
     }
@@ -32,6 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               clientPhone: orderPayload.clientPhone || clientPhone,
               shippingAddress: orderPayload.shippingAddress || null,
               deliveryType: orderPayload.deliveryType || "PICKUP",
+              branchId: orderPayload.branchId ? parseInt(orderPayload.branchId) : null,
               paymentMethod: "MERCADO_PAGO",
               paymentStatus: "PENDING",
               status: "PENDING_PREPARATION",
