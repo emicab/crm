@@ -64,6 +64,7 @@ const priorityModules = [
     icon: ShoppingBag,
     description: "Gestiona y prepara pedidos de ClinStore.",
     shortcut: "Ctrl+W",
+    moduleId: "pedidos_web",
     allowedRoles: ["ADMIN", "SUPERVISOR"],
   },
   {
@@ -171,6 +172,7 @@ const secondaryModules = [
     name: "Pedidos Web",
     href: "/pedidos-web",
     icon: ShoppingBag,
+    moduleId: "pedidos_web",
     allowedRoles: ["ADMIN", "SUPERVISOR"],
   },
   {
@@ -238,6 +240,7 @@ const shortcuts = [
   {
     keys: ["Ctrl", "W"],
     label: "Pedidos Web",
+    moduleId: "pedidos_web",
     allowedRoles: ["ADMIN", "SUPERVISOR"],
   },
   { keys: ["Ctrl", ",", ""], label: "Configuración", allowedRoles: ["ADMIN"] },

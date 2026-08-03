@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { PaymentType } from "@prisma/client";
+import { isProDevice } from "@/lib/branchIdentity";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
@@ -12,7 +13,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === "PUT" || req.method === "PATCH") {
     try {
-      const { status, paymentStatus, notes } = req.body;
+      // La gestión de pedidos web es exclusiva del Plan Pro.
+      if (!(await isProDevice())) {
+        return res.status(403).json({ message: "La gestión de pedidos web requiere el Plan Pro.", blockedByPlan: true });
+      }
+      const { status, paymentStatus, notes, branchId } = req.body;
 
       const currentOrder = await prisma.webOrder.findUnique({
         where: { id: orderId },
@@ -27,6 +32,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const isCancelling = status === "CANCELLED" && currentOrder.status !== "CANCELLED";
       const isUncancelling = status && status !== "CANCELLED" && currentOrder.status === "CANCELLED";
       const isAlreadyRegistered = (currentOrder.notes || "").includes("[VENTA_REGISTRADA#");
+
+      // Asignación de sucursal de despacho (DELIVERY). Al asignar se "mueve" la
+      // reserva: se devuelve el stock a la sucursal que lo tenía (branchId actual
+      // o la principal como reserva provisoria) y se reserva en la nueva.
+      const newBranchId = branchId ? Number(branchId) : null;
+      const isAssigningBranch =
+        newBranchId !== null &&
+        newBranchId !== currentOrder.branchId &&
+        currentOrder.status !== "CANCELLED";
+
+      // Sucursal principal (usada como reserva provisoria de los DELIVERY sin asignar)
+      const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
+      const mainBranchId = mainBranch?.id;
+
+      // Sucursal efectiva para reposición/venta: la asignada, o la principal como
+      // reserva provisoria de los DELIVERY sin asignar.
+      const effectiveBranchId = currentOrder.branchId ?? newBranchId ?? mainBranchId;
 
       let createdSaleId: number | null = null;
       let resolvedNotes = notes !== undefined ? notes : currentOrder.notes || "";
@@ -114,29 +136,74 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Transacción atómica: stock + venta + status update
-      const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
-      const mainBranchId = mainBranch?.id;
+      // Sucursal que hoy "sostiene" la reserva de stock del pedido.
+      const currentReserveBranchId = currentOrder.branchId ?? mainBranchId;
 
       await prisma.$transaction(async (tx) => {
-        // Stock: reponer al cancelar, descontar al des-cancelar (global + sucursal principal)
+        // Asignación de sucursal (DELIVERY): mover la reserva de la sucursal que
+        // la tenía (branchId actual o principal) hacia la nueva sucursal.
+        if (isAssigningBranch && newBranchId) {
+          const targetBranch = await tx.branch.findUnique({ where: { id: newBranchId } });
+          if (!targetBranch) {
+            throw new Error("La sucursal seleccionada no existe.");
+          }
+          for (const item of currentOrder.items) {
+            const qty = Number(item.quantity);
+            if (currentReserveBranchId && currentReserveBranchId !== newBranchId) {
+              // Devolver la reserva provisoria a la sucursal que la tenía
+              await tx.productBranchStock.upsert({
+                where: {
+                  productId_branchId: {
+                    productId: item.productId,
+                    branchId: currentReserveBranchId,
+                  },
+                },
+                update: { quantityStock: { increment: qty } },
+                create: {
+                  productId: item.productId,
+                  branchId: currentReserveBranchId,
+                  quantityStock: qty,
+                },
+              });
+            }
+            // Reservar en la nueva sucursal de despacho
+            await tx.productBranchStock.upsert({
+              where: {
+                productId_branchId: {
+                  productId: item.productId,
+                  branchId: newBranchId,
+                },
+              },
+              update: { quantityStock: { decrement: qty } },
+              create: {
+                productId: item.productId,
+                branchId: newBranchId,
+                quantityStock: -qty,
+              },
+            });
+          }
+        }
+
+        // Stock: reponer al cancelar, descontar al des-cancelar
+        // (global + sucursal que sostiene la reserva: branchId o principal).
         if (isCancelling) {
           for (const item of currentOrder.items) {
             await tx.product.update({
               where: { id: item.productId },
               data: { quantityStock: { increment: Number(item.quantity) } },
             });
-            if (mainBranchId) {
+            if (currentReserveBranchId) {
               await tx.productBranchStock.upsert({
                 where: {
                   productId_branchId: {
                     productId: item.productId,
-                    branchId: mainBranchId,
+                    branchId: currentReserveBranchId,
                   },
                 },
                 update: { quantityStock: { increment: Number(item.quantity) } },
                 create: {
                   productId: item.productId,
-                  branchId: mainBranchId,
+                  branchId: currentReserveBranchId,
                   quantityStock: Number(item.quantity),
                 },
               });
@@ -148,18 +215,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               where: { id: item.productId },
               data: { quantityStock: { decrement: Number(item.quantity) } },
             });
-            if (mainBranchId) {
+            if (currentReserveBranchId) {
               await tx.productBranchStock.upsert({
                 where: {
                   productId_branchId: {
                     productId: item.productId,
-                    branchId: mainBranchId,
+                    branchId: currentReserveBranchId,
                   },
                 },
                 update: { quantityStock: { decrement: Number(item.quantity) } },
                 create: {
                   productId: item.productId,
-                  branchId: mainBranchId,
+                  branchId: currentReserveBranchId,
                   quantityStock: -Number(item.quantity),
                 },
               });
@@ -167,7 +234,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         }
 
-        // Venta + movimiento de caja si se entrega (atribuida a la sucursal principal)
+        // Venta + movimiento de caja si se entrega (atribuida a la sucursal de despacho)
         if (isDelivered && !isAlreadyRegistered) {
           const sale = await tx.sale.create({
             data: {
@@ -177,7 +244,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               notes: `Pedido Web #${currentOrder.webOrderNumber} (${currentOrder.clientName})`,
               sellerId: seller.id,
               ...(openRegister && { cashRegisterId: openRegister.id }),
-              ...(mainBranchId && { branchId: mainBranchId }),
+              ...(effectiveBranchId && { branchId: effectiveBranchId }),
               status: "COMPLETED",
               items: { create: saleItemsData },
             },
@@ -218,6 +285,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const updateData: any = { notes: resolvedNotes };
         if (status) updateData.status = status;
         if (paymentStatus) updateData.paymentStatus = paymentStatus;
+        if (isAssigningBranch && newBranchId) updateData.branchId = newBranchId;
         if (isDelivered && !isAlreadyRegistered) updateData.paymentStatus = "PAID";
 
         await tx.webOrder.update({

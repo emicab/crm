@@ -2,6 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
+import { isProDevice } from '../../../lib/branchIdentity';
 
 export default async function handler(
   req: NextApiRequest,
@@ -9,6 +10,11 @@ export default async function handler(
 ) {
   if (req.method === 'GET') {
     try {
+      // La vista/gestión de pedidos web es exclusiva del Plan Pro.
+      if (!(await isProDevice())) {
+        return res.status(403).json({ message: 'La gestión de pedidos web requiere el Plan Pro.', blockedByPlan: true });
+      }
+
       const orders = await prisma.webOrder.findMany({
         include: {
           items: {
@@ -54,6 +60,7 @@ export default async function handler(
         totalAmount,
         notes,
         items,
+        branchId,
       } = req.body;
 
       if (!clientName || !clientPhone || !items || !items.length) {
@@ -71,6 +78,8 @@ export default async function handler(
         return res.status(200).json(existing);
       }
 
+      const parsedBranchId = branchId ? parseInt(branchId) : null;
+
       const newOrder = await prisma.webOrder.create({
         data: {
           webOrderNumber: generatedNumber,
@@ -79,6 +88,7 @@ export default async function handler(
           clientPhone,
           shippingAddress: shippingAddress || null,
           deliveryType: deliveryType || 'PICKUP',
+          branchId: parsedBranchId,
           paymentMethod: paymentMethod || 'CASH_ON_DELIVERY',
           paymentStatus: paymentStatus || 'PENDING',
           status: 'PENDING_PREPARATION',
@@ -96,8 +106,10 @@ export default async function handler(
         include: { items: { include: { product: true } } }
       });
 
-      // Descuenta stock automáticamente de los productos (global + sucursal principal)
+      // Descuenta stock automáticamente (global + sucursal asignada; si no hay
+      // branchId se usa la principal como reserva provisoria)
       const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
+      const stockBranchId = parsedBranchId ?? mainBranch?.id;
       for (const item of items) {
         try {
           await prisma.product.update({
@@ -108,18 +120,18 @@ export default async function handler(
               }
             }
           });
-          if (mainBranch) {
+          if (stockBranchId) {
             await prisma.productBranchStock.upsert({
               where: {
                 productId_branchId: {
                   productId: parseInt(item.productId),
-                  branchId: mainBranch.id,
+                  branchId: stockBranchId,
                 },
               },
               update: { quantityStock: { decrement: parseFloat(item.quantity) } },
               create: {
                 productId: parseInt(item.productId),
-                branchId: mainBranch.id,
+                branchId: stockBranchId,
                 quantityStock: -parseFloat(item.quantity),
               },
             });

@@ -142,7 +142,7 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const isModuleEnabled = useCallback(
     (moduleId: string) => {
       // Módulos exclusivos del Plan Pro
-      if (['cuenta_corriente', 'analiticas', 'roles', 'backup_nube', 'consignaciones', 'agente_ia', 'clinia', 'traspasos'].includes(moduleId)) {
+      if (['cuenta_corriente', 'analiticas', 'roles', 'backup_nube', 'consignaciones', 'agente_ia', 'clinia', 'traspasos', 'pedidos_web'].includes(moduleId)) {
         if (!planLoaded) return true;
         return plan === 'pro';
       }

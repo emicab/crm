@@ -1,9 +1,16 @@
 // pages/api/sync/index.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { runSupabaseSync } from "../../../lib/syncService";
+import { isProDevice } from "../../../lib/branchIdentity";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "POST" || req.method === "GET") {
+    // La sincronización en la nube es exclusiva del Plan Pro.
+    if (!(await isProDevice())) {
+      res.status(403).json({ message: "La sincronización en la nube requiere el Plan Pro.", blockedByPlan: true });
+      return;
+    }
+
     const forceFullSync = req.body?.forceFullSync === true || req.query?.force === "true";
     const result = await runSupabaseSync(forceFullSync);
     if (result.success) {

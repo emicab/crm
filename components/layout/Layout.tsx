@@ -38,6 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     hasSupabaseConfig,
     storageMode,
     hasRolePermission,
+    plan,
   } = useModules();
   const pathname = usePathname() || "";
 
@@ -49,6 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   React.useEffect(() => {
     if (
       isLoading ||
+      plan !== "pro" ||
       !hasSupabaseConfig ||
       showOnboarding ||
       showPinLock ||
@@ -163,6 +165,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             },
             handlePayload,
           )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "WebOrder",
+              filter: `tenant_id=eq.${config.tenantId}`,
+            },
+            handlePayload,
+          )
           .subscribe((status: string) => {
             if (status === "SUBSCRIBED") {
               console.log(
@@ -186,7 +198,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         realtimeChannel.unsubscribe();
       }
     };
-  }, [isLoading, hasSupabaseConfig, showOnboarding, showPinLock, storageMode]);
+  }, [isLoading, hasSupabaseConfig, showOnboarding, showPinLock, storageMode, plan]);
 
   let isAccessAllowed = true;
   if (

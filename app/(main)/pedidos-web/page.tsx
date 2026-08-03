@@ -26,6 +26,7 @@ import { formatCurrency } from "@/lib/formatCurrency";
 import toast from "react-hot-toast";
 import { formatDate } from "@/lib/formatDate";
 import { playOrderChimeSound } from "@/lib/audio";
+import { useModules } from "@/hooks/useModules";
 
 interface WebOrderItem {
   id: number;
@@ -57,13 +58,24 @@ interface WebOrder {
     | "CANCELLED";
   totalAmount: string;
   notes?: string | null;
+  branchId?: number | null;
   createdAt: string;
   items: WebOrderItem[];
 }
 
+interface Branch {
+  id: number;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  isMain: boolean;
+}
+
 export default function PedidosWebPage() {
   const router = useRouter();
+  const { plan, isLoading: planLoading } = useModules();
   const [orders, setOrders] = useState<WebOrder[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -74,6 +86,8 @@ export default function PedidosWebPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const isInitialLoadedRef = useRef(false);
   const notifiedKeysRef = useRef<Set<string>>(new Set());
+
+  const isPro = plan === "pro";
 
   const fetchOrders = async (isInitial = false) => {
     if (isInitial) setLoading(true);
@@ -137,6 +151,18 @@ export default function PedidosWebPage() {
   useEffect(() => {
     fetchOrders(true);
   }, []);
+
+  useEffect(() => {
+    fetch("/api/branches")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setBranches(Array.isArray(data) ? data : []))
+      .catch(() => setBranches([]));
+  }, []);
+
+  const branchName = (id?: number | null) => {
+    if (!id) return null;
+    return branches.find((b) => b.id === id)?.name || null;
+  };
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -213,6 +239,32 @@ export default function PedidosWebPage() {
       }
     } catch (err: any) {
       toast.error(err.message || "Error al actualizar estado.");
+    }
+  };
+
+  const handleAssignBranch = async (order: WebOrder, branchId: number) => {
+    try {
+      const res = await fetch(`/api/web-orders/${order.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Error al asignar la sucursal.");
+      }
+      const updated = await res.json();
+
+      const applyToOrder = (o: WebOrder) =>
+        o.id === order.id
+          ? { ...o, ...(updated.branchId ? { branchId: updated.branchId } : {}) }
+          : o;
+
+      setOrders((prev) => prev.map(applyToOrder));
+      setSelectedOrder((prev) => (prev ? applyToOrder(prev) : prev));
+      toast.success("Sucursal de despacho asignada. La reserva de stock se movió correctamente.");
+    } catch (err: any) {
+      toast.error(err.message || "Error al asignar sucursal.");
     }
   };
 
@@ -314,6 +366,40 @@ export default function PedidosWebPage() {
         );
     }
   };
+
+  if (planLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={32} className="animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isPro) {
+    return (
+      <div className="flex items-center justify-center h-[70vh]">
+        <div className="max-w-md w-full bg-muted border border-border rounded-2xl p-8 text-center space-y-4 shadow">
+          <div className="mx-auto h-14 w-14 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+            <ShoppingBag size={28} />
+          </div>
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+            Plan Pro ⭐
+          </span>
+          <h1 className="text-xl font-bold text-foreground">Pedidos Web (ClinStore)</h1>
+          <p className="text-sm text-foreground-muted">
+            La gestión de pedidos web es exclusiva del <strong className="text-foreground font-semibold">Plan Pro</strong>, ya que requiere la tienda online ClinStore.
+          </p>
+          <Button
+            variant="primary"
+            onClick={() => router.push("/configuracion?tab=suscripciones")}
+            className="w-full justify-center bg-amber-600 hover:bg-amber-700 text-white font-bold"
+          >
+            💳 Ver Plan Pro y Suscripción
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -515,6 +601,11 @@ export default function PedidosWebPage() {
                           en Local
                         </span>
                       )}
+                      {branchName(order.branchId) && (
+                        <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold border border-blue-200 dark:border-blue-800/40">
+                          <MapPin size={9} /> {branchName(order.branchId)}
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 text-center">
                       {order.paymentStatus === "PAID" ? (
@@ -522,8 +613,19 @@ export default function PedidosWebPage() {
                           🟢 PAGADO ({order.paymentMethod === "MERCADO_PAGO" ? "Mercado Pago" : "Efectivo"})
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/40">
-                          🟡 PENDIENTE DE PAGO
+                        <span className="inline-flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/40">
+                            🟡 PENDIENTE DE PAGO
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdateOrderStatus(order.id, order.status, "PAID")
+                            }
+                            className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                          >
+                            Marcar como pagado
+                          </button>
                         </span>
                       )}
                     </td>
@@ -676,7 +778,66 @@ export default function PedidosWebPage() {
                   >
                     <XCircle size={14} /> Cancelar
                   </button>
+                  {selectedOrder.paymentStatus !== "PAID" && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleUpdateOrderStatus(
+                          selectedOrder.id,
+                          selectedOrder.status,
+                          "PAID",
+                        )
+                      }
+                      className="p-2 rounded-lg text-xs font-bold border border-emerald-300/40 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <CheckCircle2 size={14} /> Marcar Pagado
+                    </button>
+                  )}
                 </div>
+              </div>
+
+              {/* Sucursal de despacho / retiro */}
+              <div className="bg-background p-3 rounded-xl border border-border space-y-2">
+                <label className="block text-xs font-bold text-foreground">
+                  {selectedOrder.deliveryType === "DELIVERY"
+                    ? "Sucursal de Despacho:"
+                    : "Sucursal de Retiro:"}
+                </label>
+                {selectedOrder.deliveryType === "DELIVERY" ? (
+                  <select
+                    value={selectedOrder.branchId ?? ""}
+                    onChange={(e) => {
+                      const id = Number(e.target.value);
+                      if (id) handleAssignBranch(selectedOrder, id);
+                    }}
+                    className="w-full text-xs font-semibold p-2 rounded-lg border border-border bg-background cursor-pointer focus:ring-2 focus:ring-blue-500/50"
+                  >
+                    <option value="" disabled>
+                      {selectedOrder.branchId
+                        ? branchName(selectedOrder.branchId)
+                        : "Sin asignar (reserva en Principal)"}
+                    </option>
+                    {branches
+                      .filter((b) => b.id !== selectedOrder.branchId)
+                      .map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                          {b.isMain ? " (Principal)" : ""}
+                        </option>
+                      ))}
+                  </select>
+                ) : (
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <MapPin size={14} className="text-blue-600" />
+                    {branchName(selectedOrder.branchId) || "Sin asignar"}
+                  </p>
+                )}
+                {selectedOrder.deliveryType === "DELIVERY" && (
+                  <p className="text-[11px] text-foreground-muted">
+                    Al asignar, la reserva de stock se mueve automáticamente a la
+                    sucursal elegida.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -797,6 +958,11 @@ export default function PedidosWebPage() {
                   ? "🚚 ENVÍO A DOMICILIO"
                   : "🏪 RETIRO EN LOCAL"}
               </p>
+              {branchName(selectedOrder.branchId) && (
+                <p className="font-bold text-xs uppercase mt-1">
+                  SUCURSAL: {branchName(selectedOrder.branchId)}
+                </p>
+              )}
               {selectedOrder.deliveryType === "DELIVERY" && (
                 <p className="font-bold text-xs uppercase bg-black text-white p-1 mt-1 text-center">
                   DIRECCIÓN:{" "}

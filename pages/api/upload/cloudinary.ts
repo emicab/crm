@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import crypto from "crypto";
 import prisma from "../../../lib/prisma";
 import { decryptText } from "../../../lib/encryption";
+import { loadEnv } from "../../../lib/envLoader";
 
 export const config = {
   api: {
@@ -22,6 +23,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "Se requiere un archivo o base64 de imagen." });
   }
 
+  // En producción las credenciales viajan empaquetadas en app_standalone/cloudinary.env
+  // (generado por scripts/write-cloudinary-env.js durante el build).
+  loadEnv();
+
   // Preferir variables de entorno (dev) y, si faltan, leer credenciales cifradas de la DB local.
   const setting = await prisma.setting.findMany({ where: { key: { in: ["cloudinaryCloudName", "cloudinaryApiKey", "cloudinaryApiSecret"] } } });
   const settingMap: Record<string, string> = {};
@@ -33,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!cloudName || !apiKey || !apiSecret) {
     return res.status(400).json({
-      message: "Cloudinary no está configurado. Definí las credenciales en Ajustes > Imágenes (Cloudinary) o en el archivo .env.",
+      message: "Cloudinary no está configurado. Las credenciales deben estar definidas en el archivo .env o empaquetadas en app_standalone/cloudinary.env.",
       configured: false,
     });
   }

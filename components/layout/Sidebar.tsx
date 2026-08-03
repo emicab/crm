@@ -67,6 +67,7 @@ const navGroups: NavGroup[] = [
         href: "/pedidos-web",
         label: "Pedidos Web (ClinStore)",
         icon: <ShoppingBag size={20} />,
+        moduleId: "pedidos_web",
         allowedRoles: ["ADMIN", "SUPERVISOR"],
       },
       {
@@ -437,6 +438,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             "consignaciones",
             "agente_ia",
             "traspasos",
+            "pedidos_web",
           ].includes(item.moduleId || "");
 
           // If feature belongs to Pro plan and we are in basic plan, keep item visible with lock
@@ -613,7 +615,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               Actualizar
             </button>
           </div>
-          {storageMode === "safe" && (
+          {plan === "pro" && storageMode === "safe" && (
             <div className="flex items-center justify-center gap-1.5 text-[9px] text-foreground-muted/70 font-semibold mb-1">
               <span
                 className={`h-1.5 w-1.5 rounded-full ${

@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "../../../lib/prisma";
 import crypto from "crypto";
 import os from "os";
+import { isProDevice } from "../../../lib/branchIdentity";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -11,6 +12,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // El Realtime/la nube es exclusivo del Plan Pro.
+    if (!(await isProDevice())) {
+      return res.status(403).json({ message: "El acceso a la nube requiere el Plan Pro.", blockedByPlan: true });
+    }
+
     const settings = await prisma.setting.findMany();
     const config: Record<string, string> = {};
     for (const s of settings) {

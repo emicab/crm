@@ -35,6 +35,28 @@ export function loadEnv() {
     console.error("[EnvLoader] Error al leer archivo .env en runtime:", err);
   }
 
+  // Credenciales de Cloudinary empaquetadas en el instalador (app_standalone/cloudinary.env)
+  try {
+    const cloudinaryEnvPath = path.join(process.cwd(), "cloudinary.env");
+    if (fs.existsSync(cloudinaryEnvPath)) {
+      const content = fs.readFileSync(cloudinaryEnvPath, "utf-8");
+      content.split(/\r?\n/).forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) return;
+        const parts = trimmed.split("=");
+        if (parts.length >= 2) {
+          const key = parts[0].trim();
+          const val = parts.slice(1).join("=").trim().replace(/^['"]|['"]$/g, "");
+          if (key && !process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.error("[EnvLoader] Error al leer cloudinary.env en runtime:", err);
+  }
+
   // Inyectar únicamente fallbacks públicos de lectura/escritura con RLS si faltan
   Object.entries(DEFAULT_ENV).forEach(([key, val]) => {
     if (!process.env[key]) {

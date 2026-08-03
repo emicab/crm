@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Database, Download, Upload, Cloud, RefreshCw, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Database, Download, Upload, Cloud, RefreshCw, CheckCircle2, ShieldCheck, Sparkles } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import toast from 'react-hot-toast';
 
@@ -10,12 +10,14 @@ interface ConfigBackupTabProps {
   handleChange: (key: string, value: string) => void;
   handleManualSync: () => void;
   isSyncing: boolean;
+  isPlanPro: boolean;
 }
 
 export default function ConfigBackupTab({
   form,
   handleManualSync,
   isSyncing,
+  isPlanPro,
 }: ConfigBackupTabProps) {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -121,39 +123,64 @@ export default function ConfigBackupTab({
             </p>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-600 text-xs font-bold rounded-full shrink-0">
-            <ShieldCheck size={14} /> Servicio Conectado
-          </span>
+          {isPlanPro && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-600 text-xs font-bold rounded-full shrink-0">
+              <ShieldCheck size={14} /> Servicio Conectado
+            </span>
+          )}
         </div>
 
-        <div className="p-5 bg-background border border-border rounded-xl space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-foreground flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-emerald-500" /> Servidor Oficial Activo
-              </p>
-              {form.supabase_last_sync ? (
-                <p className="text-xs text-emerald-600 font-semibold mt-1">
-                  Último respaldo exitoso en la nube: {new Date(form.supabase_last_sync).toLocaleString('es-AR')}
-                </p>
-              ) : (
-                <p className="text-xs text-foreground-muted mt-1">
-                  Conexión segura lista. Todavía no realizaste la primera sincronización manual.
-                </p>
-              )}
+        {!isPlanPro ? (
+          <div className="p-5 bg-background border border-amber-300/40 rounded-xl space-y-3">
+            <div className="flex items-center gap-2 text-amber-600">
+              <Sparkles size={18} />
+              <p className="text-sm font-bold text-foreground">Función del Plan Pro</p>
             </div>
-
+            <p className="text-xs text-foreground-muted">
+              El respaldo automático en la nube es exclusivo del <strong className="text-foreground font-semibold">Plan Pro</strong>. Mientras tanto, podés seguir usando la copia de seguridad local en tu computadora.
+            </p>
             <Button
               type="button"
-              onClick={handleManualSync}
-              disabled={isSyncing}
-              className="shrink-0 font-bold text-xs px-5 py-2.5"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.location.href = '/configuracion?tab=suscripciones';
+                }
+              }}
+              className="font-bold text-xs px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white"
             >
-              <RefreshCw size={15} className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-              {isSyncing ? 'Guardando en la Nube...' : 'Guardar en la Nube Ahora'}
+              💳 Ver Plan Pro y Suscripción
             </Button>
           </div>
-        </div>
+        ) : (
+          <div className="p-5 bg-background border border-border rounded-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-500" /> Servidor Oficial Activo
+                </p>
+                {form.supabase_last_sync ? (
+                  <p className="text-xs text-emerald-600 font-semibold mt-1">
+                    Último respaldo exitoso en la nube: {new Date(form.supabase_last_sync).toLocaleString('es-AR')}
+                  </p>
+                ) : (
+                  <p className="text-xs text-foreground-muted mt-1">
+                    Conexión segura lista. Todavía no realizaste la primera sincronización manual.
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type="button"
+                onClick={handleManualSync}
+                disabled={isSyncing}
+                className="shrink-0 font-bold text-xs px-5 py-2.5"
+              >
+                <RefreshCw size={15} className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Guardando en la Nube...' : 'Guardar en la Nube Ahora'}
+              </Button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
