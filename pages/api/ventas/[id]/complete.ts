@@ -95,6 +95,8 @@ export default async function handler(
       }
 
       for (const item of sale.items) {
+        if (item.productId == null) continue; // ítem desvinculado, sin producto
+
         const product = await tx.product.findUnique({ where: { id: item.productId } });
         if (!product) {
           throw new Error(`Producto con ID ${item.productId} no encontrado.`);

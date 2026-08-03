@@ -301,6 +301,33 @@ const MIGRATIONS: &[Migration] = &[
             CREATE INDEX IF NOT EXISTS "SyncOutbox_status_idx" ON "SyncOutbox" ("status");
         "#,
     },
+    Migration {
+        version: 13,
+        name: "make_saleitem_product_optional",
+        sql: r#"
+            PRAGMA foreign_keys=OFF;
+            CREATE TABLE "SaleItem_new" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "quantity" REAL NOT NULL,
+                "priceAtSale" DECIMAL NOT NULL,
+                "purchasePriceAtSale" DECIMAL NOT NULL,
+                "saleId" INTEGER NOT NULL,
+                "productId" INTEGER,
+                "productName" TEXT,
+                CONSTRAINT "SaleItem_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sale" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT "SaleItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+            );
+            INSERT INTO "SaleItem_new" ("id", "quantity", "priceAtSale", "purchasePriceAtSale", "saleId", "productId", "productName")
+                SELECT "id", "quantity", "priceAtSale", "purchasePriceAtSale", "saleId", "productId",
+                       (SELECT "name" FROM "Product" WHERE "Product"."id" = "SaleItem"."productId")
+                FROM "SaleItem";
+            DROP TABLE "SaleItem";
+            ALTER TABLE "SaleItem_new" RENAME TO "SaleItem";
+            CREATE INDEX IF NOT EXISTS "SaleItem_saleId_idx" ON "SaleItem" ("saleId");
+            CREATE INDEX IF NOT EXISTS "SaleItem_productId_idx" ON "SaleItem" ("productId");
+            PRAGMA foreign_keys=ON;
+        "#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {

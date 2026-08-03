@@ -266,7 +266,7 @@ export default function PrintPage() {
                   <td className="py-4 px-4 font-medium text-center">{item.quantity}</td>
                   <td className="py-4 px-4">
                     <span className="font-semibold block text-base">
-                      {item.product?.name || "Producto eliminado"}
+                      {item.product?.name || item.productName || "Producto eliminado"}
                     </span>
                     {Number(item.discountPercent) > 0 && (
                       <span className="inline-block mt-1 text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">
@@ -418,7 +418,7 @@ export default function PrintPage() {
             <tr key={item.id}>
               <td className="py-1 align-top">{item.quantity}</td>
               <td className="py-1 align-top pr-1">
-                {item.product?.name || "Producto eliminado"}
+                {item.product?.name || item.productName || "Producto eliminado"}
                 {Number(item.discountPercent) > 0 && (
                   <span className="block text-[10px]">
                     (-{item.discountPercent}%)

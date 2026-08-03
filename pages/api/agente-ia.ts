@@ -552,13 +552,15 @@ Si consideras útil sugerirle al usuario siguientes pasos o preguntas de seguimi
             });
 
             const topProducts = await Promise.all(
-              items.map(async (i) => {
-                const product = await prisma.product.findUnique({ where: { id: i.productId } });
-                return {
-                  nombre: product?.name || "Desconocido",
-                  cantidadVendida: i._sum.quantity || 0,
-                };
-              })
+              items
+                .filter((i) => i.productId != null)
+                .map(async (i) => {
+                  const product = await prisma.product.findUnique({ where: { id: i.productId as number } });
+                  return {
+                    nombre: product?.name || "Desconocido",
+                    cantidadVendida: i._sum.quantity || 0,
+                  };
+                })
             );
             toolResponse = { productosMasVendidos: topProducts, periodo: `${dias} dias` };
 

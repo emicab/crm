@@ -76,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         let totalSoldAmount = new Decimal(0);
-        const saleItemsToCreate: { productId: number; quantity: number; priceAtSale: Prisma.Decimal; purchasePriceAtSale: Prisma.Decimal }[] = [];
+        const saleItemsToCreate: { productId: number; productName?: string | null; quantity: number; priceAtSale: Prisma.Decimal; purchasePriceAtSale: Prisma.Decimal }[] = [];
 
         for (const sItem of settlementItems) {
           const cItem = consignment.items.find((i) => i.id === sItem.itemId);
@@ -118,6 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const product = await tx.product.findUnique({ where: { id: cItem.productId } });
             saleItemsToCreate.push({
               productId: cItem.productId,
+              productName: product?.name || null,
               quantity: qSold,
               priceAtSale: cItem.priceAtGiven,
               purchasePriceAtSale: product?.pricePurchase || new Decimal(0),
@@ -149,6 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               items: {
                 create: saleItemsToCreate.map((item) => ({
                   productId: item.productId,
+                  productName: item.productName,
                   quantity: item.quantity,
                   priceAtSale: item.priceAtSale,
                   purchasePriceAtSale: item.purchasePriceAtSale,

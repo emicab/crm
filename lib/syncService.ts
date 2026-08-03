@@ -360,7 +360,8 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       })),
       SaleItem: saleItems.map(si => ({
         id: si.id, quantity: si.quantity, priceAtSale: fmtDec(si.priceAtSale), tenant_id: tenantId,
-        purchasePriceAtSale: fmtDec(si.purchasePriceAtSale), saleId: si.saleId, productId: si.productId
+        purchasePriceAtSale: fmtDec(si.purchasePriceAtSale), saleId: si.saleId, productId: si.productId,
+        productName: si.productName || null
       })),
       ComboItem: comboItems.map(ci => ({
         id: ci.id, comboId: ci.comboId, productId: ci.productId, quantity: ci.quantity, tenant_id: tenantId,

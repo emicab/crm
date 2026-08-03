@@ -613,6 +613,7 @@ const SaleDetailPage = () => {
                                     >
                                         <td className='p-3 text-sm text-foreground font-medium'>
                                             {item.product?.name ||
+                                                item.productName ||
                                                 "Producto no disponible"}
                                             {item.product?.sku && (
                                                 <span className='block text-xs text-foreground-muted'>

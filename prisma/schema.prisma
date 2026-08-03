@@ -122,14 +122,17 @@ enum SaleStatus {
 }
 
 model SaleItem {
-  id                  Int     @id @default(autoincrement())
+  id                  Int      @id @default(autoincrement())
   quantity            Float
   priceAtSale         Decimal
   purchasePriceAtSale Decimal
   saleId              Int
-  productId           Int
-  product             Product @relation(fields: [productId], references: [id])
-  sale                Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId           Int?
+  // Snapshot del nombre del producto al momento de la venta. Permite que el
+  // historial conserve el nombre aunque el producto se elimine o se desvincule.
+  productName         String?
+  product             Product? @relation(fields: [productId], references: [id])
+  sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
 }
 
 model Expense {

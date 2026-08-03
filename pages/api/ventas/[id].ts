@@ -147,7 +147,7 @@ export default async function handler(
           });
         }
 
-        affectedProductIds = saleToDelete.items.map(i => i.productId);
+        affectedProductIds = saleToDelete.items.filter(i => i.productId != null).map(i => i.productId as number);
 
         // 2. Revertir saldo de Cuenta Corriente si estuvo vinculada a un cliente
         if (saleToDelete.clientId) {
@@ -184,6 +184,8 @@ export default async function handler(
         const restoreBranchId = saleToDelete.branchId || mainBranch?.id;
 
         for (const item of saleToDelete.items) {
+          if (item.productId == null) continue; // ítem desvinculado, sin producto para reponer
+
           // Reponer en stock general del producto
           await tx.product.update({
             where: { id: item.productId },

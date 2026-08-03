@@ -365,6 +365,7 @@ export default async function handler(
             data: {
               saleId: newSale.id,
               productId: item.productId,
+              productName: product.name,
               quantity: item.quantity,
               priceAtSale: new Decimal(item.priceAtSale),
               purchasePriceAtSale: purchasePriceAtSale || new Decimal(0),

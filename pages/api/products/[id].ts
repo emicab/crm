@@ -214,8 +214,10 @@ export default async function handler(
         prisma.stockTransferItem.count({ where: { productId: id } }),
       ]);
 
+      // Los ítems de venta se DESVINCULAN (productId -> null) conservando el
+      // nombre (productName) para no perder el historial. Las demás referencias
+      // sí bloquean.
       const relations = [];
-      if (saleItemsCount > 0) relations.push(`${saleItemsCount} ítem(s) de venta`);
       if (purchaseItemsCount > 0) relations.push(`${purchaseItemsCount} ítem(s) de compra`);
       if (comboItemsCount > 0) relations.push(`${comboItemsCount} ítem(s) de combo`);
       if (promotionConditionsCount > 0) relations.push(`${promotionConditionsCount} condición(es) de promoción`);
@@ -260,6 +262,15 @@ export default async function handler(
         if (webOrderIds.length > 0) {
           await tx.webOrderItem.deleteMany({ where: { webOrderId: { in: webOrderIds } } });
           await tx.webOrder.deleteMany({ where: { id: { in: webOrderIds } } });
+        }
+        // Desvincular los ítems de venta: conservan el nombre (productName) para
+        // no perder el historial, pero dejan de referenciar al producto.
+        if (saleItemsCount > 0) {
+          const productToDelete = await tx.product.findUnique({ where: { id }, select: { name: true } });
+          await tx.saleItem.updateMany({
+            where: { productId: id },
+            data: { productId: null, productName: productToDelete?.name || null },
+          });
         }
         await tx.productBranchStock.deleteMany({ where: { productId: id } });
         await tx.product.delete({ where: { id } });

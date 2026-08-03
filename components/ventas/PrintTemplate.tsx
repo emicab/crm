@@ -147,7 +147,7 @@ export const PrintTemplate: React.FC<PrintTemplateProps> = ({
                   </td>
                   <td className="py-1.5 px-2">
                     <span className="font-semibold block text-[10px]">
-                      {item.product?.name || "Producto eliminado"}
+                      {item.product?.name || item.productName || "Producto eliminado"}
                     </span>
                     {Number(item.discountPercent) > 0 && (
                       <span className="inline-block mt-0.5 text-[8px] font-bold text-[#dc2626] bg-[#fef2f2] px-1 py-0.5 rounded border border-[#fee2e2]">
@@ -305,7 +305,7 @@ export const PrintTemplate: React.FC<PrintTemplateProps> = ({
             <tr key={item.id}>
               <td className="py-1 align-top">{item.quantity}</td>
               <td className="py-1 align-top pr-1">
-                {item.product?.name || "Producto eliminado"}
+                {item.product?.name || item.productName || "Producto eliminado"}
                 {Number(item.discountPercent) > 0 && (
                   <span className="block text-[10px]">
                     (-{item.discountPercent}%)

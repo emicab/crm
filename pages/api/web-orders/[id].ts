@@ -85,6 +85,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const prod = productsMap.get(item.productId);
           return {
             productId: item.productId,
+            productName: prod?.name || null,
             quantity: item.quantity,
             priceAtSale: item.unitPrice,
             purchasePriceAtSale: prod ? prod.pricePurchase : 0,

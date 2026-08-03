@@ -260,10 +260,11 @@ CREATE TABLE "SaleItem" (
     "priceAtSale" NUMERIC(12, 2) NOT NULL,
     "purchasePriceAtSale" NUMERIC(12, 2) NOT NULL,
     "saleId" INTEGER NOT NULL,
-    "productId" INTEGER NOT NULL,
+    "productId" INTEGER,
+    "productName" TEXT,
     PRIMARY KEY ("tenant_id", "id"),
     FOREIGN KEY ("tenant_id", "saleId") REFERENCES "Sale" ("tenant_id", "id") ON DELETE CASCADE,
-    FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE
+    FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE SET NULL
 );
 
 -- 16. Tabla Purchase (Compras)

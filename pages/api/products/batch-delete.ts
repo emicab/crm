@@ -44,9 +44,9 @@ export default async function handler(
       return res.status(404).json({ message: 'No se encontraron productos para eliminar.' });
     }
 
-    // Validar dependencias de negocio (misma lógica que el borrado individual).
-    const [saleItemsCount, purchaseItemsCount, comboItemsCount, promotionConditionsCount, consignmentItemsCount, stockTransferItemsCount] = await Promise.all([
-      prisma.saleItem.count({ where: { productId: { in: candidateIds } } }),
+    // Validar dependencias de negocio (los ítems de venta se desvinculan en vez
+    // de bloquear; el resto sí bloquea).
+    const [purchaseItemsCount, comboItemsCount, promotionConditionsCount, consignmentItemsCount, stockTransferItemsCount] = await Promise.all([
       prisma.purchaseItem.count({ where: { productId: { in: candidateIds } } }),
       prisma.comboItem.count({ where: { productId: { in: candidateIds } } }),
       prisma.promotionCondition.count({ where: { productId: { in: candidateIds } } }),
@@ -55,7 +55,6 @@ export default async function handler(
     ]);
 
     const relations = [];
-    if (saleItemsCount > 0) relations.push(`${saleItemsCount} ítem(s) de venta`);
     if (purchaseItemsCount > 0) relations.push(`${purchaseItemsCount} ítem(s) de compra`);
     if (comboItemsCount > 0) relations.push(`${comboItemsCount} ítem(s) de combo`);
     if (promotionConditionsCount > 0) relations.push(`${promotionConditionsCount} condición(es) de promoción`);
@@ -100,6 +99,24 @@ export default async function handler(
       if (webOrderIds.length > 0) {
         await tx.webOrderItem.deleteMany({ where: { webOrderId: { in: webOrderIds } } });
         await tx.webOrder.deleteMany({ where: { id: { in: webOrderIds } } });
+      }
+      // Desvincular los ítems de venta: conservan el nombre (productName) y
+      // dejan de referenciar al producto.
+      if (candidateIds.length > 0) {
+        const productsToDelete = await tx.product.findMany({
+          where: { id: { in: candidateIds } },
+          select: { id: true, name: true },
+        });
+        const nameById = new Map(productsToDelete.map((p) => [p.id, p.name]));
+        for (const pid of candidateIds) {
+          const name = nameById.get(pid);
+          if (name) {
+            await tx.saleItem.updateMany({
+              where: { productId: pid },
+              data: { productId: null, productName: name },
+            });
+          }
+        }
       }
       await tx.productBranchStock.deleteMany({ where: { productId: { in: candidateIds } } });
       await tx.product.deleteMany({ where: { id: { in: candidateIds } } });

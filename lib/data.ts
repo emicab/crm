@@ -298,6 +298,7 @@ export async function getTopSellingProducts(
                         lte: endDate,
                     },
                 },
+                productId: { not: null },
             },
             orderBy: {
                 _sum: {
@@ -310,7 +311,9 @@ export async function getTopSellingProducts(
         if (topProducts.length === 0) return [];
 
         // Obtener los nombres de los productos
-        const productIds = topProducts.map((p) => p.productId);
+        const productIds = topProducts
+          .filter((p) => p.productId != null)
+          .map((p) => p.productId as number);
         const products = await prisma.product.findMany({
             where: {
                 id: { in: productIds },
@@ -323,10 +326,12 @@ export async function getTopSellingProducts(
 
         const productMap = new Map(products.map((p) => [p.id, p.name]));
 
-        return topProducts.map((p) => ({
-            productName: productMap.get(p.productId) || "Producto Desconocido",
-            totalSold: p._sum.quantity || 0,
-        }));
+        return topProducts
+          .filter((p) => p.productId != null)
+          .map((p) => ({
+              productName: productMap.get(p.productId as number) || "Producto Desconocido",
+              totalSold: p._sum.quantity || 0,
+          }));
     } catch (error) {
         console.error("Error fetching top selling products:", error);
         return [];

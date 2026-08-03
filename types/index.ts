@@ -125,8 +125,9 @@ export interface Brand {
   
   export interface SaleItem {
     id?: number;
-    productId: number;
-    product?: Product;
+    productId?: number | null;
+    product?: Product | null;
+    productName?: string | null;
     quantity: number;
     priceAtSale: number;
   }

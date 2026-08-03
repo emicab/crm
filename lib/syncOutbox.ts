@@ -69,7 +69,8 @@ async function pushSale(saleId: number, tenantId: string): Promise<boolean> {
     }],
     SaleItem: sale.items.map(si => ({
       id: si.id, quantity: si.quantity, priceAtSale: fmtDec(si.priceAtSale), tenant_id: tenantId,
-      purchasePriceAtSale: fmtDec(si.purchasePriceAtSale), saleId: si.saleId, productId: si.productId
+      purchasePriceAtSale: fmtDec(si.purchasePriceAtSale), saleId: si.saleId, productId: si.productId,
+      productName: si.productName || null
     })),
   };
 

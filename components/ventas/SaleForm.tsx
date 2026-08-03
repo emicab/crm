@@ -362,7 +362,7 @@ const SaleForm = () => {
                     
                     let message = `Hola ${clientName}! 👋\n\nTe adjuntamos el detalle de tu compra N° #${lastCreatedSale.id}:\n\n`;
                     lastCreatedSale.items.forEach((item: any) => {
-                        message += `- ${item.quantity}x ${item.product?.name || 'Producto'} ($${parseFloat(item.priceAtSale).toLocaleString("es-AR", { minimumFractionDigits: 2 })})\n`;
+                        message += `- ${item.quantity}x ${item.product?.name || item.productName || 'Producto'} ($${parseFloat(item.priceAtSale).toLocaleString("es-AR", { minimumFractionDigits: 2 })})\n`;
                     });
                     
                     if (lastCreatedSale.discountCodeApplied) {

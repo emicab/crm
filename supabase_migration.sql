@@ -146,3 +146,29 @@ BEGIN
         ALTER TABLE "Promotion" ADD COLUMN "conditions" JSONB DEFAULT '[]'::jsonb;
     END IF;
 END $$;
+
+-- 10. SaleItem: permitir desvincular el producto (productId nullable) y guardar
+--     el nombre del producto (productName) para conservar el historial al borrar.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'SaleItem' AND column_name = 'productName') THEN
+        ALTER TABLE "SaleItem" ADD COLUMN "productName" TEXT;
+    END IF;
+END $$;
+DO $$
+BEGIN
+    -- Backfill del nombre desde el producto (solo si hay columnas)
+    UPDATE "SaleItem" si
+    SET "productName" = p."name"
+    FROM "Product" p
+    WHERE si."productId" = p."id" AND si."productName" IS NULL;
+END $$;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'SaleItem' AND column_name = 'productId' AND is_nullable = 'NO'
+    ) THEN
+        ALTER TABLE "SaleItem" ALTER COLUMN "productId" DROP NOT NULL;
+    END IF;
+END $$;
