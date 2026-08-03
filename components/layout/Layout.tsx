@@ -48,7 +48,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const showPinLock =
     !isLoading && !showOnboarding && isModuleEnabled("roles") && !currentUser;
 
-  // Sincronización Realtime con Supabase
+  // Auto-sync periódico con Supabase (sin Realtime para reducir consumo de mensajes).
   React.useEffect(() => {
     if (
       isLoading ||
@@ -60,11 +60,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     ) {
       return;
     }
-
-    let isMounted = true;
-    let realtimeChannel: any = null;
-    let syncTimeout: NodeJS.Timeout | null = null;
-    let initialTimeout: NodeJS.Timeout | null = null;
 
     const triggerSync = async () => {
       try {
@@ -80,125 +75,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       }
     };
 
-    initialTimeout = setTimeout(triggerSync, 5000);
+    const initialTimeout = setTimeout(triggerSync, 5000);
     const fallbackInterval = setInterval(triggerSync, 300000);
 
-    const setupRealtime = async () => {
-      try {
-        const res = await fetch("/api/sync/config");
-        if (!res.ok) return;
-        const config = await res.json();
-        if (
-          !config.supabaseUrl ||
-          !config.supabaseAnonKey ||
-          !config.tenantId ||
-          !isMounted
-        )
-          return;
-
-        const { createClient } = await import("@supabase/supabase-js");
-        const supabase = createClient(
-          config.supabaseUrl,
-          config.supabaseAnonKey,
-        );
-
-        // Callback unificado con debounce de 3 segundos
-        const handlePayload = (payload: any) => {
-          if (syncTimeout) clearTimeout(syncTimeout);
-          syncTimeout = setTimeout(() => {
-            console.log(
-              "[Realtime] Cambio detectado en Supabase, sincronizando...",
-              payload.table,
-            );
-            triggerSync();
-          }, 3000);
-        };
-
-        // [CORREGIDO] Se debe especificar la 'table' al usar 'filter' en Supabase Realtime
-        realtimeChannel = supabase
-          .channel("tenant_changes")
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "ProductBranchStock",
-              filter: `tenant_id=eq.${config.tenantId}`,
-            },
-            handlePayload,
-          )
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "Product",
-              filter: `tenant_id=eq.${config.tenantId}`,
-            },
-            handlePayload,
-          )
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "Sale",
-              filter: `tenant_id=eq.${config.tenantId}`,
-            },
-            handlePayload,
-          )
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "Purchase",
-              filter: `tenant_id=eq.${config.tenantId}`,
-            },
-            handlePayload,
-          )
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "StockTransfer",
-              filter: `tenant_id=eq.${config.tenantId}`,
-            },
-            handlePayload,
-          )
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "WebOrder",
-              filter: `tenant_id=eq.${config.tenantId}`,
-            },
-            handlePayload,
-          )
-          .subscribe((status: string) => {
-            if (status === "SUBSCRIBED") {
-              console.log(
-                "[Realtime] Suscrito a eventos de Supabase exitosamente.",
-              );
-            }
-          });
-      } catch (error) {
-        console.error("Error configurando Realtime Supabase:", error);
-      }
-    };
-
-    setupRealtime();
-
     return () => {
-      isMounted = false;
-      if (initialTimeout) clearTimeout(initialTimeout);
-      if (syncTimeout) clearTimeout(syncTimeout);
+      clearTimeout(initialTimeout);
       clearInterval(fallbackInterval);
-      if (realtimeChannel) {
-        realtimeChannel.unsubscribe();
-      }
     };
   }, [isLoading, hasSupabaseConfig, showOnboarding, showPinLock, storageMode, plan]);
 
