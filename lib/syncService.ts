@@ -2,10 +2,19 @@
 import prisma from "./prisma";
 import os from "os";
 import crypto from "crypto";
-import { isMainDevice } from "./branchIdentity";
+import { isMainDevice, isProDevice } from "./branchIdentity";
 import { isCloudNewer } from "./syncConflict";
 
 const fmtDec = (val: any, fallback: string | null = "0.00") => (val !== undefined && val !== null ? val.toString() : fallback);
+
+// El respaldo/sincronización en la nube es exclusivo del Plan Pro.
+async function isCloudAllowed(): Promise<boolean> {
+  const allowed = await isProDevice();
+  if (!allowed) {
+    console.warn("[Sync] Sincronización en la nube omitida: requiere el Plan Pro.");
+  }
+  return allowed;
+}
 
 async function loadConfigFromDb(): Promise<Record<string, string>> {
   const settings = await prisma.setting.findMany();
@@ -136,6 +145,14 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       }
     }
 
+    // La sincronización en la nube es exclusiva del Plan Pro.
+    if (!(await isCloudAllowed())) {
+      return {
+        success: false,
+        message: "La sincronización en la nube requiere el Plan Pro.",
+      };
+    }
+
     const lastSync = (forceFullSync || !lastSyncStr) ? new Date(0) : new Date(lastSyncStr);
     const syncStartTime = new Date();
 
@@ -170,7 +187,10 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
     const categories = await prisma.category.findMany();
     const suppliers = await prisma.supplier.findMany();
     const discountCodes = await prisma.discountCode.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
-    const promotions = await prisma.promotion.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
+    const promotions = await prisma.promotion.findMany({
+      where: forceFullSync ? {} : { updatedAt: { gt: lastSync } },
+      include: { conditions: { include: { product: true, category: true } } }
+    });
     const clients = await prisma.client.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
     const sellers = await prisma.seller.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
     const users = await prisma.user.findMany({ where: forceFullSync ? {} : { updatedAt: { gt: lastSync } } });
@@ -200,7 +220,8 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
     const comboItems = await prisma.comboItem.findMany({
       where: forceFullSync ? {} : {
         combo: { updatedAt: { gt: lastSync } }
-      }
+      },
+      include: { product: true }
     });
     const webOrders = await prisma.webOrder.findMany({
       where: forceFullSync ? {} : { updatedAt: { gt: lastSync } },
@@ -247,6 +268,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         pricePurchase: fmtDec(p.pricePurchase), priceSale: fmtDec(p.priceSale),
         quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert, unitType: p.unitType,
         isPublicWeb: p.isPublicWeb !== false, webCategory: p.webCategory || null,
+        imageUrl: p.imageUrl || null,
         brandId: p.brandId, categoryId: p.categoryId, supplierId: p.supplierId,
         createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString()
       })),
@@ -272,6 +294,13 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         id: p.id, name: p.name, description: p.description, type: p.type, status: p.status, tenant_id: tenantId,
         discountType: p.discountType, discountValue: fmtDec(p.discountValue), minQuantity: p.minQuantity,
         maxDiscountQty: p.maxDiscountQty, priority: p.priority,
+        imageUrl: p.imageUrl || null,
+        conditions: (p.conditions || []).map(c => ({
+          id: c.id, promotionId: c.promotionId, productId: c.productId, categoryId: c.categoryId,
+          minQuantity: c.minQuantity,
+          product: c.product ? { name: c.product.name } : null,
+          category: c.category ? { name: c.category.name } : null
+        })),
         startDate: p.startDate?.toISOString() || null, endDate: p.endDate?.toISOString() || null,
         createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString()
       })),
@@ -289,7 +318,16 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       })),
       Combo: combos.map(co => ({
         id: co.id, name: co.name, description: co.description, price: fmtDec(co.price), tenant_id: tenantId,
-        active: co.active, createdAt: co.createdAt.toISOString(), updatedAt: co.updatedAt.toISOString()
+        active: co.active, imageUrl: co.imageUrl || null,
+        items: comboItems
+          .filter(ci => ci.comboId === co.id)
+          .map(ci => ({
+            id: ci.id, comboId: ci.comboId, productId: ci.productId,
+            productName: ci.product?.name || `#${ci.productId}`,
+            quantity: ci.quantity,
+            priceSale: ci.customPrice !== null && ci.customPrice !== undefined ? fmtDec(ci.customPrice) : fmtDec(ci.product?.priceSale)
+          })),
+        createdAt: co.createdAt.toISOString(), updatedAt: co.updatedAt.toISOString()
       })),
       CashRegister: cashRegisters.map(c => ({
         id: c.id, openDate: c.openDate.toISOString(), closeDate: c.closeDate?.toISOString() || null, tenant_id: tenantId,
@@ -351,6 +389,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
           clientPhone: o.clientPhone,
           shippingAddress: o.shippingAddress,
           deliveryType: o.deliveryType,
+          branchId: o.branchId ?? null,
           paymentMethod: o.paymentMethod,
           paymentStatus: o.paymentStatus,
           status: o.status,
@@ -411,6 +450,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
                 clientPhone: order.clientPhone,
                 shippingAddress: order.shippingAddress,
                 deliveryType: order.deliveryType,
+                branchId: order.branchId ?? null,
                 paymentMethod: order.paymentMethod,
                 paymentStatus: order.paymentStatus,
                 status: order.status,
@@ -428,47 +468,59 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
               }
             });
 
-            if (mainBranchId) {
-              for (const item of (order.WebOrderItem || [])) {
-                try {
-                  await adjustBranchStock(item.productId, mainBranchId, -item.quantity);
-                  productIdsToRecalc.add(item.productId);
-                } catch (err) {
-                  console.warn("Stock decrement error for product", item.productId, err);
-                }
-              }
-            } else {
-              console.warn("[Sync] No hay sucursal principal configurada; no se pudo descontar stock del pedido web", order.webOrderNumber);
+            // El stock del pedido ya fue descontado en la nube (PICKUP: sucursal
+            // elegida; DELIVERY: reserva de la sucursal principal). Acá NO se
+            // vuelve a descontar: el pull de ProductBranchStock que corre después
+            // trae los valores ya descontados y los sobrescribe localmente.
+            for (const item of (order.WebOrderItem || [])) {
+              productIdsToRecalc.add(item.productId);
             }
           } else {
             const isBeingCancelled = order.status === "CANCELLED" && exists.status !== "CANCELLED";
             const isBeingRestored = order.status !== "CANCELLED" && exists.status === "CANCELLED";
 
-            if ((isBeingCancelled || isBeingRestored) && mainBranchId) {
+            // Resolución de conflictos: la nube solo gana si es MÁS RECIENTE que el
+            // registro local. Evita que el PULL (que corre antes del PUSH) pise un
+            // cambio de estado hecho recién en este POS con datos viejos de Supabase.
+            const cloudWins = isCloudNewer(order.updatedAt, exists.updatedAt);
+
+            if (cloudWins && (isBeingCancelled || isBeingRestored)) {
               const existingItems = await prisma.webOrderItem.findMany({
                 where: { webOrderId: exists.id }
               });
-              const sign = isBeingCancelled ? 1 : -1; 
-              for (const item of existingItems) {
-                try {
-                  await adjustBranchStock(item.productId, mainBranchId, sign * item.quantity);
-                  productIdsToRecalc.add(item.productId);
-                } catch (err) {
-                  console.warn("Stock restore/decrement error for product", item.productId, err);
+              // La reposición usa la sucursal del pedido: la asignada (branchId)
+              // o la principal como reserva provisoria de los DELIVERY sin asignar.
+              const orderBranchId = exists.branchId ?? mainBranchId;
+              if (orderBranchId) {
+                const sign = isBeingCancelled ? 1 : -1;
+                for (const item of existingItems) {
+                  try {
+                    await adjustBranchStock(item.productId, orderBranchId, sign * item.quantity);
+                    productIdsToRecalc.add(item.productId);
+                  } catch (err) {
+                    console.warn("Stock restore/decrement error for product", item.productId, err);
+                  }
                 }
+              } else {
+                console.warn("[Sync] No hay sucursal asignada ni principal; no se pudo ajustar stock del pedido", order.webOrderNumber);
               }
             }
 
-            await prisma.webOrder.update({
-              where: { id: exists.id },
-              data: {
-                paymentStatus:
-                  exists.paymentStatus === "PAID" || order.paymentStatus === "PAID"
-                    ? "PAID"
-                    : order.paymentStatus,
-                status: order.status
-              }
-            });
+            if (cloudWins) {
+              await prisma.webOrder.update({
+                where: { id: exists.id },
+                data: {
+                  branchId: order.branchId ?? exists.branchId,
+                  paymentStatus:
+                    exists.paymentStatus === "PAID" || order.paymentStatus === "PAID"
+                      ? "PAID"
+                      : order.paymentStatus,
+                  status: order.status,
+                  notes: order.notes ?? exists.notes,
+                  updatedAt: new Date(order.updatedAt)
+                }
+              });
+            }
           }
         }
       }
@@ -583,11 +635,16 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       if (resB.ok) {
         const cloudBranches = await resB.json();
         for (const b of cloudBranches) {
-          await prisma.branch.upsert({
-            where: { id: b.id },
-            update: { name: b.name, address: b.address, phone: b.phone, isMain: b.isMain, updatedAt: new Date(b.updatedAt) },
-            create: { id: b.id, name: b.name, address: b.address, phone: b.phone, isMain: b.isMain, updatedAt: new Date(b.updatedAt) }
-          });
+          const branchData = {
+            name: b.name, address: b.address, phone: b.phone, isMain: b.isMain,
+            updatedAt: new Date(b.updatedAt)
+          };
+          const existingBranch = await prisma.branch.findUnique({ where: { id: b.id }, select: { updatedAt: true } });
+          if (!existingBranch) {
+            await prisma.branch.create({ data: { id: b.id, ...branchData } });
+          } else if (isCloudNewer(b.updatedAt, existingBranch.updatedAt)) {
+            await prisma.branch.update({ where: { id: b.id }, data: branchData });
+          }
         }
       }
 
@@ -595,11 +652,15 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       if (resBr.ok) {
         const cloudBrands = await resBr.json();
         for (const b of cloudBrands) {
-          await prisma.brand.upsert({
-            where: { id: b.id },
-            update: { name: b.name, logoUrl: b.logoUrl, updatedAt: new Date(b.updatedAt) },
-            create: { id: b.id, name: b.name, logoUrl: b.logoUrl, updatedAt: new Date(b.updatedAt) }
-          });
+          const brandData = {
+            name: b.name, logoUrl: b.logoUrl, updatedAt: new Date(b.updatedAt)
+          };
+          const existingBrand = await prisma.brand.findUnique({ where: { id: b.id }, select: { updatedAt: true } });
+          if (!existingBrand) {
+            await prisma.brand.create({ data: { id: b.id, ...brandData } });
+          } else if (isCloudNewer(b.updatedAt, existingBrand.updatedAt)) {
+            await prisma.brand.update({ where: { id: b.id }, data: brandData });
+          }
         }
       }
 
@@ -607,11 +668,15 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       if (resCat.ok) {
         const cloudCats = await resCat.json();
         for (const c of cloudCats) {
-          await prisma.category.upsert({
-            where: { id: c.id },
-            update: { name: c.name, logoUrl: c.logoUrl, updatedAt: new Date(c.updatedAt) },
-            create: { id: c.id, name: c.name, logoUrl: c.logoUrl, updatedAt: new Date(c.updatedAt) }
-          });
+          const catData = {
+            name: c.name, logoUrl: c.logoUrl, updatedAt: new Date(c.updatedAt)
+          };
+          const existingCat = await prisma.category.findUnique({ where: { id: c.id }, select: { updatedAt: true } });
+          if (!existingCat) {
+            await prisma.category.create({ data: { id: c.id, ...catData } });
+          } else if (isCloudNewer(c.updatedAt, existingCat.updatedAt)) {
+            await prisma.category.update({ where: { id: c.id }, data: catData });
+          }
         }
       }
 
@@ -619,11 +684,16 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       if (resSup.ok) {
         const cloudSuppliers = await resSup.json();
         for (const s of cloudSuppliers) {
-          await prisma.supplier.upsert({
-            where: { id: s.id },
-            update: { name: s.name, contactPerson: s.contactPerson, email: s.email, phone: s.phone, address: s.address, notes: s.notes, updatedAt: new Date(s.updatedAt) },
-            create: { id: s.id, name: s.name, contactPerson: s.contactPerson, email: s.email, phone: s.phone, address: s.address, notes: s.notes, updatedAt: new Date(s.updatedAt) }
-          });
+          const supplierData = {
+            name: s.name, contactPerson: s.contactPerson, email: s.email, phone: s.phone,
+            address: s.address, notes: s.notes, updatedAt: new Date(s.updatedAt)
+          };
+          const existingSup = await prisma.supplier.findUnique({ where: { id: s.id }, select: { updatedAt: true } });
+          if (!existingSup) {
+            await prisma.supplier.create({ data: { id: s.id, ...supplierData } });
+          } else if (isCloudNewer(s.updatedAt, existingSup.updatedAt)) {
+            await prisma.supplier.update({ where: { id: s.id }, data: supplierData });
+          }
         }
       }
 
@@ -648,6 +718,16 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
             if (existingBySku) productId = existingBySku.id;
           }
 
+          // "Último escritor gana": no pisar cambios locales más recientes que la nube.
+          const existingProduct = await prisma.product.findUnique({
+            where: { id: productId },
+            select: { updatedAt: true }
+          });
+          if (existingProduct && !isCloudNewer(p.updatedAt, existingProduct.updatedAt)) {
+            productIdsToRecalc.add(productId);
+            continue;
+          }
+
           try {
             await prisma.product.upsert({
               where: { id: productId },
@@ -656,6 +736,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
                 pricePurchase: p.pricePurchase, priceSale: p.priceSale,
                 stockMinAlert: p.stockMinAlert,
                 unitType: p.unitType || null, isPublicWeb: p.isPublicWeb !== false,
+                imageUrl: p.imageUrl || null,
                 brandId: p.brandId, categoryId: p.categoryId, supplierId: supplierExists ? p.supplierId : null,
                 updatedAt: new Date(p.updatedAt)
               },
@@ -664,6 +745,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
                 pricePurchase: p.pricePurchase, priceSale: p.priceSale,
                 quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert,
                 unitType: p.unitType || null, isPublicWeb: p.isPublicWeb !== false,
+                imageUrl: p.imageUrl || null,
                 brandId: p.brandId, categoryId: p.categoryId, supplierId: supplierExists ? p.supplierId : null,
                 updatedAt: new Date(p.updatedAt)
               }
@@ -688,6 +770,14 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
           const branchExists = await prisma.branch.findUnique({ where: { id: bs.branchId }, select: { id: true } });
           if (!productExists || !branchExists) {
             skippedPbs++;
+            continue;
+          }
+          const existingPbs = await prisma.productBranchStock.findUnique({
+            where: { productId_branchId: { productId: bs.productId, branchId: bs.branchId } },
+            select: { updatedAt: true }
+          });
+          // "Último escritor gana": no pisar un stock local más reciente que la nube.
+          if (existingPbs && !isCloudNewer(bs.updatedAt, existingPbs.updatedAt)) {
             continue;
           }
           await prisma.productBranchStock.upsert({
@@ -750,6 +840,83 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
       } catch (stErr) {
         console.warn("[Sync] Error al descargar StockTransfer desde Supabase:", stErr);
       }
+
+      // Combos y Promociones: se descargan para mantener consistencia multi-dispositivo
+      // y para que el push posterior re-emita los datos con items/conditions embebidos
+      // (lo que la tienda web lee directamente).
+      try {
+        const resCombo = await fetch(`${supabaseUrl}/rest/v1/Combo?${tenantParam}&select=*`, { headers });
+        if (resCombo.ok) {
+          const cloudCombos = await resCombo.json();
+          for (const co of cloudCombos) {
+            const existingCombo = await prisma.combo.findUnique({ where: { id: co.id }, select: { updatedAt: true } });
+            if (existingCombo && !isCloudNewer(co.updatedAt, existingCombo.updatedAt)) {
+              continue;
+            }
+            await prisma.combo.upsert({
+              where: { id: co.id },
+              update: {
+                name: co.name, description: co.description || null,
+                price: co.price, active: co.active !== false,
+                imageUrl: co.imageUrl || null, updatedAt: new Date(co.updatedAt),
+              },
+              create: {
+                id: co.id, name: co.name, description: co.description || null,
+                price: co.price, active: co.active !== false,
+                imageUrl: co.imageUrl || null, createdAt: new Date(co.createdAt), updatedAt: new Date(co.updatedAt),
+              },
+            });
+          }
+        }
+
+        const resComboItem = await fetch(`${supabaseUrl}/rest/v1/ComboItem?${tenantParam}&select=*`, { headers });
+        if (resComboItem.ok) {
+          const cloudComboItems = await resComboItem.json();
+          for (const ci of cloudComboItems) {
+            const comboExists = await prisma.combo.findUnique({ where: { id: ci.comboId }, select: { id: true } });
+            const productExists = await prisma.product.findUnique({ where: { id: ci.productId }, select: { id: true } });
+            if (!comboExists || !productExists) continue;
+            await prisma.comboItem.upsert({
+              where: { id: ci.id },
+              update: { comboId: ci.comboId, productId: ci.productId, quantity: ci.quantity, customPrice: ci.customPrice ?? null },
+              create: { id: ci.id, comboId: ci.comboId, productId: ci.productId, quantity: ci.quantity, customPrice: ci.customPrice ?? null },
+            });
+          }
+        }
+
+        const resPromo = await fetch(`${supabaseUrl}/rest/v1/Promotion?${tenantParam}&select=*`, { headers });
+        if (resPromo.ok) {
+          const cloudPromos = await resPromo.json();
+          for (const pr of cloudPromos) {
+            const existingPromo = await prisma.promotion.findUnique({ where: { id: pr.id }, select: { updatedAt: true } });
+            if (existingPromo && !isCloudNewer(pr.updatedAt, existingPromo.updatedAt)) {
+              continue;
+            }
+            await prisma.promotion.upsert({
+              where: { id: pr.id },
+              update: {
+                name: pr.name, description: pr.description || null, type: pr.type, status: pr.status || 'ACTIVE',
+                discountType: pr.discountType, discountValue: pr.discountValue, minQuantity: pr.minQuantity,
+                maxDiscountQty: pr.maxDiscountQty, priority: pr.priority ?? 0, imageUrl: pr.imageUrl || null,
+                startDate: pr.startDate ? new Date(pr.startDate) : null, endDate: pr.endDate ? new Date(pr.endDate) : null,
+                updatedAt: new Date(pr.updatedAt),
+              },
+              create: {
+                id: pr.id, name: pr.name, description: pr.description || null, type: pr.type, status: pr.status || 'ACTIVE',
+                discountType: pr.discountType, discountValue: pr.discountValue, minQuantity: pr.minQuantity,
+                maxDiscountQty: pr.maxDiscountQty, priority: pr.priority ?? 0, imageUrl: pr.imageUrl || null,
+                startDate: pr.startDate ? new Date(pr.startDate) : null, endDate: pr.endDate ? new Date(pr.endDate) : null,
+                createdAt: new Date(pr.createdAt), updatedAt: new Date(pr.updatedAt),
+              },
+            });
+          }
+        }
+
+        // PromotionCondition no existe como tabla en Supabase (las condiciones viajan
+        // embebidas como JSON en Promotion.conditions), así que no hay pull separado.
+      } catch (cpErr) {
+        console.warn("[Sync] Error al descargar Combos/Promociones desde Supabase:", cpErr);
+      }
     } catch (pullErr) {
       console.warn("[Sync] Error al descargar entidades desde Supabase:", pullErr);
     }
@@ -793,6 +960,7 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
         quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert, unitType: p.unitType,
         isPublicWeb: p.isPublicWeb !== false, webCategory: p.webCategory || null,
         brandId: p.brandId, categoryId: p.categoryId, supplierId: p.supplierId,
+        imageUrl: p.imageUrl || null,
         createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString()
       }));
       
@@ -896,6 +1064,7 @@ async function pushEntitiesToSupabase(
 }
 
 export async function syncSingleProduct(productId: number): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
   try {
     const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
 
@@ -932,6 +1101,7 @@ export async function syncSingleProduct(productId: number): Promise<boolean> {
       pricePurchase: fmtDec(product.pricePurchase), priceSale: fmtDec(product.priceSale),
       quantityStock: product.quantityStock, stockMinAlert: product.stockMinAlert, unitType: product.unitType,
       isPublicWeb: product.isPublicWeb !== false, webCategory: product.webCategory || null,
+      imageUrl: product.imageUrl || null,
       brandId: product.brandId, categoryId: product.categoryId, supplierId: product.supplierId,
       createdAt: product.createdAt.toISOString(), updatedAt: product.updatedAt.toISOString()
     }];
@@ -954,6 +1124,7 @@ export async function syncSingleProduct(productId: number): Promise<boolean> {
 }
 
 export async function syncProducts(productIds: number[]): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
   try {
     const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
 
@@ -994,6 +1165,7 @@ export async function syncProducts(productIds: number[]): Promise<boolean> {
       pricePurchase: fmtDec(p.pricePurchase), priceSale: fmtDec(p.priceSale),
       quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert, unitType: p.unitType,
       isPublicWeb: p.isPublicWeb !== false, webCategory: p.webCategory || null,
+      imageUrl: p.imageUrl || null,
       brandId: p.brandId, categoryId: p.categoryId, supplierId: p.supplierId,
       createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString()
     }));
@@ -1012,6 +1184,7 @@ export async function syncProducts(productIds: number[]): Promise<boolean> {
 }
 
 export async function deleteProductFromSupabase(productId: number): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
   try {
     const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
 
@@ -1032,6 +1205,7 @@ export async function deleteProductFromSupabase(productId: number): Promise<bool
 }
 
 export async function syncWebOrderToSupabase(orderId: number): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
   try {
     const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
 
@@ -1070,6 +1244,7 @@ export async function syncWebOrderToSupabase(orderId: number): Promise<boolean> 
         clientPhone: order.clientPhone,
         shippingAddress: order.shippingAddress,
         deliveryType: order.deliveryType,
+        branchId: order.branchId ?? null,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         status: order.status,
@@ -1100,6 +1275,7 @@ export async function syncWebOrderToSupabase(orderId: number): Promise<boolean> 
 }
 
 export async function deleteWebOrdersFromSupabase(webOrderNumbers: string[]): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
   try {
     const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
 
@@ -1147,6 +1323,7 @@ export async function deleteWebOrdersFromSupabase(webOrderNumbers: string[]): Pr
 }
 
 export async function pullSingleProductStock(productId: number): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
   try {
     const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
     const headers = { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` };
@@ -1179,6 +1356,7 @@ export async function pullSingleProductStock(productId: number): Promise<boolean
 // vendidos (solo de la sucursal local) y baja el de las otras sucursales para
 // esos mismos productos, sin recorrer el resto del catálogo. Fire-and-forget.
 export async function syncStockForProducts(productIds: number[]): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
   try {
     const uniqueIds = Array.from(new Set(productIds));
     if (uniqueIds.length === 0) return false;
@@ -1202,6 +1380,7 @@ export async function syncStockForProducts(productIds: number[]): Promise<boolea
       pricePurchase: fmtDec(p.pricePurchase), priceSale: fmtDec(p.priceSale),
       quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert, unitType: p.unitType,
       isPublicWeb: p.isPublicWeb !== false, webCategory: p.webCategory || null,
+      imageUrl: p.imageUrl || null,
       brandId: p.brandId, categoryId: p.categoryId, supplierId: p.supplierId,
       createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString()
     }));
@@ -1250,6 +1429,7 @@ export async function syncStockForProducts(productIds: number[]): Promise<boolea
 // responder o cancelar un traspaso, para que la otra sucursal lo vea sin
 // esperar el sync global.
 export async function syncStockTransferToSupabase(transferId: number): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
   try {
     const { supabaseUrl, supabaseKey, tenantId } = await getSelectiveSyncCredentials();
 

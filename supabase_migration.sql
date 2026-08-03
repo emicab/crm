@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS "WebOrder" (
     "clientPhone" TEXT NOT NULL,
     "shippingAddress" TEXT,
     "deliveryType" TEXT NOT NULL,
+    "branchId" INTEGER,
     "paymentMethod" TEXT NOT NULL,
     "paymentStatus" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'PENDING_PREPARATION',
@@ -104,7 +105,15 @@ ALTER TABLE IF EXISTS "StoreConfig" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "WebOrder" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "WebOrderItem" DISABLE ROW LEVEL SECURITY;
 
--- 7. Agregar columna imageUrl a Product y Combo (para reflejar imágenes en la tienda)
+-- 6b. Agregar columna branchId a WebOrder (sucursal que despacha/prepara)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'WebOrder' AND column_name = 'branchId') THEN
+        ALTER TABLE "WebOrder" ADD COLUMN "branchId" INTEGER;
+    END IF;
+END $$;
+
+-- 7. Agregar columna imageUrl a Product, Combo y Promotion (para reflejar imágenes en la tienda)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'imageUrl') THEN
@@ -113,6 +122,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Combo' AND column_name = 'imageUrl') THEN
         ALTER TABLE "Combo" ADD COLUMN "imageUrl" TEXT;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Promotion' AND column_name = 'imageUrl') THEN
+        ALTER TABLE "Promotion" ADD COLUMN "imageUrl" TEXT;
+    END IF;
 END $$;
 
 -- 8. Agregar columna customDomain a StoreConfig (dominio personalizado de la tienda, ej. clinstore.com.ar)
@@ -120,5 +132,17 @@ DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'StoreConfig' AND column_name = 'customDomain') THEN
         ALTER TABLE "StoreConfig" ADD COLUMN "customDomain" TEXT;
+    END IF;
+END $$;
+
+-- 9. Agregar columnas items (Combo) y conditions (Promotion) como JSONB para que la
+--    tienda web lea el contenido de combos y las condiciones de promociones sin joins.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Combo' AND column_name = 'items') THEN
+        ALTER TABLE "Combo" ADD COLUMN "items" JSONB DEFAULT '[]'::jsonb;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Promotion' AND column_name = 'conditions') THEN
+        ALTER TABLE "Promotion" ADD COLUMN "conditions" JSONB DEFAULT '[]'::jsonb;
     END IF;
 END $$;
