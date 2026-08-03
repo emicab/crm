@@ -2,7 +2,7 @@
 
 import React from "react";
 import Button from "@/components/ui/Button";
-import { X, Edit, Globe, EyeOff, ArrowRightLeft } from "lucide-react";
+import { X, Edit, Globe, EyeOff, ArrowRightLeft, Trash2 } from "lucide-react";
 
 interface SelectedBarProps {
   count: number;
@@ -15,6 +15,7 @@ interface SelectedBarProps {
   onPublishWeb?: () => void;
   onHideWeb?: () => void;
   onTransferStock?: () => void;
+  onDelete?: () => void;
 }
 
 const SelectedBar: React.FC<SelectedBarProps> = ({
@@ -28,6 +29,7 @@ const SelectedBar: React.FC<SelectedBarProps> = ({
   onPublishWeb,
   onHideWeb,
   onTransferStock,
+  onDelete,
 }) => {
   if (count === 0 && !isAllPagesSelected) return null;
 
@@ -107,6 +109,16 @@ const SelectedBar: React.FC<SelectedBarProps> = ({
         >
           <X size={14} className="mr-1" /> Limpiar
         </Button>
+        {onDelete && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDelete}
+            className="border-rose-600 text-rose-700 hover:bg-rose-100 bg-white font-semibold flex items-center gap-1"
+          >
+            <Trash2 size={14} className="text-rose-600" /> Eliminar Masivo
+          </Button>
+        )}
         <Button variant="primary" size="sm" onClick={onBatchUpdate}>
           <Edit size={14} className="mr-1" /> Edición Masiva
         </Button>

@@ -34,6 +34,8 @@ const ProductTable = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Product | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBatchSupplierModalOpen, setIsBatchSupplierModalOpen] =
@@ -298,6 +300,36 @@ const ProductTable = () => {
     }
   };
 
+  const handleConfirmBatchDelete = async () => {
+    setIsBatchDeleting(true);
+    try {
+      const payload = isAllPagesSelected
+        ? { allPages: true, filters }
+        : { ids: Array.from(selectedIds) };
+
+      const response = await fetch("/api/products/batch-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const errorData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(errorData.message || "Error al eliminar productos.");
+      }
+
+      toast.success(
+        `Se eliminaron ${errorData.count ?? selectedIds.size} producto(s).`,
+      );
+      handleClearSelection();
+      setIsBatchDeleteOpen(false);
+      fetchProducts(page);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error inesperado.");
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
   const handleToggleWebPublic = async (
     productId: number,
     newStatus: boolean,
@@ -366,6 +398,25 @@ const ProductTable = () => {
           &quot;{itemToDelete?.name}&quot;
         </strong>
         ? Esta acción no se puede deshacer.
+      </ConfirmationModal>
+
+      <ConfirmationModal
+        isOpen={isBatchDeleteOpen}
+        onClose={() => setIsBatchDeleteOpen(false)}
+        onConfirm={handleConfirmBatchDelete}
+        title="Eliminar Productos Masivamente"
+        confirmText="Sí, Eliminar Todos"
+        isLoading={isBatchDeleting}
+      >
+        ¿Estás seguro de que querés eliminar{" "}
+        <strong className="text-foreground">
+          {isAllPagesSelected
+            ? `los ${totalProducts.toLocaleString("es-AR")} productos seleccionados (TODAS las páginas)`
+            : `${selectedIds.size} producto${selectedIds.size !== 1 ? "s" : ""} seleccionado${selectedIds.size !== 1 ? "s" : ""}`}
+        </strong>
+        ? Esta acción no se puede deshacer. Los productos que estén asociados a
+        ventas, compras, combos, promociones, consignaciones o traspasos no se
+        eliminarán.
       </ConfirmationModal>
 
       <BatchSupplierModal
@@ -460,6 +511,7 @@ const ProductTable = () => {
           onPublishWeb={() => handleBatchWebStatus(true)}
           onHideWeb={() => handleBatchWebStatus(false)}
           onTransferStock={handleOpenTransferForSelected}
+          onDelete={() => setIsBatchDeleteOpen(true)}
         />
         <div className="overflow-x-auto">
           <table className="hidden md:table w-full text-left table-auto">
