@@ -48,12 +48,14 @@ export default async function handler(
           allowDelivery: true,
           deliveryFee: '0',
           minDeliveryAmount: '0',
+          businessSector: 'GASTRONOMIA',
         });
         return;
       }
 
       res.status(200).json({
         ...config,
+        businessSector: config.businessSector || 'GASTRONOMIA',
         deliveryFee: config.deliveryFee ? config.deliveryFee.toString() : '0',
         minDeliveryAmount: config.minDeliveryAmount ? config.minDeliveryAmount.toString() : '0',
         mpFeePercent: config.mpFeePercent ? config.mpFeePercent.toString() : '0',
@@ -94,6 +96,7 @@ export default async function handler(
         allowDelivery,
         deliveryFee,
         minDeliveryAmount,
+        businessSector,
       } = req.body;
 
       if (!slug || !slug.trim()) {
@@ -123,6 +126,8 @@ export default async function handler(
       const parsedDeliveryFee = new Prisma.Decimal(parseFloat(deliveryFee) || 0);
       const parsedMinDeliveryAmount = new Prisma.Decimal(parseFloat(minDeliveryAmount) || 0);
       const parsedMinStockBuffer = minStockBuffer !== undefined && minStockBuffer !== '' ? (parseFloat(minStockBuffer) || 1) : 1;
+      const validSectors = ['GASTRONOMIA', 'INDUMENTARIA', 'MINIMARKET', 'RETAIL_GENERAL'];
+      const cleanBusinessSector = validSectors.includes(businessSector) ? businessSector : 'GASTRONOMIA';
 
       let result;
       if (existingConfig) {
@@ -146,6 +151,7 @@ export default async function handler(
             allowDelivery: allowDelivery !== undefined ? Boolean(allowDelivery) : true,
             deliveryFee: parsedDeliveryFee,
             minDeliveryAmount: parsedMinDeliveryAmount,
+            businessSector: cleanBusinessSector,
           },
         });
       } else {
@@ -168,6 +174,7 @@ export default async function handler(
             allowDelivery: allowDelivery !== undefined ? Boolean(allowDelivery) : true,
             deliveryFee: parsedDeliveryFee,
             minDeliveryAmount: parsedMinDeliveryAmount,
+            businessSector: cleanBusinessSector,
           },
         });
       }

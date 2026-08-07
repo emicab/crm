@@ -117,6 +117,66 @@ export function toPbsPayload(bs: any, tenantId: string): Record<string, any> {
   };
 }
 
+// Id determinista para ProductModifierGroup: igual patrón que RecipeItem
+// (productId*1000000 + índice dentro del producto) para que el upsert por PK
+// (tenant_id+id) no duplique filas entre POS ni dependa de ids autoincrementales locales.
+export function toModifierGroupPayload(g: any, groupIdx: number, tenantId: string): Record<string, any> {
+  return {
+    id: Number(g.productId) * 1000000 + groupIdx,
+    productId: g.productId, name: g.name, type: g.type || "MULTI_SELECT",
+    isRequired: g.isRequired === true, minSelect: g.minSelect ?? 0, maxSelect: g.maxSelect ?? null,
+    tenant_id: tenantId,
+    createdAt: g.createdAt?.toISOString?.() || new Date().toISOString(),
+    updatedAt: g.updatedAt?.toISOString?.() || new Date().toISOString()
+  };
+}
+
+// Id determinista para ProductModifierOption: productId*1000000 + índice dentro del
+// producto (contador global por producto, no por grupo) para mantener unicidad.
+export function toModifierOptionPayload(o: any, optionIdx: number, tenantId: string, modifierGroupCloudId: number): Record<string, any> {
+  return {
+    id: Number(o.modifierGroup.productId) * 1000000 + optionIdx,
+    modifierGroupId: modifierGroupCloudId,
+    name: o.name, priceExtra: fmtDec(o.priceExtra), colorHex: o.colorHex || null,
+    ingredientId: o.ingredientId ?? null, ingredientQty: fmtDec(o.ingredientQty, "1"),
+    tenant_id: tenantId,
+    createdAt: o.createdAt?.toISOString?.() || new Date().toISOString(),
+    updatedAt: o.updatedAt?.toISOString?.() || new Date().toISOString()
+  };
+}
+
+// Construye los arrays de ProductModifierGroup/ProductModifierOption con ids
+// determinísticos, agrupando las opciones por su grupo local para calcular el
+// modifierGroupId de nube correcto. Se reutiliza en buildPushPayload y en el
+// refreshProductPayload para que ambos caminos suban el MISMO set.
+export function buildModifierPayloads(
+  modifierGroups: any[],
+  modifierOptions: any[],
+  tenantId: string
+): { ProductModifierGroup: Record<string, any>[]; ProductModifierOption: Record<string, any>[] } {
+  const groupCounters = new Map<number, number>();
+  const optionCounters = new Map<number, number>();
+  const groupCloudIdByLocal = new Map<number, number>();
+
+  const groupPayloads = modifierGroups.map((g) => {
+    const idx = groupCounters.get(g.productId) ?? 0;
+    groupCounters.set(g.productId, idx + 1);
+    const cloudId = Number(g.productId) * 1000000 + idx;
+    groupCloudIdByLocal.set(g.id, cloudId);
+    return toModifierGroupPayload(g, idx, tenantId);
+  });
+
+  const optionPayloads = modifierOptions.map((o) => {
+    const cloudGroupId = groupCloudIdByLocal.get(o.modifierGroupId);
+    if (cloudGroupId === undefined) return null;
+    const idx = optionCounters.get(o.modifierGroup.productId) ?? 0;
+    optionCounters.set(o.modifierGroup.productId, idx + 1);
+    return toModifierOptionPayload(o, idx, tenantId, cloudGroupId);
+  }).filter((x): x is Record<string, any> => x !== null);
+
+  return { ProductModifierGroup: groupPayloads, ProductModifierOption: optionPayloads };
+}
+
 export function toBrandPayload(b: any, tenantId: string): Record<string, any> {
   return {
     id: b.id, name: b.name, logoUrl: b.logoUrl, tenant_id: tenantId,
@@ -154,6 +214,7 @@ export function toWebOrderPayload(order: any, cloudId: number, tenantId: string)
     status: order.status,
     totalAmount: fmtDec(order.totalAmount),
     mpFeeAmount: fmtDec(order.mpFeeAmount, "0"),
+    scheduledFor: order.scheduledFor ? (typeof order.scheduledFor === "string" ? order.scheduledFor : order.scheduledFor.toISOString()) : null,
     notes: order.notes,
     tenant_id: tenantId,
     createdAt: order.createdAt.toISOString(),
@@ -163,15 +224,13 @@ export function toWebOrderPayload(order: any, cloudId: number, tenantId: string)
 
 export function toWebOrderItemPayload(item: any, cloudId: number, index: number, tenantId: string): Record<string, any> {
   return {
-    // El id de nube se calcula con el mismo esquema que usa clinstore
-    // (orderId * 100 + index) para que el upsert (PK tenant_id+id) sea
-    // idempotente y no duplique items en cada sync.
     id: cloudId * 100 + index,
     webOrderId: cloudId,
     productId: item.productId,
     quantity: item.quantity,
     unitPrice: fmtDec(item.unitPrice),
     subtotal: fmtDec(item.subtotal),
+    modifiers: item.modifiers || null,
     tenant_id: tenantId
   };
 }
@@ -235,6 +294,8 @@ interface SyncEntities {
   comboItems: any[];
   webOrders: any[];
   storeConfigs: any[];
+  modifierGroups: any[];
+  modifierOptions: any[];
 }
 
 // La Casa Central revalida su licencia online en cada sync: si el plan bajó
@@ -323,6 +384,15 @@ export async function loadLocalEntities(lastSync: Date, forceFullSync: boolean):
     }),
     webOrders: await prisma.webOrder.findMany({ where: whereRecent, include: { items: true } }),
     storeConfigs: await prisma.storeConfig.findMany(),
+    modifierGroups: await prisma.productModifierGroup.findMany({
+      where: forceFullSync ? {} : { product: { updatedAt: { gt: lastSync } } },
+      orderBy: { id: "asc" },
+    }),
+    modifierOptions: await prisma.productModifierOption.findMany({
+      where: forceFullSync ? {} : { modifierGroup: { updatedAt: { gt: lastSync } } },
+      orderBy: { id: "asc" },
+      include: { modifierGroup: { select: { id: true, productId: true } } },
+    }),
   };
 }
 
@@ -358,8 +428,10 @@ export function buildPushPayload(
     brands, categories, suppliers, branches, branchStocks, stockTransfers, stockTransferItems,
     discountCodes, promotions, clients, sellers, users, products, recipeItems, cashRegisters, accountBalances,
     combos, comboItems, sales, saleItems, purchases, purchaseItems, expenses, cashMovements,
-    accountMovements, webOrders, storeConfigs
+    accountMovements, webOrders, storeConfigs, modifierGroups, modifierOptions
   } = entities;
+
+  const modifierPayloads = buildModifierPayloads(modifierGroups, modifierOptions, tenantId);
 
   return {
     Brand: brands.map(b => toBrandPayload(b, tenantId)),
@@ -379,6 +451,8 @@ export function buildPushPayload(
         return toRecipeItemPayload(ri, idx, tenantId);
       });
     })(),
+    ProductModifierGroup: modifierPayloads.ProductModifierGroup,
+    ProductModifierOption: modifierPayloads.ProductModifierOption,
     ProductBranchStock: branchStocks.map(bs => toPbsPayload(bs, tenantId)),
     StockTransfer: stockTransfers.map(st => toStockTransferPayload(st, tenantId)),
     StockTransferItem: stockTransferItems.map(sti => toStockTransferItemPayload(sti, tenantId)),
@@ -494,6 +568,7 @@ export function buildPushPayload(
       primaryColor: sc.primaryColor, isWebActive: sc.isWebActive, mpAccessToken: sc.mpAccessToken, mpPublicKey: sc.mpPublicKey,
       mpFeePercent: fmtDec(sc.mpFeePercent), whatsappPhone: sc.whatsappPhone, minStockBuffer: sc.minStockBuffer, allowPickup: sc.allowPickup,
       allowDelivery: sc.allowDelivery, deliveryFee: fmtDec(sc.deliveryFee), minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
+      businessSector: sc.businessSector || "GASTRONOMIA",
       tenant_id: tenantId, createdAt: sc.createdAt.toISOString(), updatedAt: sc.updatedAt.toISOString()
     })) : [],
     Setting: isMainDeviceFlag && config.app_plan ? [{
@@ -519,6 +594,7 @@ export async function refreshStoreConfigPayload(payload: Record<string, any[]>, 
         minStockBuffer: sc.minStockBuffer, allowPickup: sc.allowPickup,
         allowDelivery: sc.allowDelivery, deliveryFee: fmtDec(sc.deliveryFee),
         minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
+        businessSector: sc.businessSector || "GASTRONOMIA",
         tenant_id: tenantId, createdAt: sc.createdAt.toISOString(),
         updatedAt: sc.updatedAt.toISOString()
       }));
@@ -544,6 +620,19 @@ export async function refreshProductPayload(
         where: { product: { updatedAt: { gt: lastSync } } },
         orderBy: { ingredientId: "asc" },
       });
+  const freshModifierGroups = forceFullSync
+    ? await prisma.productModifierGroup.findMany({ orderBy: { id: "asc" } })
+    : await prisma.productModifierGroup.findMany({
+        where: { product: { updatedAt: { gt: lastSync } } },
+        orderBy: { id: "asc" },
+      });
+  const freshModifierOptions = forceFullSync
+    ? await prisma.productModifierOption.findMany({ orderBy: { id: "asc" }, include: { modifierGroup: { select: { id: true, productId: true } } } })
+    : await prisma.productModifierOption.findMany({
+        where: { modifierGroup: { updatedAt: { gt: lastSync } } },
+        orderBy: { id: "asc" },
+        include: { modifierGroup: { select: { id: true, productId: true } } },
+      });
 
   payload.Product = freshProducts.map(p => toProductPayload(p, tenantId));
   payload.ProductBranchStock = freshBranchStocks.map(bs => toPbsPayload(bs, tenantId));
@@ -553,6 +642,9 @@ export async function refreshProductPayload(
     counters.set(ri.productId, idx + 1);
     return toRecipeItemPayload(ri, idx, tenantId);
   });
+  const modifierPayloads = buildModifierPayloads(freshModifierGroups, freshModifierOptions, tenantId);
+  payload.ProductModifierGroup = modifierPayloads.ProductModifierGroup;
+  payload.ProductModifierOption = modifierPayloads.ProductModifierOption;
 }
 
 // Descarga los pedidos web desde Supabase y los aplica localmente (crea los
@@ -599,7 +691,10 @@ export async function pullWebOrdersFromCloud(ctx: SyncPhaseContext): Promise<voi
                   productId: i.productId,
                   quantity: i.quantity,
                   unitPrice: i.unitPrice,
-                  subtotal: i.subtotal
+                  subtotal: i.subtotal,
+                  modifiers: i.modifiers
+                    ? (typeof i.modifiers === "string" ? i.modifiers : JSON.stringify(i.modifiers))
+                    : null,
                 }))
               }
             }

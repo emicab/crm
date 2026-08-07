@@ -10,6 +10,7 @@ import {
   AlertCircle,
   EyeOff,
   Globe,
+  Sliders,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -25,6 +26,7 @@ import SelectedBar from "./SelectedBar";
 import CSVImportModal from "./CSVImportModal";
 import { TransferStockModal, type TransferItem } from "./TransferStockModal";
 import { BatchPriceModal } from "./BatchPriceModal";
+import ProductModifiersModal from "./ProductModifiersModal";
 
 const ProductTable = () => {
   const router = useRouter();
@@ -70,6 +72,19 @@ const ProductTable = () => {
   const [transferInitialItems, setTransferInitialItems] = useState<
     TransferItem[]
   >([]);
+
+  const [selectedProductForModifiers, setSelectedProductForModifiers] = useState<Product | null>(null);
+  const [isModifiersModalOpen, setIsModifiersModalOpen] = useState(false);
+  const [businessSector, setBusinessSector] = useState("GASTRONOMIA");
+
+  useEffect(() => {
+    fetch("/api/store-config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => {
+        if (cfg?.businessSector) setBusinessSector(cfg.businessSector);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Cargar sucursal activa guardada en esta PC por defecto
@@ -698,8 +713,22 @@ const ProductTable = () => {
                         </button>
                       </td>
                     )}
-                    <td className="py-2.5 px-2 text-sm text-center w-20 whitespace-nowrap">
+                    <td className="py-2.5 px-2 text-sm text-center w-24 whitespace-nowrap">
                       <div className="flex items-center justify-center space-x-1">
+                        {product.isRecipe && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSelectedProductForModifiers(product);
+                              setIsModifiersModalOpen(true);
+                            }}
+                            title="Personalizar Variantes & Modificadores (Talles, Colores, Agregados)"
+                            className="h-7 w-7 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
+                          >
+                            <Sliders size={15} />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -750,6 +779,15 @@ const ProductTable = () => {
           onPageChange={handlePageChange}
         />
       </div>
+
+      <ProductModifiersModal
+        isOpen={isModifiersModalOpen}
+        onClose={() => setIsModifiersModalOpen(false)}
+        productId={selectedProductForModifiers?.id || 0}
+        productName={selectedProductForModifiers?.name || ""}
+        businessSector={businessSector}
+        onSuccess={() => fetchProducts(page)}
+      />
     </>
   );
 };

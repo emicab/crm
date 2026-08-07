@@ -41,6 +41,7 @@ export default function ConfigTiendaWebTab() {
     allowDelivery: true,
     deliveryFee: 0,
     minDeliveryAmount: 0,
+    businessSector: "GASTRONOMIA",
   });
 
   const fetchConfig = async () => {
@@ -71,6 +72,7 @@ export default function ConfigTiendaWebTab() {
               : true,
           deliveryFee: parseFloat(data.deliveryFee) || 0,
           minDeliveryAmount: parseFloat(data.minDeliveryAmount) || 0,
+          businessSector: data.businessSector || "GASTRONOMIA",
         });
       }
     } catch (err) {
@@ -289,7 +291,7 @@ export default function ConfigTiendaWebTab() {
           Tienda
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Input
             label="Subdominio / Slug de la Tienda *"
             name="slug"
@@ -306,6 +308,22 @@ export default function ConfigTiendaWebTab() {
             placeholder="ej. Panadería y Confitería Don Yeyo"
             required
           />
+          <div>
+            <label className="block text-sm font-medium text-foreground-muted mb-1">
+              Rubro Comercial del Negocio
+            </label>
+            <select
+              name="businessSector"
+              value={formData.businessSector}
+              onChange={handleChange}
+              className="w-full p-2.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50 font-semibold"
+            >
+              <option value="GASTRONOMIA">🍔 Gastronomía (Restaurantes, Cafés, Dark Kitchens)</option>
+              <option value="INDUMENTARIA">👕 Indumentaria y Calzado (Talles y Colores)</option>
+              <option value="MINIMARKET">🛒 Minimarket / Almacén / Kiosco</option>
+              <option value="RETAIL_GENERAL">🛍️ Retail y Comercio General</option>
+            </select>
+          </div>
         </div>
 
         <div>

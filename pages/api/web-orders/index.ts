@@ -118,6 +118,9 @@ export default async function handler(
           quantity: qty,
           unitPrice: dbPrice,
           subtotal: subtotal,
+          modifiers: rawItem.modifiers
+            ? (typeof rawItem.modifiers === 'string' ? rawItem.modifiers : JSON.stringify(rawItem.modifiers))
+            : null,
         });
       }
 

@@ -25,6 +25,7 @@ import {
   toProductPayload,
   toPbsPayload,
   toRecipeItemPayload,
+  buildModifierPayloads,
   toBrandPayload,
   toCategoryPayload,
   toSupplierPayload,
@@ -339,6 +340,74 @@ async function pushRecipeItemsToSupabase(
   }).catch((err) => console.warn("[Sync] Error al subir RecipeItem a la nube:", err));
 }
 
+// Sincroniza los grupos/opciones de modifiers de productos puntuales: borra los
+// registros de esos productos en la nube y re-inserta el set actual con ids
+// deterministas (mismo patrón que pushRecipeItemsToSupabase).
+export async function syncModifierGroupsForProducts(tenantId: string, productIds: number[]): Promise<boolean> {
+  if (!(await isCloudAllowed())) return false;
+  if (productIds.length === 0) return true;
+  try {
+    const { supabaseUrl, supabaseKey } = await getSelectiveSyncCredentials();
+    const headers = { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" };
+    const idsParam = productIds.join(",");
+    const tenantParam = `tenant_id=eq.${encodeURIComponent(tenantId)}`;
+
+    // 1. Cargar grupos locales para calcular sus ids deterministas de nube y borrar opciones/grupos.
+    const groups = await prisma.productModifierGroup.findMany({
+      where: { productId: { in: productIds } },
+      orderBy: { id: "asc" },
+    });
+    const counters = new Map<number, number>();
+    const cloudGroupIds = groups.map((g) => {
+      const idx = counters.get(g.productId) ?? 0;
+      counters.set(g.productId, idx + 1);
+      return Number(g.productId) * 1000000 + idx;
+    });
+
+    // 2. Borrar opciones y grupos de esos productos (evita huérfanos).
+    if (cloudGroupIds.length > 0) {
+      await fetch(`${supabaseUrl}/rest/v1/ProductModifierOption?${tenantParam}&modifierGroupId=in.(${cloudGroupIds.join(",")})`, {
+        method: "DELETE",
+        headers,
+      }).catch((err) => console.warn("[Sync] Error al limpiar ProductModifierOption en la nube:", err));
+    }
+    await fetch(`${supabaseUrl}/rest/v1/ProductModifierGroup?${tenantParam}&productId=in.(${idsParam})`, {
+      method: "DELETE",
+      headers,
+    }).catch((err) => console.warn("[Sync] Error al limpiar ProductModifierGroup en la nube:", err));
+
+    // 3. Subir el set actual con ids deterministas.
+    if (groups.length === 0) return true;
+
+    const options = await prisma.productModifierOption.findMany({
+      where: { modifierGroup: { productId: { in: productIds } } },
+      orderBy: { id: "asc" },
+      include: { modifierGroup: { select: { id: true, productId: true } } },
+    });
+
+    const { ProductModifierGroup, ProductModifierOption } = buildModifierPayloads(groups, options, tenantId);
+
+    if (ProductModifierGroup.length > 0) {
+      await fetch(`${supabaseUrl}/rest/v1/ProductModifierGroup`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(ProductModifierGroup),
+      }).catch((err) => console.warn("[Sync] Error al subir ProductModifierGroup a la nube:", err));
+    }
+    if (ProductModifierOption.length > 0) {
+      await fetch(`${supabaseUrl}/rest/v1/ProductModifierOption`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(ProductModifierOption),
+      }).catch((err) => console.warn("[Sync] Error al subir ProductModifierOption a la nube:", err));
+    }
+    return true;
+  } catch (error) {
+    console.error("Error en syncModifierGroupsForProducts:", error);
+    return false;
+  }
+}
+
 export async function syncSingleProduct(productId: number): Promise<boolean> {
   if (!(await isCloudAllowed())) return false;
   try {
@@ -365,6 +434,7 @@ export async function syncSingleProduct(productId: number): Promise<boolean> {
       orderBy: { ingredientId: "asc" },
     });
     await pushRecipeItemsToSupabase(supabaseUrl, supabaseKey, tenantId, [productId], recipeItems);
+    await syncModifierGroupsForProducts(tenantId, [productId]);
 
     await pushEntitiesToSupabase(supabaseUrl, supabaseKey, payload);
 
@@ -408,6 +478,7 @@ export async function syncProducts(productIds: number[]): Promise<boolean> {
       orderBy: { ingredientId: "asc" },
     });
     await pushRecipeItemsToSupabase(supabaseUrl, supabaseKey, tenantId, productIds, recipeItems);
+    await syncModifierGroupsForProducts(tenantId, productIds);
 
     await pushEntitiesToSupabase(supabaseUrl, supabaseKey, payload);
     return true;

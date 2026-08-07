@@ -15,12 +15,14 @@ import {
   Globe,
   EyeOff,
   Lock,
+  Sliders,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { formatQuantity } from "@/lib/recipeUnits";
 import { useModules } from "@/hooks/useModules";
 import IngredientForm from "@/components/recetario/IngredientForm";
+import ProductModifiersModal from "@/components/productos/ProductModifiersModal";
 import { toast } from "react-hot-toast";
 
 interface RecipeItemView {
@@ -94,6 +96,20 @@ export default function RecetarioPage() {
   const [historyRecipe, setHistoryRecipe] = useState<RecipeView | null>(null);
   const [costHistory, setCostHistory] = useState<CostEntry[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // Modifiers modal
+  const [selectedRecipeForModifiers, setSelectedRecipeForModifiers] = useState<RecipeView | null>(null);
+  const [isModifiersModalOpen, setIsModifiersModalOpen] = useState(false);
+  const [businessSector, setBusinessSector] = useState("GASTRONOMIA");
+
+  useEffect(() => {
+    fetch("/api/store-config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => {
+        if (cfg?.businessSector) setBusinessSector(cfg.businessSector);
+      })
+      .catch(() => {});
+  }, []);
 
   const isPro = plan === "pro";
 
@@ -423,6 +439,16 @@ export default function RecetarioPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => {
+                            setSelectedRecipeForModifiers(recipe);
+                            setIsModifiersModalOpen(true);
+                          }}
+                          title="Personalizar Variantes & Modificadores (Talles, Colores, Agregados)"
+                          className="p-1.5 rounded-md hover:bg-border text-foreground-muted hover:text-indigo-600 transition-colors"
+                        >
+                          <Sliders size={16} />
+                        </button>
                         <Link
                           href={`/productos/${recipe.id}/editar`}
                           title="Editar receta"
@@ -648,6 +674,16 @@ export default function RecetarioPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Modificadores & Variantes */}
+      <ProductModifiersModal
+        isOpen={isModifiersModalOpen}
+        onClose={() => setIsModifiersModalOpen(false)}
+        productId={selectedRecipeForModifiers?.id || 0}
+        productName={selectedRecipeForModifiers?.name || ""}
+        businessSector={businessSector}
+        onSuccess={loadRecipes}
+      />
     </div>
   );
 }

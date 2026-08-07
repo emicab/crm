@@ -402,6 +402,54 @@ const MIGRATIONS: &[Migration] = &[
             CREATE INDEX IF NOT EXISTS "RecipeCostHistory_createdAt_idx" ON "RecipeCostHistory" ("createdAt");
         "#,
     },
+    Migration {
+        version: 17,
+        name: "add_product_modifiers_and_business_sector",
+        sql: r#"
+            ALTER TABLE "StoreConfig" ADD COLUMN "businessSector" TEXT NOT NULL DEFAULT 'GASTRONOMIA';
+
+            ALTER TABLE "WebOrder" ADD COLUMN "scheduledFor" DATETIME;
+
+            ALTER TABLE "WebOrderItem" ADD COLUMN "modifiers" TEXT;
+
+            ALTER TABLE "SaleItem" ADD COLUMN "modifiers" TEXT;
+
+            CREATE TABLE IF NOT EXISTS "ProductModifierGroup" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "productId" INTEGER NOT NULL,
+                "name" TEXT NOT NULL,
+                "type" TEXT NOT NULL DEFAULT 'MULTI_SELECT',
+                "isRequired" BOOLEAN NOT NULL DEFAULT 0,
+                "minSelect" INTEGER NOT NULL DEFAULT 0,
+                "maxSelect" INTEGER,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "ProductModifierGroup_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS "ProductModifierGroup_productId_idx" ON "ProductModifierGroup" ("productId");
+
+            CREATE TABLE IF NOT EXISTS "ProductModifierOption" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "modifierGroupId" INTEGER NOT NULL,
+                "name" TEXT NOT NULL,
+                "priceExtra" DECIMAL NOT NULL DEFAULT 0,
+                "colorHex" TEXT,
+                "ingredientId" INTEGER,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "ProductModifierOption_modifierGroupId_fkey" FOREIGN KEY ("modifierGroupId") REFERENCES "ProductModifierGroup" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT "ProductModifierOption_ingredientId_fkey" FOREIGN KEY ("ingredientId") REFERENCES "Product" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS "ProductModifierOption_modifierGroupId_idx" ON "ProductModifierOption" ("modifierGroupId");
+        "#,
+    },
+    Migration {
+        version: 18,
+        name: "add_modifier_option_ingredient_qty",
+        sql: r#"
+            ALTER TABLE "ProductModifierOption" ADD COLUMN "ingredientQty" DECIMAL NOT NULL DEFAULT 1;
+        "#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {

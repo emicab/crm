@@ -34,6 +34,7 @@ interface WebOrderItem {
   quantity: number;
   unitPrice: string;
   subtotal: string;
+  modifiers?: string | null;
   product?: {
     name: string;
     sku?: string | null;
@@ -69,6 +70,25 @@ interface Branch {
   address?: string | null;
   phone?: string | null;
   isMain: boolean;
+}
+
+interface ParsedModifier {
+  groupName: string;
+  optionName: string;
+  priceExtra?: number;
+  colorHex?: string;
+  ingredientId?: number;
+}
+
+// Parsea el JSON de modifiers guardado en el ítem (string JSON o array).
+function parseItemModifiers(item: WebOrderItem): ParsedModifier[] {
+  if (!item.modifiers) return [];
+  try {
+    const parsed = typeof item.modifiers === "string" ? JSON.parse(item.modifiers) : item.modifiers;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export default function PedidosWebPage() {
@@ -845,25 +865,44 @@ export default function PedidosWebPage() {
                   Productos Solicitados
                 </h4>
                 <div className="border border-border rounded-xl overflow-hidden divide-y divide-border">
-                  {selectedOrder.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-3 flex justify-between items-center bg-background"
-                    >
-                      <div>
-                        <p className="font-semibold text-foreground">
-                          {item.product?.name || `Producto #${item.productId}`}
-                        </p>
-                        <p className="text-xs text-foreground-muted">
-                          {item.quantity} unidades ×{" "}
-                          {formatCurrency(parseFloat(item.unitPrice))}
-                        </p>
+                  {selectedOrder.items.map((item) => {
+                    const itemMods = parseItemModifiers(item);
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 flex justify-between items-center bg-background"
+                      >
+                        <div>
+                          <p className="font-semibold text-foreground">
+                            {item.product?.name || `Producto #${item.productId}`}
+                          </p>
+                          <p className="text-xs text-foreground-muted">
+                            {item.quantity} unidades ×{" "}
+                            {formatCurrency(parseFloat(item.unitPrice))}
+                          </p>
+                          {itemMods.length > 0 && (
+                            <ul className="mt-1 space-y-0.5">
+                              {itemMods.map((m, i) => (
+                                <li key={i} className="text-[11px] text-foreground-muted">
+                                  <span className="font-semibold">{m.groupName}:</span>{" "}
+                                  {m.optionName}
+                                  {m.priceExtra ? (
+                                    <span className="text-emerald-600">
+                                      {" "}
+                                      (+{formatCurrency(m.priceExtra)})
+                                    </span>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                        <span className="font-bold text-foreground">
+                          {formatCurrency(parseFloat(item.subtotal))}
+                        </span>
                       </div>
-                      <span className="font-bold text-foreground">
-                        {formatCurrency(parseFloat(item.subtotal))}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -978,20 +1017,28 @@ export default function PedidosWebPage() {
               PRODUCTOS A EMPACAR:
             </p>
             <div className="space-y-1">
-              {selectedOrder.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex justify-between items-start text-xs"
-                >
-                  <span>
-                    [ ] {item.quantity}x{" "}
-                    {item.product?.name || `Producto #${item.productId}`}
-                  </span>
-                  <span className="font-bold">
-                    {formatCurrency(parseFloat(item.subtotal))}
-                  </span>
-                </div>
-              ))}
+              {selectedOrder.items.map((item) => {
+                const itemMods = parseItemModifiers(item);
+                return (
+                  <div
+                    key={item.id}
+                    className="flex justify-between items-start text-xs"
+                  >
+                    <span>
+                      [ ] {item.quantity}x{" "}
+                      {item.product?.name || `Producto #${item.productId}`}
+                      {itemMods.length > 0 && (
+                        <span className="block text-[10px] text-gray-600">
+                          {itemMods.map((m) => `${m.groupName}: ${m.optionName}`).join(" | ")}
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-bold">
+                      {formatCurrency(parseFloat(item.subtotal))}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

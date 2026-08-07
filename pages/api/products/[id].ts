@@ -68,7 +68,7 @@ export default async function handler(
 
     const {
       pricePurchase, priceSale, quantityStock, stockMinAlert,
-      brandId, categoryId, supplierId, unitType, branchStocks, branchId, isRecipe
+      brandId, categoryId, supplierId, unitType, branchStocks, branchId, isRecipe, recipeItems
     } = req.body;
     let {
       name, sku, description,
@@ -183,6 +183,9 @@ export default async function handler(
         const validUnitTypes = [null, 'UNIT', 'WEIGHT', 'VOLUME'];
         dataToUpdate.unitType = validUnitTypes.includes(unitType) ? (unitType || null) : null;
       }
+      if (isRecipe !== undefined) {
+        dataToUpdate.isRecipe = Boolean(isRecipe) || (Array.isArray(recipeItems) && recipeItems.length > 0);
+      }
       if (req.body.isPublicWeb !== undefined) {
         dataToUpdate.isPublicWeb = Boolean(req.body.isPublicWeb);
       }
@@ -200,6 +203,18 @@ export default async function handler(
         data: dataToUpdate,
         include: { brand: true, category: true, supplier: true, branchStocks: true },
       });
+
+      // [CORREGIDO] Guardar la receta junto al producto. Antes el PUT ignoraba
+      // recipeItems/isRecipe y los ingredientes no se persistían (bug "no lo suma").
+      const finalIsRecipe = isRecipe !== undefined ? Boolean(isRecipe) : (Array.isArray(recipeItems) && recipeItems.length > 0);
+      if (finalIsRecipe) {
+        const { replaceRecipeItems, recordCostSnapshot } = await import("../../../lib/recipeStock");
+        await replaceRecipeItems(prisma, id, Array.isArray(recipeItems) ? recipeItems : []);
+        await recordCostSnapshot(prisma, id, "recipe_save");
+      } else if (Array.isArray(recipeItems)) {
+        // Dejó de ser receta (o viene con items vacíos): limpiar ingredientes.
+        await prisma.recipeItem.deleteMany({ where: { productId: id } });
+      }
 
       // Fire-and-forget: encolar el cambio en el outbox.
       try {

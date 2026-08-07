@@ -153,6 +153,10 @@ export async function drainOutbox(limit = 100): Promise<{ drained: number; remai
 
         if (record.entity === "Product" || record.entity === "ProductBranchStock") {
           ok = await syncSingleProduct(Number(record.entityKey));
+        } else if (record.entity === "ProductModifierGroup") {
+          const { getSelectiveSyncCredentials, syncModifierGroupsForProducts } = await import("./syncService");
+          const { tenantId } = await getSelectiveSyncCredentials();
+          ok = await syncModifierGroupsForProducts(tenantId, [Number(record.entityKey)]);
         } else if (record.entity === "WebOrder") {
           ok = await syncWebOrderToSupabase(Number(record.entityKey));
         } else if (record.entity === "StockTransfer") {

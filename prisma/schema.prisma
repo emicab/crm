@@ -60,6 +60,8 @@ model Product {
   recipeItems      RecipeItem[]     @relation("RecipeProduct")
   recipeIngredientOf RecipeItem[]   @relation("RecipeIngredient")
   costHistory      RecipeCostHistory[]
+  modifierGroups   ProductModifierGroup[]
+  modifierOptionIngredientOf ProductModifierOption[] @relation("ModifierOptionIngredient")
 }
 
 model RecipeItem {
@@ -164,6 +166,7 @@ model SaleItem {
   // Snapshot del nombre del producto al momento de la venta. Permite que el
   // historial conserve el nombre aunque el producto se elimine o se desvincule.
   productName         String?
+  modifiers           String?  // JSON snapshot de modificadores/opciones seleccionadas
   product             Product? @relation(fields: [productId], references: [id])
   sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
 }
@@ -503,6 +506,7 @@ model StoreConfig {
   allowDelivery     Boolean  @default(true)
   deliveryFee       Decimal  @default(0)
   minDeliveryAmount Decimal  @default(0)
+  businessSector  String   @default("GASTRONOMIA") // GASTRONOMIA | INDUMENTARIA | MINIMARKET | RETAIL_GENERAL
   createdAt         DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -521,6 +525,7 @@ model WebOrder {
   status          WebOrderStatus @default(PENDING_PREPARATION)
   totalAmount     Decimal
   mpFeeAmount     Decimal        @default(0)
+  scheduledFor    DateTime?      // Fecha/hora de entrega programada (para aperturas)
   notes           String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -534,6 +539,7 @@ model WebOrderItem {
   quantity    Float
   unitPrice   Decimal
   subtotal    Decimal
+  modifiers   String?  // JSON snapshot de opciones seleccionadas
   webOrder    WebOrder @relation(fields: [webOrderId], references: [id], onDelete: Cascade)
   product     Product  @relation(fields: [productId], references: [id])
 }
@@ -605,5 +611,37 @@ model SyncOutbox {
   updatedAt DateTime @updatedAt
 
   @@index([status])
+}
+
+model ProductModifierGroup {
+  id          Int                     @id @default(autoincrement())
+  productId   Int
+  name        String                  // ej. "Punto de cocción", "Agregados", "Talle", "Color"
+  type        String                  @default("MULTI_SELECT") // SINGLE_SELECT | MULTI_SELECT | SIZE_COLOR
+  isRequired  Boolean                 @default(false)
+  minSelect   Int                     @default(0)
+  maxSelect   Int?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  product     Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  options     ProductModifierOption[]
+
+  @@index([productId])
+}
+
+model ProductModifierOption {
+  id              Int                  @id @default(autoincrement())
+  modifierGroupId Int
+  name            String               // ej. "Extra Bacon", "A punto", "Talle L"
+  priceExtra      Decimal              @default(0)
+  colorHex        String?              // ej. "#000000" para swatches de color
+  ingredientId    Int?                 // vínculo con ingrediente de Recetario
+  ingredientQty   Decimal              @default(1) // cantidad del ingrediente a descontar por unidad vendida
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  modifierGroup   ProductModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  ingredient      Product?             @relation("ModifierOptionIngredient", fields: [ingredientId], references: [id])
+
+  @@index([modifierGroupId])
 }
 
