@@ -31,6 +31,7 @@ export interface Brand {
     brandId: number;
     categoryId: number;
     supplierId?: number | null;
+    isRecipe?: boolean;
     createdAt: string;
     updatedAt: string;
     brand: Brand;

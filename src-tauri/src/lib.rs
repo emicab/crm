@@ -328,6 +328,80 @@ const MIGRATIONS: &[Migration] = &[
             PRAGMA foreign_keys=ON;
         "#,
     },
+    Migration {
+        version: 14,
+        name: "add_recetario",
+        sql: r#"
+            ALTER TABLE "Product" ADD COLUMN "isRecipe" BOOLEAN NOT NULL DEFAULT 0;
+
+            CREATE TABLE IF NOT EXISTS "RecipeItem" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "productId" INTEGER NOT NULL,
+                "ingredientId" INTEGER NOT NULL,
+                "quantity" REAL NOT NULL,
+                "unitType" TEXT NOT NULL,
+                CONSTRAINT "RecipeItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT "RecipeItem_ingredientId_fkey" FOREIGN KEY ("ingredientId") REFERENCES "Product" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS "RecipeItem_productId_idx" ON "RecipeItem" ("productId");
+            CREATE INDEX IF NOT EXISTS "RecipeItem_ingredientId_idx" ON "RecipeItem" ("ingredientId");
+        "#,
+    },
+    Migration {
+        version: 15,
+        name: "recetario_ingredientes_marca_categoria_opcionales",
+        sql: r#"
+            PRAGMA foreign_keys=OFF;
+            CREATE TABLE "Product_new" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "name" TEXT NOT NULL,
+                "sku" TEXT,
+                "description" TEXT,
+                "pricePurchase" DECIMAL NOT NULL,
+                "priceSale" DECIMAL NOT NULL,
+                "quantityStock" REAL NOT NULL,
+                "stockMinAlert" REAL,
+                "unitType" TEXT,
+                "isPublicWeb" BOOLEAN NOT NULL DEFAULT 0,
+                "webCategory" TEXT,
+                "imageUrl" TEXT,
+                "brandId" INTEGER,
+                "categoryId" INTEGER,
+                "supplierId" INTEGER,
+                "isRecipe" BOOLEAN NOT NULL DEFAULT 0,
+                "isIngredient" BOOLEAN NOT NULL DEFAULT 0,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" DATETIME NOT NULL,
+                CONSTRAINT "Product_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                CONSTRAINT "Product_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "Brand" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                CONSTRAINT "Product_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Supplier" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+            );
+            INSERT INTO "Product_new" ("id", "name", "sku", "description", "pricePurchase", "priceSale", "quantityStock", "stockMinAlert", "unitType", "isPublicWeb", "webCategory", "imageUrl", "brandId", "categoryId", "supplierId", "isRecipe", "isIngredient", "createdAt", "updatedAt")
+                SELECT "id", "name", "sku", "description", "pricePurchase", "priceSale", "quantityStock", "stockMinAlert", "unitType", "isPublicWeb", "webCategory", "imageUrl", "brandId", "categoryId", "supplierId", "isRecipe", 0, "createdAt", "updatedAt"
+                FROM "Product";
+            DROP TABLE "Product";
+            ALTER TABLE "Product_new" RENAME TO "Product";
+            CREATE UNIQUE INDEX IF NOT EXISTS "Product_sku_key" ON "Product"("sku");
+            PRAGMA foreign_keys=ON;
+        "#,
+    },
+    Migration {
+        version: 16,
+        name: "add_recipe_cost_history",
+        sql: r#"
+            CREATE TABLE IF NOT EXISTS "RecipeCostHistory" (
+                "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                "productId" INTEGER NOT NULL,
+                "cost" DECIMAL NOT NULL,
+                "hasFullCost" BOOLEAN NOT NULL DEFAULT 1,
+                "source" TEXT NOT NULL,
+                "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "RecipeCostHistory_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS "RecipeCostHistory_productId_idx" ON "RecipeCostHistory" ("productId");
+            CREATE INDEX IF NOT EXISTS "RecipeCostHistory_createdAt_idx" ON "RecipeCostHistory" ("createdAt");
+        "#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {

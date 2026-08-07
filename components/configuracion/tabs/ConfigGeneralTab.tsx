@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Building, Percent, CreditCard, Save, Mail } from 'lucide-react';
+import { Building, Percent, CreditCard, Save, Mail, ChefHat } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
@@ -264,6 +264,31 @@ export default function ConfigGeneralTab({
             />
           </div>
         </div>
+      </div>
+
+      {/* Módulos activables */}
+      <div className="bg-muted p-6 rounded-xl shadow space-y-4">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <ChefHat size={20} className="text-primary" /> Módulos activables
+        </h2>
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={(form.module_recetario || 'false') === 'true'}
+            onChange={(e) => handleChange('module_recetario', e.target.checked ? 'true' : 'false')}
+            className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+          />
+          <span>
+            <span className="block text-sm font-medium text-foreground">
+              Recetario 🧾 (Rubro Gastronómico)
+            </span>
+            <span className="block text-xs text-foreground-muted mt-0.5">
+              Productos elaborados que se preparan con ingredientes (ej. Lomo XL = 3 bifes, 2 huevos,
+              300g queso). Su stock se calcula automáticamente desde los ingredientes y al venderlos se
+              descuentan los ingredientes.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="flex justify-end">

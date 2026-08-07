@@ -62,6 +62,25 @@ export default async function handler(
     if (notes) notes = sanitizeString(notes);
 
     try {
+      // Guarda de Recetario: no se reciben/compran productos elaborados.
+      const newStatus = status as PurchaseStatus || undefined;
+      const itemIds = (items && Array.isArray(items) && items.length > 0)
+        ? items.map((i: any) => i.productId)
+        : (newStatus === 'RECEIVED'
+            ? (await prisma.purchaseItem.findMany({ where: { purchaseId: id }, select: { productId: true } })).map(i => i.productId)
+            : []);
+      if (itemIds.length > 0) {
+        const recipeBlock = await prisma.product.findFirst({
+          where: { id: { in: itemIds }, isRecipe: true },
+          select: { name: true },
+        });
+        if (recipeBlock) {
+          return res.status(400).json({
+            message: `No se puede recibir un producto elaborado ("${recipeBlock.name}"). Comprá sus ingredientes para reponer stock.`,
+          });
+        }
+      }
+
       const result = await prisma.$transaction(async (tx) => {
         // 1. Obtener la compra actual con sus items
         const existingPurchase = await tx.purchase.findUnique({
@@ -130,7 +149,11 @@ export default async function handler(
             if (newStatus === PurchaseStatus.RECEIVED && stockQty > 0) {
               await tx.product.update({
                 where: { id: item.productId },
-                data: { quantityStock: { increment: stockQty } },
+                data: {
+                  quantityStock: { increment: stockQty },
+                  // El costo del ingrediente/producto = última compra recibida.
+                  pricePurchase: new Decimal(item.purchasePrice),
+                },
               });
               const { branchId } = req.body;
               if (branchId) {
@@ -158,7 +181,11 @@ export default async function handler(
               const receivedQty = item.quantityReceived ?? item.quantity;
               await tx.product.update({
                 where: { id: item.productId },
-                data: { quantityStock: { increment: receivedQty } },
+                data: {
+                  quantityStock: { increment: receivedQty },
+                  // El costo del ingrediente/producto = última compra recibida.
+                  pricePurchase: new Decimal(item.purchasePrice),
+                },
               });
               if (bId && !isNaN(bId)) {
                 await tx.productBranchStock.upsert({
@@ -202,6 +229,21 @@ export default async function handler(
           data: updateData,
           include: { supplier: true, items: { include: { product: true } } },
         });
+
+        // Recetario: al recibir mercadería, registrar snapshot de costo de los
+        // elaborados afectados (solo si cambió).
+        if (newStatus === PurchaseStatus.RECEIVED) {
+          const purchaseItemsForCost = await tx.purchaseItem.findMany({
+            where: { purchaseId: id },
+            select: { productId: true },
+          });
+          const { findRecipesAffectedByIngredient, recordCostSnapshot } = await import("../../../lib/recipeStock");
+          const ingredientIds = purchaseItemsForCost.map((i: any) => i.productId);
+          const affected = await findRecipesAffectedByIngredient(tx, ingredientIds);
+          for (const rid of affected) {
+            await recordCostSnapshot(tx, rid, "purchase");
+          }
+        }
 
         // 5. Si se asignó un medio de pago, sincronizar gasto y movimiento de caja
         if (paymentType) {
@@ -261,6 +303,32 @@ export default async function handler(
 
         return updatedPurchase;
       });
+
+      // Fire-and-forget: encolar productos recibidos + elaborados afectados
+      // (su stock derivado cambió) para mantener la tienda web al día.
+      if (result.status === PurchaseStatus.RECEIVED) {
+        try {
+          const { enqueueOutbox } = await import('../../../lib/syncOutbox');
+          const receivedItems = await prisma.purchaseItem.findMany({
+            where: { purchaseId: id },
+            select: { productId: true },
+          });
+          const receivedIds = receivedItems.map((i) => i.productId);
+          for (const pid of receivedIds) {
+            await enqueueOutbox('Product', 'UPSERT', String(pid));
+            await enqueueOutbox('ProductBranchStock', 'UPSERT', String(pid));
+          }
+          if (receivedIds.length > 0) {
+            const { findRecipesAffectedByIngredient } = await import('../../../lib/recipeStock');
+            const affected = await findRecipesAffectedByIngredient(prisma, receivedIds);
+            for (const rid of affected) {
+              await enqueueOutbox('Product', 'UPSERT', String(rid));
+            }
+          }
+        } catch (enqErr) {
+          console.error('[Compras] Error al encolar recepción:', enqErr);
+        }
+      }
 
       // Convertir Decimales a string
       const purchaseForJson = {

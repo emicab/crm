@@ -3,6 +3,7 @@
 // Permite trabajar offline y sincronizar después sin perder datos (borrados,
 // pedidos web locales, ventas/compras/traspasos, etc.).
 import prisma from "./prisma";
+import { isProDevice } from "./branchIdentity";
 
 export type OutboxOperation = "UPSERT" | "DELETE";
 
@@ -10,6 +11,9 @@ const fmtDec = (val: any, fallback: string | null = "0.00") => (val !== undefine
 
 export async function enqueueOutbox(entity: string, operation: OutboxOperation, entityKey: string): Promise<void> {
   try {
+    // En planes sin nube no se acumulan operaciones pendientes: evita el aviso
+    // "X pendientes de sincronizar" en configuraciones puramente locales.
+    if (!(await isProDevice())) return;
     await prisma.syncOutbox.create({
       data: { entity, operation, entityKey, status: "PENDING", attempts: 0 },
     });

@@ -113,6 +113,9 @@ export const useSaleState = () => {
   const [validDiscountCode, setValidDiscountCode] = useState<{
     code: string;
     percent: number;
+    discountType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+    discountValue?: number;
+    minPurchase?: number;
   } | null>(null);
 
   const [invoiceType, setInvoiceType] = useState<'A' | 'B' | 'C' | 'NONE'>('NONE');
@@ -386,7 +389,15 @@ export const useSaleState = () => {
           );
           setValidDiscountCode(
             exact
-              ? { code: exact.code, percent: parseFloat(exact.discountPercent) }
+              ? {
+                  code: exact.code,
+                  percent: parseFloat(exact.discountPercent),
+                  discountType: (exact.discountType || 'PERCENTAGE') as 'PERCENTAGE' | 'FIXED_AMOUNT',
+                  discountValue: exact.discountValue !== null && exact.discountValue !== undefined
+                    ? parseFloat(exact.discountValue)
+                    : parseFloat(exact.discountPercent),
+                  minPurchase: exact.minPurchase ? parseFloat(exact.minPurchase) : 0,
+                }
               : null,
           );
         }

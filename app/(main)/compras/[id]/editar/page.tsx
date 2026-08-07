@@ -76,7 +76,7 @@ export default function EditarCompraPage() {
     if (!productSearch.trim()) { setSearchResults([]); return; }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/products?search=${encodeURIComponent(productSearch)}`);
+        const res = await fetch(`/api/products?kind=all&search=${encodeURIComponent(productSearch)}`);
         if (res.ok) {
           const data = await res.json();
           const inCartIds = items.map(i => i.productId);

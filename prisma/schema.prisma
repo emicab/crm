@@ -39,13 +39,15 @@ model Product {
   isPublicWeb   Boolean  @default(false)
   webCategory   String?
   imageUrl      String?
-  brandId       Int
-  categoryId    Int
+  brandId       Int?
+  categoryId    Int?
   supplierId    Int?
+  isRecipe      Boolean        @default(false) // producto elaborado: su stock se deriva de los ingredientes
+  isIngredient  Boolean        @default(false) // materia prima: oculta, no se vende (solo Recetario)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  category      Category       @relation(fields: [categoryId], references: [id])
-  brand         Brand          @relation(fields: [brandId], references: [id])
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  brand         Brand?         @relation(fields: [brandId], references: [id])
   supplier      Supplier?      @relation(fields: [supplierId], references: [id])
   SaleItem         SaleItem[]
   purchaseItems    PurchaseItem[]
@@ -55,6 +57,37 @@ model Product {
   webOrderItems    WebOrderItem[]
   branchStocks     ProductBranchStock[]
   stockTransferItems StockTransferItem[]
+  recipeItems      RecipeItem[]     @relation("RecipeProduct")
+  recipeIngredientOf RecipeItem[]   @relation("RecipeIngredient")
+  costHistory      RecipeCostHistory[]
+}
+
+model RecipeItem {
+  id           Int      @id @default(autoincrement())
+  productId    Int      // producto elaborado
+  ingredientId Int      // ingrediente (puede ser otro elaborado: recetas anidadas)
+  quantity     Float    // cantidad en la unidad canónica del ingrediente (kg/L/u)
+  unitType     String   // UNIT | WEIGHT | VOLUME (validado contra el ingrediente)
+  product      Product  @relation("RecipeProduct", fields: [productId], references: [id], onDelete: Cascade)
+  ingredient   Product  @relation("RecipeIngredient", fields: [ingredientId], references: [id])
+
+  @@index([productId])
+  @@index([ingredientId])
+}
+
+// Historial de costo de productos elaborados: snapshot por unidad cuando el
+// costo cambia (al recibir compras de ingredientes o guardar la receta).
+model RecipeCostHistory {
+  id          Int      @id @default(autoincrement())
+  productId   Int      // elaborado
+  cost        Decimal  // costo por unidad en ese momento
+  hasFullCost Boolean  @default(true) // false si algún ingrediente no tenía costo
+  source      String   // "purchase" | "recipe_save" | "manual"
+  createdAt   DateTime @default(now())
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([createdAt])
 }
 
 model Client {

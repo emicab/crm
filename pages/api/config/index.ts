@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   unlocked_plan_pro: 'false',
   storage_mode: 'safe',
   business_profile: 'general',
+  module_recetario: 'false',
   license_key: '',
   license_activated_at: '',
   hardware_id: getHardwareId(),

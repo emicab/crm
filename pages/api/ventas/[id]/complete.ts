@@ -94,6 +94,8 @@ export default async function handler(
         }
       }
 
+      const affectedIngredientIds: number[] = [];
+
       for (const item of sale.items) {
         if (item.productId == null) continue; // ítem desvinculado, sin producto
 
@@ -101,6 +103,26 @@ export default async function handler(
         if (!product) {
           throw new Error(`Producto con ID ${item.productId} no encontrado.`);
         }
+
+        if (product.isRecipe === true) {
+          // Elaborado: validar disponibilidad derivada y descontar ingredientes.
+          const { getRecipeAvailability, deductRecipeStock, computeRecipeCost } = await import("../../../../lib/recipeStock");
+          const availability = await getRecipeAvailability(tx, item.productId, sale.branchId);
+          if (availability.available < Number(item.quantity)) {
+            const limitText = availability.limiting.map(l => `"${l.name}"`).join(", ");
+            throw new Error(`Stock insuficiente para preparar "${product.name}". Solo podés preparar ${availability.available}. Falta: ${limitText}.`);
+          }
+          // Corregir el costo registrado (las ventas pendientes previas al fix quedaron en 0).
+          const recipeCost = (await computeRecipeCost(tx, item.productId)).cost;
+          await tx.saleItem.update({
+            where: { id: item.id },
+            data: { purchasePriceAtSale: recipeCost },
+          });
+          const affected = await deductRecipeStock(tx, item.productId, Number(item.quantity), sale.branchId);
+          affectedIngredientIds.push(...affected);
+          continue;
+        }
+
         if (Number(product.quantityStock) < Number(item.quantity)) {
           throw new Error(`Stock insuficiente para el producto "${product.name}". Disponible: ${product.quantityStock}, Solicitado: ${item.quantity}.`);
         }
@@ -148,15 +170,17 @@ export default async function handler(
         },
         include: { client: true, seller: true, items: { include: { product: true } } }
       });
-      return updatedSale;
+      return { ...updatedSale, affectedIngredientIds };
     });
 
     // Fire-and-forget: encolar venta + productos vendidos en el outbox.
     try {
       const { enqueueOutbox } = await import("../../../../lib/syncOutbox");
       await enqueueOutbox("Sale", "UPSERT", String(sale.id));
-      const productIds = sale.items.map((item: any) => item.productId);
-      for (const pid of productIds) {
+      const allAffected = Array.from(new Set([
+        ...sale.items.map((item: any) => item.productId),
+        ...(result as any)?.affectedIngredientIds || [],
+      ]));      for (const pid of allAffected) {
         await enqueueOutbox("Product", "UPSERT", String(pid));
         await enqueueOutbox("ProductBranchStock", "UPSERT", String(pid));
       }

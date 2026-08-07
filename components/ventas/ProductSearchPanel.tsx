@@ -111,6 +111,9 @@ const ProductSearchPanel: React.FC<ProductSearchPanelProps> = ({
                   onClick={() => onSelectProduct(p)}
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${p.quantityStock <= 0 ? "border-destructive/40 text-destructive hover:bg-destructive/10" : "border-primary/30 text-primary hover:bg-primary/10"}`}
                 >
+                  {p.isRecipe && (
+                    <span title="Producto elaborado" className="text-[10px]">🧾</span>
+                  )}
                   {p.name}{" "}
                   <span
                     className={`text-[10px] ${p.quantityStock <= 0 ? "text-destructive/70" : "text-primary/70"}`}
@@ -141,6 +144,9 @@ const ProductSearchPanel: React.FC<ProductSearchPanelProps> = ({
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1 mr-4">
                   <p className="font-medium text-sm text-foreground truncate">
+                    {product.isRecipe && (
+                      <span title="Producto elaborado" className="mr-1">🧾</span>
+                    )}
                     {product.name}
                   </p>
                   <p className="text-[11px] text-foreground-muted truncate">

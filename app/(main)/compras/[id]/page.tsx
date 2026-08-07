@@ -100,7 +100,7 @@ const PurchaseDetailPage = () => {
     if (!receiveSearchTerm.trim()) { setReceiveSearchResults([]); return; }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/products?search=${encodeURIComponent(receiveSearchTerm)}`);
+        const res = await fetch(`/api/products?kind=all&search=${encodeURIComponent(receiveSearchTerm)}`);
         if (res.ok) {
           const data = await res.json();
           const items = Array.isArray(data) ? data : data.data || [];

@@ -222,9 +222,26 @@ export default async function handler(
       promotionsAppliedJson = JSON.stringify(promotionsApplied);
     }
 
-    if (discountPercent > 0) {
-      const discountAmount = calculatedTotalAmount.times(discountPercent).div(100);
-      calculatedTotalAmount = calculatedTotalAmount.minus(discountAmount);
+    if (discountCodeRecord) {
+      const minPurchaseVal = discountCodeRecord.minPurchase ? parseFloat(discountCodeRecord.minPurchase.toString()) : 0;
+      if (minPurchaseVal > 0 && calculatedTotalAmount.lessThan(minPurchaseVal)) {
+        return res.status(400).json({
+          message: `El código "${discountCodeApplied}" requiere una compra mínima de $${minPurchaseVal.toLocaleString('es-AR')}.`
+        });
+      }
+
+      const discType = discountCodeRecord.discountType || "PERCENTAGE";
+      const discVal = discountCodeRecord.discountValue !== null && discountCodeRecord.discountValue !== undefined
+        ? parseFloat(discountCodeRecord.discountValue.toString())
+        : parseFloat(discountCodeRecord.discountPercent.toString());
+
+      if (discType === "FIXED_AMOUNT") {
+        const discountAmount = Decimal.min(calculatedTotalAmount, new Decimal(discVal));
+        calculatedTotalAmount = calculatedTotalAmount.minus(discountAmount);
+      } else {
+        const discountAmount = calculatedTotalAmount.times(discVal).div(100);
+        calculatedTotalAmount = calculatedTotalAmount.minus(discountAmount);
+      }
     }
 
     const paymentMethodDiscountDecimal = new Decimal(paymentMethodDiscount || 0);
@@ -254,6 +271,7 @@ export default async function handler(
         if (mainBranch) effectiveBranchId = mainBranch.id;
       }
 
+      const affectedIngredientIds: number[] = [];
       const result = await prisma.$transaction(async (tx) => {
         if (discountCodeRecord) {
           await tx.discountCode.update({
@@ -340,13 +358,32 @@ export default async function handler(
           }
         }
 
-        for (const item of items) {
-          const product = await tx.product.findUnique({ where: { id: item.productId } });
+        for (const item of items) {          const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) {
             throw new Error(`Producto con ID ${item.productId} no encontrado.`);
           }
-          if (!isPending && Number(product.quantityStock) < item.quantity) {
-            throw new Error(`Stock insuficiente para el producto "${product.name}". Disponible: ${product.quantityStock}, Solicitado: ${item.quantity}.`);
+
+          const bId = effectiveBranchId ?? (req.body.branchId ? parseInt(req.body.branchId) : undefined);
+          const recipeBranchId = bId && !isNaN(bId) ? bId : undefined;
+          const isRecipeProduct = product.isRecipe === true;
+
+          // Validación de stock: para elaborados se valida contra la disponibilidad
+          // derivada de sus ingredientes.
+          if (!isPending) {
+            if (isRecipeProduct) {
+              const { getRecipeAvailability } = await import("../../../lib/recipeStock");
+              const availability = await getRecipeAvailability(tx, item.productId, recipeBranchId);
+              if (availability.available < item.quantity) {
+                const limitText = availability.limiting
+                  .map(l => `"${l.name}"`)
+                  .join(", ");
+                throw new Error(
+                  `Stock insuficiente para preparar "${product.name}". Solo podés preparar ${availability.available}. Falta: ${limitText}.`
+                );
+              }
+            } else if (Number(product.quantityStock) < item.quantity) {
+              throw new Error(`Stock insuficiente para el producto "${product.name}". Disponible: ${product.quantityStock}, Solicitado: ${item.quantity}.`);
+            }
           }
 
           let purchasePriceAtSale = product.pricePurchase;
@@ -361,6 +398,12 @@ export default async function handler(
             }
           }
 
+          // Elaborado: el costo se calcula desde sus ingredientes (Σ costo × cantidad).
+          if (isRecipeProduct) {
+            const { computeRecipeCost } = await import("../../../lib/recipeStock");
+            purchasePriceAtSale = (await computeRecipeCost(tx, item.productId)).cost;
+          }
+
           await tx.saleItem.create({
             data: {
               saleId: newSale.id,
@@ -373,48 +416,63 @@ export default async function handler(
           });
 
           if (!isPending) {
-            const updateResult = await tx.product.updateMany({
-              where: {
-                id: item.productId,
-                quantityStock: { gte: item.quantity }
-              },
-              data: {
-                quantityStock: { decrement: item.quantity }
-              }
-            });
-            if (updateResult.count === 0) {
-              throw new Error(`Stock insuficiente o modificado concurrentemente para el producto "${product.name}".`);
-            }
-            
-            const bId = effectiveBranchId ?? (req.body.branchId ? parseInt(req.body.branchId) : undefined);
-            if (bId && !isNaN(bId)) {
-              await tx.productBranchStock.upsert({
+            if (isRecipeProduct) {
+              // Elaborado: no se descuenta su propio stock, sino el de los ingredientes.
+              const { deductRecipeStock } = await import("../../../lib/recipeStock");
+              const affected = await deductRecipeStock(tx, item.productId, item.quantity, recipeBranchId);
+              affectedIngredientIds.push(...affected);
+            } else {
+              const updateResult = await tx.product.updateMany({
                 where: {
-                  productId_branchId: {
-                    productId: item.productId,
-                    branchId: bId
-                  }
+                  id: item.productId,
+                  quantityStock: { gte: item.quantity }
                 },
-                update: {
+                data: {
                   quantityStock: { decrement: item.quantity }
-                },
-                create: {
-                  productId: item.productId,
-                  branchId: bId,
-                  quantityStock: -item.quantity
                 }
               });
+              if (updateResult.count === 0) {
+                throw new Error(`Stock insuficiente o modificado concurrentemente para el producto "${product.name}".`);
+              }
+
+              if (recipeBranchId) {
+                await tx.productBranchStock.upsert({
+                  where: {
+                    productId_branchId: {
+                      productId: item.productId,
+                      branchId: recipeBranchId
+                    }
+                  },
+                  update: {
+                    quantityStock: { decrement: item.quantity }
+                  },
+                  create: {
+                    productId: item.productId,
+                    branchId: recipeBranchId,
+                    quantityStock: -item.quantity
+                  }
+                });
+              }
             }
           }
 
           if (!isPending) {
-            const updatedProduct = await tx.product.findUnique({
-              where: { id: item.productId },
-              select: { id: true, name: true, quantityStock: true, stockMinAlert: true }
-            });
-            if (updatedProduct && updatedProduct.stockMinAlert !== null && updatedProduct.quantityStock < updatedProduct.stockMinAlert) {
-              console.warn(`[STOCK ALERT] El producto "${updatedProduct.name}" (ID: ${updatedProduct.id}) ha quedado por debajo del mínimo de alerta de stock (${updatedProduct.stockMinAlert}). Stock actual: ${updatedProduct.quantityStock}`);
-              console.log(`[MOCK EMAIL] Enviado correo ficticio a: administracion@empresa.com | Asunto: Alerta de Stock Mínimo - ${updatedProduct.name} | Contenido: El producto "${updatedProduct.name}" tiene ${updatedProduct.quantityStock} unidades disponibles (Umbral mínimo: ${updatedProduct.stockMinAlert}).`);
+            if (isRecipeProduct) {
+              // Alerta de elaborado: comparar la disponibilidad derivada contra el mínimo.
+              const { getRecipeAvailability } = await import("../../../lib/recipeStock");
+              const afterAvailability = await getRecipeAvailability(tx, item.productId, recipeBranchId);
+              if (product.stockMinAlert !== null && afterAvailability.available < product.stockMinAlert) {
+                console.warn(`[STOCK ALERT] El producto elaborado "${product.name}" (ID: ${product.id}) quedó con disponibilidad ${afterAvailability.available} por debajo del mínimo (${product.stockMinAlert}).`);
+              }
+            } else {
+              const updatedProduct = await tx.product.findUnique({
+                where: { id: item.productId },
+                select: { id: true, name: true, quantityStock: true, stockMinAlert: true }
+              });
+              if (updatedProduct && updatedProduct.stockMinAlert !== null && updatedProduct.quantityStock < updatedProduct.stockMinAlert) {
+                console.warn(`[STOCK ALERT] El producto "${updatedProduct.name}" (ID: ${updatedProduct.id}) ha quedado por debajo del mínimo de alerta de stock (${updatedProduct.stockMinAlert}). Stock actual: ${updatedProduct.quantityStock}`);
+                console.log(`[MOCK EMAIL] Enviado correo ficticio a: administracion@empresa.com | Asunto: Alerta de Stock Mínimo - ${updatedProduct.name} | Contenido: El producto "${updatedProduct.name}" tiene ${updatedProduct.quantityStock} unidades disponibles (Umbral mínimo: ${updatedProduct.stockMinAlert}).`);
+              }
             }
           }
         }
@@ -450,7 +508,8 @@ export default async function handler(
           await enqueueOutbox("Sale", "UPSERT", String(result.id));
         }
         const productIds = items.map((item: any) => item.productId);
-        for (const pid of productIds) {
+        const allAffected = Array.from(new Set([...productIds, ...affectedIngredientIds]));
+        for (const pid of allAffected) {
           await enqueueOutbox("Product", "UPSERT", String(pid));
           await enqueueOutbox("ProductBranchStock", "UPSERT", String(pid));
         }

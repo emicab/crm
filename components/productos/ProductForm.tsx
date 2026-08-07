@@ -6,9 +6,11 @@ import type { Brand, Category, Supplier, Product } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Loader2, AlertCircle, Upload, Search, Image as ImageIcon, Check, X } from 'lucide-react';
+import { Loader2, AlertCircle, Upload, Search, Image as ImageIcon, Check, X, ChefHat, Globe, EyeOff, Lock } from 'lucide-react';
 import { useQuickCreate } from '@/hooks/useQuickCreate';
 import QuickCreateModal from './QuickCreateModal';
+import RecipeEditor, { RecipeIngredientForm } from '@/components/recetario/RecipeEditor';
+import { useModules } from '@/hooks/useModules';
 import toast from 'react-hot-toast';
 import { optimizeImage } from '@/lib/imageOptimizer';
 
@@ -25,6 +27,7 @@ interface ProductFormData {
   categoryId: string;
   supplierId: string;
   unitType: string;
+  isPublicWeb: boolean;
 }
 
 interface ProductFormProps {
@@ -33,6 +36,8 @@ interface ProductFormProps {
 
 const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const router = useRouter();
+  const { plan } = useModules();
+  const isPro = plan === "pro";
 
   // Calcular el stock inicial correcto para la sucursal activa antes de inicializar el estado
   let initialFormStock = initialProductData ? String(initialProductData.quantityStock) : '';
@@ -53,10 +58,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
     priceSale: initialProductData ? String(initialProductData.priceSale) : '',
     quantityStock: initialFormStock,
     stockMinAlert: initialProductData?.stockMinAlert !== null && initialProductData?.stockMinAlert !== undefined ? String(initialProductData.stockMinAlert) : '',
-    brandId: initialProductData ? String(initialProductData.brandId) : '',
-    categoryId: initialProductData ? String(initialProductData.categoryId) : '',
+    brandId: initialProductData ? String(initialProductData.brandId ?? '') : '',
+    categoryId: initialProductData ? String(initialProductData.categoryId ?? '') : '',
     supplierId: initialProductData?.supplierId ? String(initialProductData.supplierId) : '',
     unitType: initialProductData?.unitType || '',
+    isPublicWeb: !!initialProductData?.isPublicWeb,
   });
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -71,6 +77,74 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const [isSearchingML, setIsSearchingML] = useState(false);
   const [mlCandidates, setMlCandidates] = useState<Array<{ id: string; title: string; imageUrl: string; thumbnail: string }>>([]);
   const [isMLModalOpen, setIsMLModalOpen] = useState(false);
+
+  // ── Recetario ────────────────────────────────────────────────────────────
+  const [isRecipe, setIsRecipe] = useState<boolean>(!!initialProductData?.isRecipe);
+  const [recipeItems, setRecipeItems] = useState<RecipeIngredientForm[]>([]);
+  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+
+  const loadRecipeItems = async (productId: number) => {
+    setIsLoadingRecipe(true);
+    try {
+      const res = await fetch(`/api/recipes/${productId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setIsRecipe(!!data.isRecipe);
+        setRecipeItems(
+          (data.items || []).map((i: any) => ({
+            ingredientId: i.ingredientId,
+            name: i.name,
+            unitType: i.unitType || 'UNIT',
+            quantity: i.quantity,
+          })),
+        );
+      }
+    } catch {
+      // silencioso
+    } finally {
+      setIsLoadingRecipe(false);
+    }
+  };
+
+  useEffect(() => {
+    // Cargar la receta al editar un producto elaborado.
+    if (initialProductData?.id && initialProductData.isRecipe) {
+      loadRecipeItems(initialProductData.id);
+    }
+    // Clonar receta: /productos/nuevo?clonarReceta=<id> copia ingredientes y datos.
+    if (!initialProductData && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const clonarId = params.get('clonarReceta');
+      if (clonarId && !isNaN(parseInt(clonarId))) {
+        (async () => {
+          try {
+            const res = await fetch(`/api/recipes/${clonarId}`);
+            if (res.ok) {
+              const data = await res.json();
+              setRecipeItems(
+                (data.items || []).map((i: any) => ({
+                  ingredientId: i.ingredientId,
+                  name: i.name,
+                  unitType: i.unitType || 'UNIT',
+                  quantity: i.quantity,
+                })),
+              );
+              if (params.get('nombre')) {
+                setFormData((prev) => ({ ...prev, name: params.get('nombre')! }));
+              }
+              if (params.get('precio')) {
+                setFormData((prev) => ({ ...prev, priceSale: params.get('precio')! }));
+              }
+              setIsRecipe(true);
+            }
+          } catch {
+            // silencioso
+          }
+        })();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialProductData]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -212,10 +286,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
           priceSale: String(dataToUse.priceSale) || '',
           quantityStock: String(initialStock),
           stockMinAlert: dataToUse.stockMinAlert !== null && dataToUse.stockMinAlert !== undefined ? String(dataToUse.stockMinAlert) : '',
-          brandId: String(dataToUse.brandId) || '',
-          categoryId: String(dataToUse.categoryId) || '',
+          brandId: dataToUse.brandId ? String(dataToUse.brandId) : '',
+          categoryId: dataToUse.categoryId ? String(dataToUse.categoryId) : '',
           supplierId: dataToUse.supplierId ? String(dataToUse.supplierId) : '',
           unitType: dataToUse.unitType || '',
+          isPublicWeb: !!dataToUse.isPublicWeb,
         });
       };
       refreshAndLoad();
@@ -235,8 +310,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
     setError(null);
     setSuccessMessage(null);
 
-    if (!formData.name || !formData.brandId || !formData.categoryId || !formData.priceSale || !formData.quantityStock || !formData.unitType) {
-      setError('Por favor, completa todos los campos obligatorios (Nombre, Marca, Categoría, Tipo de Unidad, Precio Venta, Stock).');
+    // La marca es opcional; la categoría es obligatoria para productos vendibles.
+    if (!formData.name || !formData.categoryId || !formData.priceSale || (!isRecipe && !formData.quantityStock) || !formData.unitType) {
+      setError('Por favor, completa los campos obligatorios (Nombre, Categoría, Tipo de Unidad, Precio Venta, Stock).');
       setIsLoading(false);
       return;
     }
@@ -257,12 +333,22 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         imageUrl: formData.imageUrl || null,
         pricePurchase: formData.pricePurchase ? parseFloat(formData.pricePurchase) : null,
         priceSale: parseFloat(formData.priceSale),
-        quantityStock: parseFloat(formData.quantityStock),
+        quantityStock: isRecipe ? 0 : parseFloat(formData.quantityStock),
         stockMinAlert: formData.stockMinAlert ? parseFloat(formData.stockMinAlert) : null,
-        brandId: parseInt(formData.brandId),
+        brandId: formData.brandId ? parseInt(formData.brandId) : null,
         categoryId: parseInt(formData.categoryId),
         supplierId: formData.supplierId ? parseInt(formData.supplierId) : null,
         unitType: formData.unitType || null,
+        isPublicWeb: isPro ? formData.isPublicWeb : false,
+        isIngredient: false,
+        isRecipe,
+        recipeItems: isRecipe
+          ? recipeItems.map((i) => ({
+              ingredientId: i.ingredientId,
+              quantity: i.quantity,
+              unitType: i.unitType,
+            }))
+          : undefined,
     };
     try {
       const response = await fetch(apiUrl, {
@@ -282,7 +368,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         setFormData({
             name: '', sku: '', description: '', imageUrl: '', pricePurchase: '', priceSale: '',
             quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
-            unitType: '',
+            unitType: '', isPublicWeb: false,
         });
       }
 
@@ -425,8 +511,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Select label="Marca *" name="brandId" value={formData.brandId} onChange={handleChange} required disabled={isFetchingDropdowns}>
-            <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Selecciona una marca'}</option>
+          <Select label="Marca (Opcional)" name="brandId" value={formData.brandId} onChange={handleChange} disabled={isFetchingDropdowns}>
+            <option value="">{isFetchingDropdowns ? 'Cargando...' : 'Sin marca'}</option>
             {brands.map(brand => <option key={brand.id} value={String(brand.id)}>{brand.name}</option>)}
           </Select>
           <button type="button" onClick={() => brandQuickCreate.setIsOpen(true)} className="mt-1 text-xs text-primary hover:underline flex items-center">
@@ -449,6 +535,34 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         {suppliers.map(supplier => <option key={supplier.id} value={String(supplier.id)}>{supplier.name}</option>)}
       </Select>
 
+      {/* Visibilidad en la tienda web (solo Plan Pro) */}
+      {isPro ? (
+        <label className="flex items-center gap-3 cursor-pointer select-none p-4 bg-muted/30 rounded-xl border border-border">
+          <input
+            type="checkbox"
+            checked={formData.isPublicWeb}
+            onChange={(e) => setFormData((prev) => ({ ...prev, isPublicWeb: e.target.checked }))}
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+          />
+          <span>
+            <span className="block text-sm font-medium text-foreground flex items-center gap-1.5">
+              {formData.isPublicWeb ? <Globe size={15} className="text-emerald-600" /> : <EyeOff size={15} className="text-foreground-muted" />}
+              {formData.isPublicWeb ? "Visible en la tienda web" : "Oculto de la tienda web"}
+            </span>
+            <span className="block text-xs text-foreground-muted mt-0.5">
+              Por defecto los productos se crean ocultos. Activá esta opción para publicarlo en ClinStore.
+            </span>
+          </span>
+        </label>
+      ) : (
+        <div className="flex items-center gap-3 p-4 bg-muted/30 rounded-xl border border-border opacity-70">
+          <Lock size={15} className="text-foreground-muted" />
+          <p className="text-xs text-foreground-muted">
+            La publicación en la tienda web (ClinStore) está disponible en el Plan Pro.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input label="Precio de Compra" name="pricePurchase" type="number" step="0.01" value={formData.pricePurchase} onChange={handleChange} />
         <Input label="Precio de Venta *" name="priceSale" type="number" step="0.01" value={formData.priceSale} onChange={handleChange} required />
@@ -463,10 +577,59 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         </Select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Input label={`Cantidad en Stock * ${formData.unitType === 'WEIGHT' ? '(kg)' : formData.unitType === 'VOLUME' ? '(L)' : ''}`} name="quantityStock" type="number" step="0.001" value={formData.quantityStock} onChange={handleChange} required />
-        <Input label={`Alerta Stock Mínimo ${formData.unitType === 'WEIGHT' ? '(kg)' : formData.unitType === 'VOLUME' ? '(L)' : '(Opcional)'}`} name="stockMinAlert" type="number" step="0.001" value={formData.stockMinAlert} onChange={handleChange} />
+      {/* Recetario: producto elaborado */}
+      <div className="space-y-4 p-4 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800">
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={isRecipe}
+            onChange={(e) => setIsRecipe(e.target.checked)}
+            className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500"
+          />
+          <span>
+            <span className="block text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <ChefHat size={16} className="text-amber-600" /> Producto elaborado (Recetario 🧾)
+            </span>
+            <span className="block text-xs text-foreground-muted mt-0.5">
+              Ej. Lomo XL = 3 bifes, 2 huevos, 300g queso. El stock se calcula desde los ingredientes y al
+              venderlo se descuentan los ingredientes.
+            </span>
+          </span>
+        </label>
+
+        {isRecipe && (
+          <div className="space-y-3">
+            {isLoadingRecipe ? (
+              <div className="flex items-center gap-2 text-sm text-foreground-muted">
+                <Loader2 size={15} className="animate-spin text-amber-600" /> Cargando receta...
+              </div>
+            ) : (
+              <RecipeEditor items={recipeItems} onChange={setRecipeItems} excludeProductId={initialProductData?.id} />
+            )}
+            <div className="bg-background border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-xs text-foreground-muted">
+              💡 El campo de stock no aplica para un producto elaborado: su disponibilidad se calcula
+              automáticamente en base al stock de los ingredientes. Cargá stock a los ingredientes desde
+              "Carga de Stock" o "Compras".
+            </div>
+          </div>
+        )}
       </div>
+
+      {!isRecipe && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Input label={`Cantidad en Stock * ${formData.unitType === 'WEIGHT' ? '(kg)' : formData.unitType === 'VOLUME' ? '(L)' : ''}`} name="quantityStock" type="number" step="0.001" value={formData.quantityStock} onChange={handleChange} required />
+          <Input label={`Alerta Stock Mínimo ${formData.unitType === 'WEIGHT' ? '(kg)' : formData.unitType === 'VOLUME' ? '(L)' : '(Opcional)'}`} name="stockMinAlert" type="number" step="0.001" value={formData.stockMinAlert} onChange={handleChange} />
+        </div>
+      )}
+
+      {isRecipe && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Input label={`Alerta Stock Mínimo (unidades elaboradas)`} name="stockMinAlert" type="number" step="1" value={formData.stockMinAlert} onChange={handleChange} />
+          <div className="flex items-end">
+            <p className="text-xs text-foreground-muted pb-2.5">Se alerta cuando la disponibilidad derivada (cuántos podés preparar) baja de este mínimo.</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-end pt-4">
         <Button type="button" variant="outline" onClick={() => router.push('/productos')} className="mr-3" disabled={isLoading}>

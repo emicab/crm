@@ -99,7 +99,7 @@ const PurchaseForm = () => {
     if (!productSearchTerm.trim()) { setSearchedProducts([]); return; }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/products?search=${encodeURIComponent(productSearchTerm)}`);
+        const res = await fetch(`/api/products?kind=all&search=${encodeURIComponent(productSearchTerm)}`);
         if (res.ok) {
           const data = await res.json();
           const itemsInCartIds = formData.items.map(item => parseInt(item.productId));

@@ -47,11 +47,11 @@ const ProductMobileCard: React.FC<ProductMobileCardProps> = ({ product, onEdit, 
         </div>
         <div>
           <p className="text-xs text-foreground-muted">Marca</p>
-          <p className="font-medium text-foreground">{product.brand.name}</p>
+          <p className="font-medium text-foreground">{product.brand?.name || '-'}</p>
         </div>
         <div className="text-right">
           <p className="text-xs text-foreground-muted">Categoría</p>
-          <p className="font-medium text-foreground">{product.category.name}</p>
+          <p className="font-medium text-foreground">{product.category?.name || '-'}</p>
         </div>
         <div className="col-span-2">
           <p className="text-xs text-foreground-muted">Proveedor</p>

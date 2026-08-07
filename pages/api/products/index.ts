@@ -12,9 +12,18 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === 'GET') {
-    const { search, brandId, categoryId, supplierId, publicOnly, isPublicWeb } = req.query;
+    const { search, brandId, categoryId, supplierId, publicOnly, isPublicWeb, kind } = req.query;
 
     const whereClause: Prisma.ProductWhereInput = {};
+
+    // Filtro por tipo: products (default, excluye ingredientes) | ingredients | all
+    const kindValue = String(kind || 'products');
+    if (kindValue === 'ingredients') {
+      whereClause.isIngredient = true;
+    } else if (kindValue === 'products') {
+      whereClause.isIngredient = false;
+    }
+    // 'all' no agrega filtro
 
     // Filtro por visibilidad en la Tienda Web
     if (publicOnly === 'true' || isPublicWeb === 'true') {
@@ -59,7 +68,7 @@ export default async function handler(
     }
 
     const page = req.query.page ? parseInt(req.query.page as string) : undefined;
-    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 100) : 50;
+    const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 5000) : 50;
 
     try {
       // 1. Obtener productos aplicando filtros base (marca, categoría, proveedor)
@@ -94,6 +103,54 @@ export default async function handler(
          ...p,
          reservedQuantity: reservedMap.get(p.id) || 0
       }));
+
+      // Stock derivado para productos elaborados (Recetario): se calcula a
+      // partir del stock de sus ingredientes, respetando la sucursal activa.
+      const recipeIds = products.filter((p: any) => p.isRecipe).map((p: any) => p.id);
+      if (recipeIds.length > 0) {
+        const branchIdParam = req.query.branchId as string | undefined;
+        const branchId = branchIdParam && !isNaN(parseInt(branchIdParam))
+          ? parseInt(branchIdParam)
+          : null;
+        const { computeDerivedStock } = await import("../../../lib/recipeStock");
+        const derivedMap = new Map<number, number>();
+        for (const rid of recipeIds) {
+          try {
+            derivedMap.set(rid, await computeDerivedStock(prisma, rid, branchId));
+          } catch {
+            derivedMap.set(rid, 0);
+          }
+        }
+        const derivedProducts: any[] = [];
+        for (const p of products) {
+          if (!p.isRecipe) {
+            derivedProducts.push(p);
+            continue;
+          }
+          // Sobrescribir el stock por sucursal con el valor derivado (la UI
+          // lee branchStocks cuando filtra por sucursal). El quantityStock
+          // global también queda derivado según la sucursal activa.
+          let branchStocks = p.branchStocks;
+          if (Array.isArray(branchStocks)) {
+            branchStocks = await Promise.all(
+              branchStocks.map(async (bs: any) => {
+                try {
+                  const derived = await computeDerivedStock(prisma, p.id, bs.branchId);
+                  return { ...bs, quantityStock: derived };
+                } catch {
+                  return bs;
+                }
+              }),
+            );
+          }
+          derivedProducts.push({
+            ...p,
+            quantityStock: derivedMap.get(p.id) ?? 0,
+            branchStocks,
+          });
+        }
+        products = derivedProducts;
+      }
 
       // Helper para normalizar texto (pasar a minúsculas y remover acentos/diacríticos)
       const normalizeText = (text: string) => {
@@ -138,27 +195,52 @@ export default async function handler(
   } else if (req.method === 'POST') {
     const {
         pricePurchase, priceSale, quantityStock, stockMinAlert,
-        brandId, categoryId, supplierId, unitType, imageUrl
+        brandId, categoryId, supplierId, unitType, imageUrl, isRecipe, recipeItems, isIngredient
     } = req.body;
     let {
         name, sku, description
     } = req.body;
 
-    // --- Validación más robusta de los datos de entrada ---
-    if (!name || priceSale === undefined || quantityStock === undefined || !brandId || !categoryId) {
-        return res.status(400).json({ message: 'Faltan campos obligatorios: Nombre, Precio Venta, Stock, Marca y Categoría.' });
-    }
-    
-    // Validar y convertir los campos numéricos antes de usarlos
-    const priceSaleNum = parseFloat(priceSale);
-    const quantityStockNum = parseFloat(quantityStock);
-    const brandIdInt = parseInt(brandId);
-    const categoryIdInt = parseInt(categoryId);
+    const isRecipeProduct = isRecipe === true || isRecipe === 'true';
+    const isIngredientProduct = isIngredient === true || isIngredient === 'true';
 
-    if (isNaN(priceSaleNum) || isNaN(quantityStockNum) || isNaN(brandIdInt) || isNaN(categoryIdInt)) {
-        return res.status(400).json({ message: 'Precio de Venta, Stock, Marca o Categoría tienen un formato numérico inválido.' });
+    if (isRecipeProduct && isIngredientProduct) {
+        return res.status(400).json({ message: 'Un producto no puede ser elaborado e ingrediente a la vez.' });
     }
-    
+
+    // --- Validación de los datos de entrada ---
+    if (!name) {
+        return res.status(400).json({ message: 'El nombre es obligatorio.' });
+    }
+    if (quantityStock === undefined || isNaN(parseFloat(quantityStock))) {
+        return res.status(400).json({ message: 'El stock inicial es obligatorio.' });
+    }
+    // El precio de venta no aplica a ingredientes (se fuerzan a 0 y quedan ocultos).
+    if (!isIngredientProduct && priceSale === undefined) {
+        return res.status(400).json({ message: 'El precio de venta es obligatorio.' });
+    }
+    // La categoría aplica a productos vendibles (simples y elaborados); los
+    // ingredientes no la usan. La marca es opcional para todos.
+    if (!isIngredientProduct && !categoryId) {
+        return res.status(400).json({ message: 'La categoría es obligatoria.' });
+    }
+
+    // Validar y convertir los campos numéricos antes de usarlos
+    const priceSaleNum = isIngredientProduct ? 0 : parseFloat(priceSale);
+    const quantityStockNum = parseFloat(quantityStock);
+    const brandIdInt = brandId ? parseInt(brandId) : NaN;
+    const categoryIdInt = isIngredientProduct ? NaN : parseInt(categoryId);
+
+    if (isNaN(priceSaleNum) || isNaN(quantityStockNum)) {
+        return res.status(400).json({ message: 'Precio de Venta o Stock tienen un formato numérico inválido.' });
+    }
+    if (!isIngredientProduct && brandId && isNaN(brandIdInt)) {
+        return res.status(400).json({ message: 'La marca tiene un formato inválido.' });
+    }
+    if (!isIngredientProduct && isNaN(categoryIdInt)) {
+        return res.status(400).json({ message: 'La categoría tiene un formato inválido.' });
+    }
+
     // Validar el precio de compra opcional
     let pricePurchaseDecimal: Decimal | null = null;
     if (pricePurchase !== undefined && pricePurchase !== null && pricePurchase !== '') {
@@ -193,39 +275,48 @@ export default async function handler(
           imageUrl: imageUrl ? imageUrl.trim() : null,
           pricePurchase: pricePurchaseDecimal || new Decimal(0),
           priceSale: new Decimal(priceSaleNum),
-          quantityStock: quantityStockNum,
+          quantityStock: isRecipeProduct ? 0 : quantityStockNum,
           stockMinAlert: stockMinAlert ? parseFloat(stockMinAlert) : null,
           unitType: resolvedUnitType,
-          isPublicWeb: req.body.isPublicWeb !== undefined ? Boolean(req.body.isPublicWeb) : true,
+          // Default oculto: nada se publica en la tienda web sin decisión explícita.
+          // Los ingredientes nunca se publican.
+          isPublicWeb: isIngredientProduct ? false : (req.body.isPublicWeb === true || req.body.isPublicWeb === 'true'),
           webCategory: req.body.webCategory ? String(req.body.webCategory).trim() : null,
-          brand: { connect: { id: brandIdInt } },
-          category: { connect: { id: categoryIdInt } },
+          isRecipe: isRecipeProduct,
+          isIngredient: isIngredientProduct,
+          ...(!isIngredientProduct && !isNaN(brandIdInt) ? { brand: { connect: { id: brandIdInt } } } : {}),
+          ...(!isIngredientProduct && !isNaN(categoryIdInt) ? { category: { connect: { id: categoryIdInt } } } : {}),
           ...(supplierId ? { supplier: { connect: { id: parseInt(supplierId) } } } : {}),
-          ...(targetBranchId ? {
-            branchStocks: {
-              create: {
-                branchId: targetBranchId,
-                quantityStock: quantityStockNum
-              }
-            }
-          } : {})
         },
         include: {
             brand: true,
             category: true,
             supplier: true,
-            branchStocks: true,
         }
       });
+
+      // Stock inicial por sucursal (los elaborados no tienen stock físico propio).
+      if (targetBranchId && !isRecipeProduct) {
+        await prisma.productBranchStock.upsert({
+          where: { productId_branchId: { productId: newProduct.id, branchId: targetBranchId } },
+          update: { quantityStock: quantityStockNum },
+          create: { productId: newProduct.id, branchId: targetBranchId, quantityStock: quantityStockNum },
+        });
+      }
+
+      // Guardar los ingredientes de la receta de forma atómica con el producto.
+      if (isRecipeProduct && Array.isArray(recipeItems) && recipeItems.length > 0) {
+        const { replaceRecipeItems, recordCostSnapshot } = await import("../../../lib/recipeStock");
+        await replaceRecipeItems(prisma, newProduct.id, recipeItems);
+        await recordCostSnapshot(prisma, newProduct.id, "recipe_save");
+      }
       // Fire-and-forget: encolar la creación en el outbox. El sync real lo sube
       // (auto-sync periódico / manual), sin bloquear la respuesta.
       try {
         const { enqueueOutbox } = await import("../../../lib/syncOutbox");
         await enqueueOutbox("Product", "UPSERT", String(newProduct.id));
-        if (newProduct.branchStocks && newProduct.branchStocks.length > 0) {
-          for (const bs of newProduct.branchStocks) {
-            await enqueueOutbox("ProductBranchStock", "UPSERT", String(newProduct.id));
-          }
+        if (targetBranchId && !isRecipeProduct) {
+          await enqueueOutbox("ProductBranchStock", "UPSERT", String(newProduct.id));
         }
       } catch (enqErr) {
         console.error("[Products] Error al encolar producto en outbox:", enqErr);

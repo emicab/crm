@@ -3,6 +3,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { isProDevice } from '../../../lib/branchIdentity';
+import { applyRateLimit } from '../../../lib/rateLimit';
+import { sanitizeString } from '../../../lib/sanitize';
 
 export default async function handler(
   req: NextApiRequest,
@@ -10,7 +12,7 @@ export default async function handler(
 ) {
   if (req.method === 'GET') {
     try {
-      // La vista/gestión de pedidos web es exclusiva del Plan Pro.
+      // Verificación de autenticación de dispositivo / sesión interna
       if (!(await isProDevice())) {
         return res.status(403).json({ message: 'La gestión de pedidos web requiere el Plan Pro.', blockedByPlan: true });
       }
@@ -46,8 +48,13 @@ export default async function handler(
       handleApiError(res, error, "fetching web orders");
     }
   } else if (req.method === 'POST') {
-    // Registra un nuevo pedido web (por ejemplo, cuando se simula o sincroniza desde Supabase)
+    // Registra un nuevo pedido web (desde ClinStore o sincronizado)
     try {
+      // Control de tasa de peticiones (Rate Limit: 20 pedidos por minuto)
+      if (!applyRateLimit(req, res, 20, 60 * 1000)) {
+        return;
+      }
+
       const {
         webOrderNumber,
         clientName,
@@ -56,18 +63,23 @@ export default async function handler(
         shippingAddress,
         deliveryType,
         paymentMethod,
-        paymentStatus,
-        totalAmount,
         notes,
         items,
         branchId,
       } = req.body;
 
-      if (!clientName || !clientPhone || !items || !items.length) {
-        return res.status(400).json({ message: 'Nombre, teléfono e ítems son obligatorios.' });
+      if (!clientName || !clientPhone || !Array.isArray(items) || !items.length) {
+        return res.status(400).json({ message: 'Nombre, teléfono e ítems válidos son obligatorios.' });
       }
 
-      const generatedNumber = webOrderNumber || `WEB-${Date.now().toString().slice(-6)}`;
+      // Sanitización de strings de entrada
+      const sanitizedName = sanitizeString(clientName);
+      const sanitizedEmail = clientEmail ? sanitizeString(clientEmail) : null;
+      const sanitizedPhone = sanitizeString(clientPhone);
+      const sanitizedAddress = shippingAddress ? sanitizeString(shippingAddress) : null;
+      const sanitizedNotes = notes ? sanitizeString(notes) : null;
+
+      const generatedNumber = webOrderNumber ? sanitizeString(webOrderNumber) : `WEB-${Date.now().toString().slice(-6)}`;
 
       // Si el pedido ya existe, evitar duplicados y responder 200 OK
       const existing = await prisma.webOrder.findFirst({
@@ -80,69 +92,105 @@ export default async function handler(
 
       const parsedBranchId = branchId ? parseInt(branchId) : null;
 
+      // SEGURIDAD: Recalcular precios unitarios y subtotal server-side consultando
+      // la base de datos oficial para evitar manipulación de precios desde el cliente.
+      const productIds = items.map((i: any) => parseInt(i.productId)).filter(id => !isNaN(id));
+      const dbProducts = await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, priceSale: true }
+      });
+      const productMap = new Map(dbProducts.map(p => [p.id, Number(p.priceSale)]));
+
+      let calculatedTotal = 0;
+      const verifiedItems = [];
+
+      for (const rawItem of items) {
+        const pId = parseInt(rawItem.productId);
+        const qty = parseFloat(rawItem.quantity);
+        if (isNaN(pId) || isNaN(qty) || qty <= 0) continue;
+
+        const dbPrice = productMap.get(pId) ?? (parseFloat(rawItem.unitPrice) || 0);
+        const subtotal = qty * dbPrice;
+        calculatedTotal += subtotal;
+
+        verifiedItems.push({
+          productId: pId,
+          quantity: qty,
+          unitPrice: dbPrice,
+          subtotal: subtotal,
+        });
+      }
+
+      if (verifiedItems.length === 0) {
+        return res.status(400).json({ message: 'No se encontraron productos válidos en el pedido.' });
+      }
+
+      // Por defecto, todo pedido web público inicia en estado PENDING de pago
       const newOrder = await prisma.webOrder.create({
         data: {
           webOrderNumber: generatedNumber,
-          clientName,
-          clientEmail: clientEmail || null,
-          clientPhone,
-          shippingAddress: shippingAddress || null,
-          deliveryType: deliveryType || 'PICKUP',
+          clientName: sanitizedName,
+          clientEmail: sanitizedEmail,
+          clientPhone: sanitizedPhone,
+          shippingAddress: sanitizedAddress,
+          deliveryType: deliveryType === 'DELIVERY' ? 'DELIVERY' : 'PICKUP',
           branchId: parsedBranchId,
           paymentMethod: paymentMethod || 'CASH_ON_DELIVERY',
-          paymentStatus: paymentStatus || 'PENDING',
+          paymentStatus: 'PENDING', // Se valida mediante webhook de MP o confirmación de caja
           status: 'PENDING_PREPARATION',
-          totalAmount: parseFloat(totalAmount) || 0,
-          notes: notes || null,
+          totalAmount: calculatedTotal,
+          notes: sanitizedNotes,
           items: {
-            create: items.map((i: any) => ({
-              productId: parseInt(i.productId),
-              quantity: parseFloat(i.quantity),
-              unitPrice: parseFloat(i.unitPrice),
-              subtotal: parseFloat(i.quantity) * parseFloat(i.unitPrice),
-            }))
+            create: verifiedItems
           }
         },
         include: { items: { include: { product: true } } }
       });
 
-      // Descuenta stock automáticamente (global + sucursal asignada; si no hay
-      // branchId se usa la principal como reserva provisoria)
+      // Descuenta stock automáticamente
       const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
       const stockBranchId = parsedBranchId ?? mainBranch?.id;
-      for (const item of items) {
+      for (const item of verifiedItems) {
         try {
-          await prisma.product.update({
-            where: { id: parseInt(item.productId) },
-            data: {
-              quantityStock: {
-                decrement: parseFloat(item.quantity)
-              }
-            }
+          const product = await prisma.product.findUnique({
+            where: { id: item.productId },
+            select: { isRecipe: true },
           });
-          if (stockBranchId) {
-            await prisma.productBranchStock.upsert({
-              where: {
-                productId_branchId: {
-                  productId: parseInt(item.productId),
-                  branchId: stockBranchId,
-                },
-              },
-              update: { quantityStock: { decrement: parseFloat(item.quantity) } },
-              create: {
-                productId: parseInt(item.productId),
-                branchId: stockBranchId,
-                quantityStock: -parseFloat(item.quantity),
-              },
+          if (product?.isRecipe) {
+            const { deductRecipeStock } = await import("../../../lib/recipeStock");
+            await deductRecipeStock(prisma, item.productId, item.quantity, stockBranchId);
+          } else {
+            await prisma.product.update({
+              where: { id: item.productId },
+              data: {
+                quantityStock: {
+                  decrement: item.quantity
+                }
+              }
             });
+            if (stockBranchId) {
+              await prisma.productBranchStock.upsert({
+                where: {
+                  productId_branchId: {
+                    productId: item.productId,
+                    branchId: stockBranchId,
+                  },
+                },
+                update: { quantityStock: { decrement: item.quantity } },
+                create: {
+                  productId: item.productId,
+                  branchId: stockBranchId,
+                  quantityStock: -item.quantity,
+                },
+              });
+            }
           }
         } catch (stkErr) {
           console.warn("Error descontando stock para item:", item, stkErr);
         }
       }
 
-      // Fire-and-forget: encolar el pedido web en el outbox para que el drain lo
-      // suba a la nube (hoy el sync global solo sube pedidos que ya existen en la nube).
+      // Encolar outbox para sync
       try {
         const { enqueueOutbox } = await import('../../../lib/syncOutbox');
         await enqueueOutbox('WebOrder', 'UPSERT', String(newOrder.id));

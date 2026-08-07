@@ -46,7 +46,7 @@ export default async function handler(
 
     // Validar dependencias de negocio (los ítems de venta se desvinculan en vez
     // de bloquear; las consignaciones canceladas se limpian; el resto sí bloquea).
-    const [purchaseItemsCount, comboItemsCount, promotionConditionsCount, activeConsignmentItemsCount, stockTransferItemsCount] = await Promise.all([
+    const [purchaseItemsCount, comboItemsCount, promotionConditionsCount, activeConsignmentItemsCount, stockTransferItemsCount, recipeIngredientCount] = await Promise.all([
       prisma.purchaseItem.count({ where: { productId: { in: candidateIds } } }),
       prisma.comboItem.count({ where: { productId: { in: candidateIds } } }),
       prisma.promotionCondition.count({ where: { productId: { in: candidateIds } } }),
@@ -54,6 +54,7 @@ export default async function handler(
         where: { productId: { in: candidateIds }, consignment: { status: { in: ['DELIVERED', 'SETTLED'] } } },
       }),
       prisma.stockTransferItem.count({ where: { productId: { in: candidateIds } } }),
+      prisma.recipeItem.count({ where: { ingredientId: { in: candidateIds } } }),
     ]);
 
     const relations = [];
@@ -62,6 +63,7 @@ export default async function handler(
     if (promotionConditionsCount > 0) relations.push(`${promotionConditionsCount} condición(es) de promoción`);
     if (activeConsignmentItemsCount > 0) relations.push(`${activeConsignmentItemsCount} ítem(s) de consignación activa`);
     if (stockTransferItemsCount > 0) relations.push(`${stockTransferItemsCount} ítem(s) de traspaso de stock`);
+    if (recipeIngredientCount > 0) relations.push(`${recipeIngredientCount} receta(s) que lo(s) usan como ingrediente`);
 
     if (relations.length > 0) {
       return res.status(409).json({

@@ -97,6 +97,18 @@ export default async function handler(
     }
 
     try {
+      // Guarda de Recetario: no se compran productos elaborados; se repone comprando sus ingredientes.
+      const recipeProducts = await prisma.product.findMany({
+        where: { id: { in: items.map(i => i.productId) }, isRecipe: true },
+        select: { id: true, name: true },
+      });
+      if (recipeProducts.length > 0) {
+        return res.status(400).json({
+          message: `No se puede comprar un producto elaborado ("${recipeProducts[0].name}"). Comprá sus ingredientes para reponer stock.`,
+        });
+      }
+
+      const affectedRecipeIds: number[] = [];
       const result = await prisma.$transaction(async (tx) => {
         const purchaseStatus = status || PurchaseStatus.PENDING;
 
@@ -126,19 +138,15 @@ export default async function handler(
           });
 
           if (purchaseStatus === PurchaseStatus.RECEIVED) {
-            const product = await tx.product.findUnique({
-              where: { id: item.productId },
-              select: { pricePurchase: true },
-            });
-
             const stockQty = item.quantityReceived ?? item.quantity;
+            // El costo del ingrediente/producto = última compra recibida.
             await tx.product.update({
               where: { id: item.productId },
               data: {
                 quantityStock: {
                   increment: stockQty,
                 },
-                ...(!product?.pricePurchase ? { pricePurchase: new Decimal(item.purchasePrice) } : {})
+                pricePurchase: new Decimal(item.purchasePrice),
               },
             });
 
@@ -162,6 +170,18 @@ export default async function handler(
               }
             }
           }
+        }
+
+        // Recetario: al recibir mercadería, registrar snapshot de costo de los
+        // elaborados afectados (solo si cambió).
+        if (purchaseStatus === PurchaseStatus.RECEIVED) {
+          const { findRecipesAffectedByIngredient, recordCostSnapshot } = await import("../../../lib/recipeStock");
+          const ingredientIds = items.map((i: any) => parseInt(i.productId));
+          const affected = await findRecipesAffectedByIngredient(tx, ingredientIds);
+          for (const rid of affected) {
+            await recordCostSnapshot(tx, rid, "purchase");
+          }
+          affectedRecipeIds.push(...affected);
         }
 
         if (paymentType) {
@@ -210,6 +230,10 @@ export default async function handler(
         for (const pid of productIds) {
           await enqueueOutbox('Product', 'UPSERT', String(pid));
           await enqueueOutbox('ProductBranchStock', 'UPSERT', String(pid));
+        }
+        // Re-sincronizar elaborados afectados (su stock derivado cambió al recibir).
+        for (const rid of affectedRecipeIds) {
+          await enqueueOutbox('Product', 'UPSERT', String(rid));
         }
       } catch (enqErr) {
         console.error('[Compras] Error al encolar compra:', enqErr);

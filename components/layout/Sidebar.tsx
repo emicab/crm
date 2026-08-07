@@ -26,6 +26,7 @@ import {
   Bookmark,
   Ticket,
   ArrowRightLeft,
+  ChefHat,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
@@ -86,6 +87,13 @@ const navGroups: NavGroup[] = [
         href: "/productos",
         label: "Productos",
         icon: <Package size={20} />,
+        allowedRoles: ["ADMIN", "SUPERVISOR"],
+      },
+      {
+        href: "/recetario",
+        label: "Recetario 🧾",
+        icon: <ChefHat size={20} />,
+        moduleId: "recetario",
         allowedRoles: ["ADMIN", "SUPERVISOR"],
       },
       {

@@ -12,7 +12,13 @@ interface SaleTotalsPanelProps {
   };
   comboDiscount: number;
   appliedPromotion: any;
-  validDiscountCode: { code: string; percent: number } | null;
+  validDiscountCode: {
+    code: string;
+    percent: number;
+    discountType?: string;
+    discountValue?: number;
+    minPurchase?: number;
+  } | null;
   isLoading: boolean;
   onSaveOrder: () => void;
 }
@@ -73,7 +79,7 @@ export const SaleTotalsPanel: React.FC<SaleTotalsPanelProps> = ({
         {validDiscountCode && (
           <div className="flex justify-between text-indigo-400 font-semibold">
             <span>
-              Código de Descuento ({validDiscountCode.percent}%)
+              Código de Descuento ({validDiscountCode.code} - {validDiscountCode.discountType === 'FIXED_AMOUNT' ? `$${validDiscountCode.discountValue ?? validDiscountCode.percent}` : `${validDiscountCode.percent}%`})
             </span>
             <span className="font-mono">
               -{formatCurrency(totals.discountCodeDiscount)}

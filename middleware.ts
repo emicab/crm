@@ -3,45 +3,56 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const origin = request.headers.get('origin') || '*';
 
-  // Manejo global de CORS preflight (OPTIONS) para permitir llamadas desde ClinStore / Ngrok / Vercel
+  // Helper de cabeceras CORS seguras
+  const setCorsHeaders = (res: NextResponse) => {
+    res.headers.set('Access-Control-Allow-Origin', origin);
+    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-app-secret, ngrok-skip-browser-warning');
+    res.headers.set('Access-Control-Allow-Credentials', 'true');
+    return res;
+  };
+
+  // Manejo global de CORS preflight (OPTIONS)
   if (request.method === 'OPTIONS') {
-    return new NextResponse(null, {
-      status: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-app-secret, ngrok-skip-browser-warning',
-      },
-    });
+    const response = new NextResponse(null, { status: 200 });
+    return setCorsHeaders(response);
   }
 
-  // Rutas públicas y de API que deben ser accesibles desde la Tienda Web y Webhooks de Mercado Pago
-  const isPublicRoute =
+  // Identificar rutas que son verdaderamente públicas según método HTTP
+  const isStaticAsset =
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/static/') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/ClinPOS.png') ||
-    pathname.startsWith('/IgniteCRM.png') ||
-    pathname.startsWith('/api/web-orders') ||
+    pathname.startsWith('/IgniteCRM.png');
+
+  const isWebhookOrMp =
     pathname.startsWith('/api/webhooks/') ||
     pathname.startsWith('/api/mercadopago/') ||
-    pathname.startsWith('/api/store-config') ||
-    pathname.startsWith('/api/products') ||
-    pathname.startsWith('/api/categories') ||
-    pathname.startsWith('/api/coupons/') ||
-    pathname.startsWith('/api/sync') ||
     pathname.startsWith('/api/mp/');
 
+  // Solo POST en /api/web-orders para que la tienda cree pedidos.
+  // /api/web-orders/mark-paid y GET /api/web-orders NO son públicos.
+  const isPublicWebOrderCreate = pathname === '/api/web-orders' && request.method === 'POST';
+
+  // Solo GET para catálogo público consumido por ClinStore
+  const isPublicCatalogGet =
+    request.method === 'GET' &&
+    (pathname.startsWith('/api/products') ||
+      pathname.startsWith('/api/categories') ||
+      pathname.startsWith('/api/coupons/validate') ||
+      pathname.startsWith('/api/store-config') ||
+      pathname.startsWith('/api/sync/status'));
+
+  const isPublicRoute = isStaticAsset || isWebhookOrMp || isPublicWebOrderCreate || isPublicCatalogGet;
+
   if (isPublicRoute) {
-    const res = NextResponse.next();
-    res.headers.set('Access-Control-Allow-Origin', '*');
-    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-app-secret, ngrok-skip-browser-warning');
-    return res;
+    return setCorsHeaders(NextResponse.next());
   }
 
-  // Solo se valida la seguridad interna de escritorio en producción
+  // Validación de seguridad interna de escritorio en producción
   if (process.env.NODE_ENV === 'production') {
     const appSecret = process.env.APP_SECRET;
 
@@ -58,24 +69,25 @@ export function middleware(request: NextRequest) {
 
         response.cookies.set('app_auth_token', appSecret, {
           httpOnly: true,
-          secure: false, // Localhost
+          secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
           path: '/',
           maxAge: 60 * 60 * 24 * 365, // 1 año
         });
-        return response;
+        return setCorsHeaders(response);
       }
 
-      // Si no coincide la cookie ni la cabecera, denegamos el acceso a pantallas privadas de la app
+      // Si no coincide la cookie ni la cabecera, denegamos el acceso a endpoints privados
       if (incomingSecretHeader !== appSecret && incomingSecretCookie !== appSecret) {
         const clientIp = request.headers.get('x-forwarded-for') || 'desconocido';
-        console.warn(`[Security] Bloqueado intento de acceso externo a ${pathname} desde ${clientIp}`);
+        console.warn(`[Security] Bloqueado intento de acceso no autorizado a ${pathname} (${request.method}) desde ${clientIp}`);
 
         if (pathname.startsWith('/api/')) {
-          return new NextResponse(
-            JSON.stringify({ success: false, error: 'Access Denied' }),
+          const forbiddenRes = new NextResponse(
+            JSON.stringify({ success: false, error: 'Access Denied: Unauthenticated' }),
             { status: 403, headers: { 'content-type': 'application/json' } }
           );
+          return setCorsHeaders(forbiddenRes);
         }
 
         return new NextResponse(
@@ -104,9 +116,7 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  const res = NextResponse.next();
-  res.headers.set('Access-Control-Allow-Origin', '*');
-  return res;
+  return setCorsHeaders(NextResponse.next());
 }
 
 export const config = {

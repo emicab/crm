@@ -29,6 +29,8 @@ export default async function handler(
                 priceSale: true,
                 quantityStock: true,
                 unitType: true,
+                isRecipe: true,
+                isIngredient: true,
                 brand: { select: { name: true } },
                 category: { select: { name: true } },
                 branchStocks: true,
@@ -42,19 +44,37 @@ export default async function handler(
     const seenIds = new Set<number>();
     const products: any[] = [];
 
+    const recipeCandidates = recentSales
+      .flatMap(s => s.items)
+      .map(i => i.product)
+      .filter((p): p is any => !!p && p.isRecipe);
+
+    const recipeStockMap = new Map<number, number>();
+    for (const rp of recipeCandidates) {
+      try {
+        const { computeDerivedStock } = await import('../../../lib/recipeStock');
+        recipeStockMap.set(rp.id, await computeDerivedStock(prisma, rp.id, parsedBranchId));
+      } catch {
+        recipeStockMap.set(rp.id, 0);
+      }
+    }
+
     for (const sale of recentSales) {
       for (const item of sale.items) {
-        if (item.product && !seenIds.has(item.product.id)) {
+        if (item.product && !item.product.isIngredient && !seenIds.has(item.product.id)) {
           seenIds.add(item.product.id);
           products.push({
             id: item.product.id,
             name: item.product.name,
             sku: item.product.sku,
             priceSale: parseFloat(item.product.priceSale.toString()),
-            quantityStock: item.product.quantityStock,
+            quantityStock: item.product.isRecipe
+              ? (recipeStockMap.get(item.product.id) ?? 0)
+              : item.product.quantityStock,
             unitType: item.product.unitType,
-            brandName: item.product.brand.name,
-            categoryName: item.product.category.name,
+            isRecipe: item.product.isRecipe,
+            brandName: item.product.brand?.name ?? null,
+            categoryName: item.product.category?.name ?? null,
           });
           if (products.length >= 15) break;
         }

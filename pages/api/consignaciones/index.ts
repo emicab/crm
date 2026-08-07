@@ -47,6 +47,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
+      // Guarda de Recetario: los productos elaborados no se consignan (no tienen stock físico propio).
+      const recipeBlock = await prisma.product.findFirst({
+        where: { id: { in: items.map((i: any) => i.productId) }, isRecipe: true },
+        select: { name: true },
+      });
+      if (recipeBlock) {
+        return res.status(400).json({
+          message: `No se puede consignar un producto elaborado ("${recipeBlock.name}").`,
+        });
+      }
+
       const result = await prisma.$transaction(async (tx) => {
         // 1. Verificar y descontar stock de cada producto entregado
         for (const item of items) {

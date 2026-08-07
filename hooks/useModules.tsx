@@ -146,10 +146,14 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!planLoaded) return true;
         return plan === 'pro';
       }
-      // Todos los demás módulos son básicos y están siempre habilitados
+      // Módulos con toggle de configuración (setting `module_<id>`): respetan el valor guardado.
+      if (modules[moduleId] !== undefined) {
+        return modules[moduleId];
+      }
+      // Todos los demás módulos básicos están siempre habilitados por defecto.
       return true;
     },
-    [plan, planLoaded]
+    [plan, planLoaded, modules]
   );
 
   const hasRolePermission = useCallback(

@@ -68,7 +68,7 @@ export default async function handler(
 
     const {
       pricePurchase, priceSale, quantityStock, stockMinAlert,
-      brandId, categoryId, supplierId, unitType, branchStocks, branchId
+      brandId, categoryId, supplierId, unitType, branchStocks, branchId, isRecipe
     } = req.body;
     let {
       name, sku, description,
@@ -140,6 +140,16 @@ export default async function handler(
           _sum: { quantityStock: true }
         });
         totalStockCalculated = totalStockAgg._sum.quantityStock ?? 0;
+      } else if (quantityStock !== undefined && !(isRecipe === true || isRecipe === 'true')) {
+        const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
+        const stockVal = parseFloat(quantityStock);
+        if (mainBranch && !isNaN(stockVal)) {
+          await prisma.productBranchStock.upsert({
+            where: { productId_branchId: { productId: id, branchId: mainBranch.id } },
+            update: { quantityStock: stockVal },
+            create: { productId: id, branchId: mainBranch.id, quantityStock: stockVal }
+          });
+        }
       }
 
       const dataToUpdate: Prisma.ProductUpdateInput = {
@@ -261,6 +271,20 @@ export default async function handler(
         webOrderNumbersToDelete = webOrders.map(o => o.webOrderNumber);
       }
 
+      // Recetas que usan este producto como ingrediente. Se eliminan sus items
+      // (RecipeItem.ingredient no tiene onDelete) y luego se re-suben a la nube
+      // para que el FK de Supabase no rompa el borrado del producto.
+      const affectedRecipeIds = [
+        ...new Set(
+          (
+            await prisma.recipeItem.findMany({
+              where: { ingredientId: id },
+              select: { productId: true },
+            })
+          ).map((ri) => ri.productId)
+        ),
+      ];
+
       // Borrar dependencias de órdenes web pendientes y el producto (transacción atómica).
       await prisma.$transaction(async (tx) => {
         if (webOrderIds.length > 0) {
@@ -281,6 +305,8 @@ export default async function handler(
           where: { productId: id, consignment: { status: 'CANCELLED' } },
         });
         await tx.productBranchStock.deleteMany({ where: { productId: id } });
+        // Quitar el producto de las recetas que lo usan como ingrediente.
+        await tx.recipeItem.deleteMany({ where: { ingredientId: id } });
         await tx.product.delete({ where: { id } });
       });
 
@@ -290,6 +316,11 @@ export default async function handler(
         const { enqueueOutbox } = await import("../../../lib/syncOutbox");
         for (const num of webOrderNumbersToDelete) {
           await enqueueOutbox("WebOrder", "DELETE", num);
+        }
+        // Primero re-subir las recetas afectadas (limpiar sus RecipeItem en la
+        // nube) y después borrar el producto, para no violar el FK de Supabase.
+        for (const recipeId of affectedRecipeIds) {
+          await enqueueOutbox("Product", "UPSERT", String(recipeId));
         }
         await enqueueOutbox("Product", "DELETE", String(id));
       } catch (enqErr) {

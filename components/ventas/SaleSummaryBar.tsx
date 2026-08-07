@@ -10,7 +10,7 @@ interface SaleSummaryBarProps {
   items: SaleItemInCart[];
   comboDiscount: number;
   appliedPromotion: { name: string; discountLabel: string } | null;
-  validDiscountCode: { code: string; percent: number } | null;
+  validDiscountCode: { code: string; percent: number; discountType?: string; discountValue?: number; minPurchase?: number } | null;
   discountCodeDiscount: number;
   paymentMethodDiscount: number;
   finalTotal: number;

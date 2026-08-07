@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { useModules } from "@/hooks/useModules";
 import ConfirmationModal from "../ui/ConfirmationModal";
 import { formatCurrency } from "@/lib/formatCurrency";
 import Pagination from "@/components/ui/Pagination";
@@ -27,6 +28,8 @@ import { BatchPriceModal } from "./BatchPriceModal";
 
 const ProductTable = () => {
   const router = useRouter();
+  const { plan } = useModules();
+  const isPro = plan === "pro";
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -528,8 +531,12 @@ const ProductTable = () => {
           onClear={handleClearSelection}
           onBatchUpdate={() => setIsBatchSupplierModalOpen(true)}
           onAdjustPrices={() => setIsBatchPriceModalOpen(true)}
-          onPublishWeb={() => handleBatchWebStatus(true)}
-          onHideWeb={() => handleBatchWebStatus(false)}
+          {...(isPro
+            ? {
+                onPublishWeb: () => handleBatchWebStatus(true),
+                onHideWeb: () => handleBatchWebStatus(false),
+              }
+            : {})}
           onTransferStock={handleOpenTransferForSelected}
           onDelete={() => setIsBatchDeleteOpen(true)}
         />
@@ -573,9 +580,11 @@ const ProductTable = () => {
                 <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-20">
                   Stock
                 </th>
-                <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-28">
-                  Tienda Web
-                </th>
+                {isPro && (
+                  <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-28">
+                    Tienda Web
+                  </th>
+                )}
                 <th className="py-3 px-2 text-sm font-semibold text-foreground text-center w-20">
                   Acciones
                 </th>
@@ -619,15 +628,15 @@ const ProductTable = () => {
                     </td>
                     <td
                       className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate"
-                      title={product.brand.name}
+                      title={product.brand?.name || "-"}
                     >
-                      {product.brand.name}
+                      {product.brand?.name || "-"}
                     </td>
                     <td
                       className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate"
-                      title={product.category.name}
+                      title={product.category?.name || "-"}
                     >
-                      {product.category.name}
+                      {product.category?.name || "-"}
                     </td>
                     <td
                       className="py-2.5 px-2 text-xs text-foreground-muted w-28 truncate"
@@ -659,34 +668,36 @@ const ProductTable = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="py-2.5 px-2 text-sm text-center w-28">
-                      <button
-                        onClick={() =>
-                          handleToggleWebPublic(
-                            product.id,
-                            !product.isPublicWeb,
-                          )
-                        }
-                        className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1 mx-auto transition-colors ${
-                          product.isPublicWeb
-                            ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300"
-                        }`}
-                        title="Haz clic para cambiar la visibilidad en ClinStore"
-                      >
-                        {product.isPublicWeb ? (
-                          <>
-                            <Globe size={12} className="text-emerald-600" />{" "}
-                            Publicado
-                          </>
-                        ) : (
-                          <>
-                            <EyeOff size={12} className="text-gray-500" />{" "}
-                            Oculto
-                          </>
-                        )}
-                      </button>
-                    </td>
+                    {isPro && (
+                      <td className="py-2.5 px-2 text-sm text-center w-28">
+                        <button
+                          onClick={() =>
+                            handleToggleWebPublic(
+                              product.id,
+                              !product.isPublicWeb,
+                            )
+                          }
+                          className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1 mx-auto transition-colors ${
+                            product.isPublicWeb
+                              ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300"
+                          }`}
+                          title="Haz clic para cambiar la visibilidad en ClinStore"
+                        >
+                          {product.isPublicWeb ? (
+                            <>
+                              <Globe size={12} className="text-emerald-600" />{" "}
+                              Publicado
+                            </>
+                          ) : (
+                            <>
+                              <EyeOff size={12} className="text-gray-500" />{" "}
+                              Oculto
+                            </>
+                          )}
+                        </button>
+                      </td>
+                    )}
                     <td className="py-2.5 px-2 text-sm text-center w-20 whitespace-nowrap">
                       <div className="flex items-center justify-center space-x-1">
                         <Button

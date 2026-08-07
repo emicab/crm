@@ -28,7 +28,7 @@ export default function StockPage() {
     setNewStock('');
 
     try {
-      const res = await fetch(`/api/products?search=${encodeURIComponent(trimmed)}`);
+      const res = await fetch(`/api/products?kind=all&search=${encodeURIComponent(trimmed)}`);
       if (!res.ok) throw new Error('Error al buscar');
 
       const data = await res.json();
@@ -74,14 +74,17 @@ export default function StockPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantityStock: Number(newStock) }),
       });
-      if (!res.ok) throw new Error('Error al guardar');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Error al guardar');
+      }
       toast.success(`Stock de "${product.name}" actualizado a ${newStock}`);
       setProduct(null);
       setBarcode('');
       setFound(null);
       setTimeout(() => inputRef.current?.focus(), 100);
-    } catch {
-      toast.error('Error al guardar el stock.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al guardar el stock.');
     } finally {
       setSaving(false);
     }
@@ -155,7 +158,7 @@ export default function StockPage() {
 
           {product.brand && (
             <div className="flex gap-2 text-xs text-foreground-muted flex-wrap">
-              <span className="px-2 py-0.5 bg-background rounded">{product.brand.name}</span>
+              <span className="px-2 py-0.5 bg-background rounded">{product.brand?.name}</span>
               {product.category && <span className="px-2 py-0.5 bg-background rounded">{product.category.name}</span>}
               {product.supplier && <span className="px-2 py-0.5 bg-background rounded">{product.supplier.name}</span>}
               {product.stockMinAlert !== null && product.stockMinAlert !== undefined && (
@@ -166,48 +169,67 @@ export default function StockPage() {
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-foreground">Nuevo Stock</label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setNewStock(prev => Math.max(0, (prev === '' ? 0 : prev) - 1))}
-                className="w-14 h-14 bg-background border-2 border-border rounded-xl text-2xl font-bold text-foreground hover:bg-muted transition-colors flex items-center justify-center"
-              >
-                −
-              </button>
-              <input
-                type="tel"
-                inputMode="numeric"
-                min="0"
-                value={newStock}
-                onChange={(e) => setNewStock(e.target.value === '' ? '' : parseInt(e.target.value))}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } }}
-                autoFocus
-                className="flex-1 h-14 text-2xl text-center bg-background border-2 border-border rounded-xl px-4 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              />
-              <button
-                type="button"
-                onClick={() => setNewStock(prev => (prev === '' ? 1 : prev + 1))}
-                className="w-14 h-14 bg-background border-2 border-border rounded-xl text-2xl font-bold text-foreground hover:bg-muted transition-colors flex items-center justify-center"
-              >
-                +
-              </button>
+          {product.isRecipe ? (
+            <div className="p-4 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-300/50 dark:border-amber-800 rounded-xl">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                🧾 Producto elaborado (Recetario)
+              </p>
+              <p className="text-xs text-foreground-muted mt-1">
+                El stock se calcula automáticamente desde los ingredientes. Para aumentar la
+                disponibilidad, cargá stock a los ingredientes (este producto o vía Compras).
+              </p>
+              <p className="text-xs font-semibold text-foreground mt-2">
+                Disponibilidad actual: {product.quantityStock}
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-foreground">Nuevo Stock</label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setNewStock(prev => Math.max(0, (prev === '' ? 0 : prev) - 1))}
+                  className="w-14 h-14 bg-background border-2 border-border rounded-xl text-2xl font-bold text-foreground hover:bg-muted transition-colors flex items-center justify-center"
+                >
+                  −
+                </button>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  min="0"
+                  value={newStock}
+                  onChange={(e) => setNewStock(e.target.value === '' ? '' : parseInt(e.target.value))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } }}
+                  autoFocus
+                  className="flex-1 h-14 text-2xl text-center bg-background border-2 border-border rounded-xl px-4 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setNewStock(prev => (prev === '' ? 1 : prev + 1))}
+                  className="w-14 h-14 bg-background border-2 border-border rounded-xl text-2xl font-bold text-foreground hover:bg-muted transition-colors flex items-center justify-center"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
 
-          <button
-            onClick={handleSave}
-            disabled={saving || newStock === ''}
-            className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-primary/90 transition-colors"
-          >
-            {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-            {saving ? 'Guardando...' : 'Guardar Stock'}
-          </button>
+          {!product.isRecipe && (
+            <button
+              onClick={handleSave}
+              disabled={saving || newStock === ''}
+              className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-primary/90 transition-colors"
+            >
+              {saving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+              {saving ? 'Guardando...' : 'Guardar Stock'}
+            </button>
+          )}
 
-          <p className="text-[10px] text-foreground-muted/60 text-center">
-            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border font-mono text-[9px]">Enter</kbd> en el campo de stock para guardar rápido
-          </p>
+          {!product.isRecipe && (
+            <p className="text-[10px] text-foreground-muted/60 text-center">
+              <kbd className="px-1.5 py-0.5 rounded bg-background border border-border font-mono text-[9px]">Enter</kbd> en el campo de stock para guardar rápido
+            </p>
+          )}
         </div>
       )}
 

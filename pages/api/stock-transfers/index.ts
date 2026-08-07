@@ -44,6 +44,16 @@ export default async function handler(
         return;
       }
 
+      // Guarda de Recetario: los elaborados no se transfieren; se transfieren sus ingredientes.
+      const recipeBlock = await prisma.product.findFirst({
+        where: { id: { in: items.map((i: any) => Number(i.productId)) }, isRecipe: true },
+        select: { name: true },
+      });
+      if (recipeBlock) {
+        res.status(400).json({ message: `No se puede transferir un producto elaborado ("${recipeBlock.name}"). Transferí sus ingredientes.` });
+        return;
+      }
+
       // Solo se puede enviar stock del propio local
       const deviceBranchId = await getEffectiveDeviceBranchId();
       if (deviceBranchId === null || Number(sourceBranchId) !== deviceBranchId) {

@@ -28,6 +28,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ message: "Pedido web no encontrado." });
       }
 
+      // Elaborados (Recetario): el stock se reserva/repone por ingredientes.
+      const orderItemIds = currentOrder.items.map((i) => i.productId);
+      const recipeIds = new Set<number>(
+        (await prisma.product.findMany({
+          where: { id: { in: orderItemIds }, isRecipe: true },
+          select: { id: true },
+        })).map((p: any) => p.id),
+      );
+
       const isDelivered = status === "DELIVERED";
       const isCancelling = status === "CANCELLED" && currentOrder.status !== "CANCELLED";
       const isUncancelling = status && status !== "CANCELLED" && currentOrder.status === "CANCELLED";
@@ -81,16 +90,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const productsMap = new Map<number, any>();
         dbProducts.forEach((p) => productsMap.set(p.id, p));
 
-        saleItemsData = currentOrder.items.map((item) => {
-          const prod = productsMap.get(item.productId);
-          return {
-            productId: item.productId,
-            productName: prod?.name || null,
-            quantity: item.quantity,
-            priceAtSale: item.unitPrice,
-            purchasePriceAtSale: prod ? prod.pricePurchase : 0,
-          };
-        });
+        saleItemsData = await Promise.all(
+          currentOrder.items.map(async (item) => {
+            const prod = productsMap.get(item.productId);
+            let purchasePriceAtSale: any = prod ? prod.pricePurchase : 0;
+            if (prod?.isRecipe) {
+              const { computeRecipeCost } = await import("../../../lib/recipeStock");
+              purchasePriceAtSale = (await computeRecipeCost(prisma, item.productId)).cost;
+            }
+            return {
+              productId: item.productId,
+              productName: prod?.name || null,
+              quantity: item.quantity,
+              priceAtSale: item.unitPrice,
+              purchasePriceAtSale,
+            };
+          }),
+        );
       }
 
       // Reembolso MP si se cancela un pedido pagado
@@ -150,6 +166,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
           for (const item of currentOrder.items) {
             const qty = Number(item.quantity);
+            if (recipeIds.has(item.productId)) {
+              const { restoreRecipeStock, deductRecipeStock } = await import("../../../lib/recipeStock");
+              if (currentReserveBranchId && currentReserveBranchId !== newBranchId) {
+                await restoreRecipeStock(tx, item.productId, qty, currentReserveBranchId);
+              }
+              await deductRecipeStock(tx, item.productId, qty, newBranchId);
+              continue;
+            }
             if (currentReserveBranchId && currentReserveBranchId !== newBranchId) {
               // Devolver la reserva provisoria a la sucursal que la tenía
               await tx.productBranchStock.upsert({
@@ -189,6 +213,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // (global + sucursal que sostiene la reserva: branchId o principal).
         if (isCancelling) {
           for (const item of currentOrder.items) {
+            if (recipeIds.has(item.productId)) {
+              const { restoreRecipeStock } = await import("../../../lib/recipeStock");
+              await restoreRecipeStock(tx, item.productId, Number(item.quantity), currentReserveBranchId);
+              continue;
+            }
             await tx.product.update({
               where: { id: item.productId },
               data: { quantityStock: { increment: Number(item.quantity) } },
@@ -212,6 +241,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         } else if (isUncancelling) {
           for (const item of currentOrder.items) {
+            if (recipeIds.has(item.productId)) {
+              const { deductRecipeStock } = await import("../../../lib/recipeStock");
+              await deductRecipeStock(tx, item.productId, Number(item.quantity), currentReserveBranchId);
+              continue;
+            }
             await tx.product.update({
               where: { id: item.productId },
               data: { quantityStock: { decrement: Number(item.quantity) } },

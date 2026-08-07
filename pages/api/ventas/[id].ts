@@ -126,19 +126,22 @@ export default async function handler(
     let affectedProductIds: number[] = [];
 
     try {
-      const result = await prisma.$transaction(async (tx) => {
-        // 1. Encontrar la venta y sus ítems
-        const saleToDelete = await tx.sale.findUnique({
-          where: { id: id },
-          include: {
-            items: {
-              select: {
-                productId: true,
-                quantity: true,
+        const result = await prisma.$transaction(async (tx) => {
+          // 1. Encontrar la venta y sus ítems
+          const saleToDelete = await tx.sale.findUnique({
+            where: { id: id },
+            include: {
+              items: {
+                select: {
+                  productId: true,
+                  quantity: true,
+                  product: {
+                    select: { isRecipe: true },
+                  },
+                },
               },
             },
-          },
-        });
+          });
 
         if (!saleToDelete) {
           throw new Prisma.PrismaClientKnownRequestError('Venta no encontrada para eliminar.', {
@@ -185,6 +188,14 @@ export default async function handler(
 
         for (const item of saleToDelete.items) {
           if (item.productId == null) continue; // ítem desvinculado, sin producto para reponer
+
+          // Elaborado: se repone el stock de sus ingredientes, no el del producto.
+          if (item.product?.isRecipe) {
+            const { restoreRecipeStock } = await import('../../../lib/recipeStock');
+            const affected = await restoreRecipeStock(tx, item.productId, item.quantity, restoreBranchId);
+            affectedProductIds.push(...affected);
+            continue;
+          }
 
           // Reponer en stock general del producto
           await tx.product.update({

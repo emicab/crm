@@ -213,3 +213,150 @@ BEGIN
 END $$;
 
 GRANT EXECUTE ON FUNCTION decrement_stock(TEXT, INTEGER, NUMERIC, INTEGER) TO anon, authenticated;
+
+-- 13. Soporte de productos elaborados (Recetario) en la nube.
+--     - Columnas isRecipe/isIngredient en Product (distinguen recetas e ingredientes).
+--     - Tabla RecipeItem (vínculos receta → ingredient + cantidad).
+--     - RPC decrement_recipe_stock para descontar INGREDIENTES de una venta web de receta.
+
+-- 13a. Columnas isRecipe / isIngredient en Product
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'isRecipe') THEN
+        ALTER TABLE "Product" ADD COLUMN "isRecipe" BOOLEAN NOT NULL DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'isIngredient') THEN
+        ALTER TABLE "Product" ADD COLUMN "isIngredient" BOOLEAN NOT NULL DEFAULT FALSE;
+    END IF;
+END $$;
+
+-- 13b. Tabla RecipeItem (si no existe)
+CREATE TABLE IF NOT EXISTS "RecipeItem" (
+    "tenant_id" TEXT NOT NULL,
+    "id" INTEGER NOT NULL,
+    "productId" INTEGER NOT NULL,
+    "ingredientId" INTEGER NOT NULL,
+    "quantity" DOUBLE PRECISION NOT NULL,
+    "unitType" TEXT NOT NULL,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id", "id"),
+    FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE,
+    FOREIGN KEY ("tenant_id", "ingredientId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE
+);
+
+ALTER TABLE "RecipeItem" DISABLE ROW LEVEL SECURITY;
+
+-- 13c. RPC atómica de decremento de stock de un elaborado: expande la receta
+--      recursivamente hacia las hojas y descuenta cada INGREDIENTE (global + sucursal).
+--      Valida disponibilidad de TODAS las hojas antes de descontar (sin descuento parcial).
+--      Acepta p_branch_id; si se pasa, también descuenta ProductBranchStock de la hoja.
+CREATE OR REPLACE FUNCTION decrement_recipe_stock(
+    p_tenant_id TEXT,
+    p_product_id INTEGER,
+    p_qty NUMERIC,
+    p_branch_id INTEGER
+) RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _leaf RECORD;
+    v_needed NUMERIC;
+BEGIN
+    -- Guarda: si el producto no tiene receta (sin ingredientes) no se puede
+    -- preparar ni vender; nunca debe devolver TRUE sin haber descontado nada.
+    IF NOT EXISTS (
+        SELECT 1 FROM "RecipeItem" WHERE "tenant_id" = p_tenant_id AND "productId" = p_product_id
+    ) THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Validación de stock de TODAS las hojas antes de descontar (todo o nada).
+
+    -- Falta de stock de alguna hoja => no se descuenta nada (todo o nada).
+    FOR _leaf IN
+        SELECT "ingredientId", SUM("accQty") AS "needed"
+        FROM (
+            WITH RECURSIVE "exp" AS (
+                SELECT "ingredientId", "quantity" AS "accQty", 1 AS "depth"
+                FROM "RecipeItem"
+                WHERE "tenant_id" = p_tenant_id AND "productId" = p_product_id
+                UNION ALL
+                SELECT r."ingredientId", e."accQty" * r."quantity", e."depth" + 1
+                FROM "exp" e
+                JOIN "RecipeItem" r
+                  ON r."tenant_id" = p_tenant_id AND r."productId" = e."ingredientId"
+                WHERE e."depth" < 10
+            )
+            SELECT "ingredientId", "accQty"
+            FROM "exp"
+            -- Solo las hojas: las que NO tienen receta propia (no aparecen como productId en RecipeItem)
+            WHERE "ingredientId" NOT IN (
+                SELECT "productId" FROM "RecipeItem" WHERE "tenant_id" = p_tenant_id
+            )
+        ) "leaves"
+        GROUP BY "ingredientId"
+    LOOP
+        v_needed := _leaf.needed * p_qty;
+
+        -- Stock global
+        IF NOT EXISTS (
+            SELECT 1 FROM "Product"
+            WHERE "tenant_id" = p_tenant_id AND "id" = _leaf."ingredientId" AND "quantityStock" >= v_needed
+        ) THEN
+            RETURN FALSE;
+        END IF;
+
+        -- Stock de sucursal (si aplica)
+        IF p_branch_id IS NOT NULL THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM "ProductBranchStock"
+                WHERE "tenant_id" = p_tenant_id
+                  AND "productId" = _leaf."ingredientId"
+                  AND "branchId" = p_branch_id
+                  AND "quantityStock" >= v_needed
+            ) THEN
+                RETURN FALSE;
+            END IF;
+        END IF;
+    END LOOP;
+
+    -- Todo el stock existe: descontar cada hoja.
+    FOR _leaf IN
+        SELECT * FROM (
+            WITH RECURSIVE "exp" AS (
+                SELECT "productId", "quantity" AS "accQty", 1 AS "depth"
+                FROM "RecipeItem"
+                WHERE "tenant_id" = p_tenant_id AND "productId" = p_product_id
+                UNION ALL
+                SELECT r."ingredientId", e."accQty" * r."quantity", e."depth" + 1
+                FROM "exp" e
+                JOIN "RecipeItem" r
+                  ON r."tenant_id" = p_tenant_id AND r."productId" = e."ingredientId"
+                WHERE e."depth" < 10
+            )
+            SELECT "ingredientId", SUM("accQty") AS "needed"
+            FROM "exp"
+            WHERE "ingredientId" NOT IN (
+                SELECT "productId" FROM "RecipeItem" WHERE "tenant_id" = p_tenant_id
+            )
+            GROUP BY "ingredientId"
+        ) "leaves"
+    LOOP
+        v_needed := _leaf.needed * p_qty;
+        UPDATE "Product"
+        SET "quantityStock" = "quantityStock" - v_needed, "updatedAt" = NOW()
+        WHERE "tenant_id" = p_tenant_id AND "id" = _leaf."ingredientId";
+
+        IF p_branch_id IS NOT NULL THEN
+            INSERT INTO "ProductBranchStock" ("tenant_id", "productId", "branchId", "quantityStock", "createdAt", "updatedAt")
+            VALUES (p_tenant_id, _leaf."ingredientId", p_branch_id, (-1) * v_needed, NOW(), NOW())
+            ON CONFLICT ("tenant_id", "productId", "branchId")
+            DO UPDATE SET "quantityStock" = "ProductBranchStock"."quantityStock" - v_needed, "updatedAt" = NOW();
+        END IF;
+    END LOOP;
+
+    RETURN TRUE;
+END $$;
+
+GRANT EXECUTE ON FUNCTION decrement_recipe_stock(TEXT, INTEGER, NUMERIC, INTEGER) TO anon, authenticated;
