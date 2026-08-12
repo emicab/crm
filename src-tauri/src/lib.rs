@@ -450,6 +450,52 @@ const MIGRATIONS: &[Migration] = &[
             ALTER TABLE "ProductModifierOption" ADD COLUMN "ingredientQty" DECIMAL NOT NULL DEFAULT 1;
         "#,
     },
+    Migration {
+        version: 19,
+        name: "add_weborder_discount_fields",
+        sql: r#"
+            ALTER TABLE "WebOrder" ADD COLUMN "subtotalAmount" DECIMAL NOT NULL DEFAULT 0;
+            ALTER TABLE "WebOrder" ADD COLUMN "discountAmount" DECIMAL NOT NULL DEFAULT 0;
+            ALTER TABLE "WebOrder" ADD COLUMN "deliveryFee" DECIMAL NOT NULL DEFAULT 0;
+            ALTER TABLE "WebOrder" ADD COLUMN "couponCode" TEXT;
+        "#,
+    },
+    Migration {
+        version: 20,
+        name: "add_weborder_origin",
+        sql: r#"
+            ALTER TABLE "WebOrder" ADD COLUMN "origin" TEXT;
+        "#,
+    },
+    Migration {
+        version: 21,
+        name: "fase2_delivery_zones_and_stock_review",
+        sql: r#"
+            ALTER TABLE "StoreConfig" ADD COLUMN "lat" REAL;
+            ALTER TABLE "StoreConfig" ADD COLUMN "lng" REAL;
+            ALTER TABLE "StoreConfig" ADD COLUMN "deliveryZones" TEXT;
+            ALTER TABLE "StoreConfig" ADD COLUMN "openingHours" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "deliveryZone" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "trackingCode" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "stockReviewNote" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "stockReviewAt" DATETIME;
+            ALTER TABLE "WebOrder" ADD COLUMN "mpPaymentId" TEXT;
+        "#,
+    },
+    Migration {
+        version: 22,
+        name: "add_weborder_discount_breakdown",
+        sql: r#"
+            ALTER TABLE "WebOrder" ADD COLUMN "discountBreakdown" TEXT;
+        "#,
+    },
+    Migration {
+        version: 23,
+        name: "add_product_web_unavailable",
+        sql: r#"
+            ALTER TABLE "Product" ADD COLUMN "webUnavailable" INTEGER NOT NULL DEFAULT 0;
+        "#,
+    },
 ];
 
 fn run_migrations(db_path: &Path) {

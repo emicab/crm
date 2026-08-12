@@ -3,7 +3,7 @@
 // cliente de transacción (tx) para garantizar atomicidad en las ventas.
 
 import { Prisma, PrismaClient } from "@prisma/client";
-import { unitScale } from "./recipeUnits";
+import { unitScale, formatQuantity } from "./recipeUnits";
 
 type DB = PrismaClient | Prisma.TransactionClient;
 
@@ -219,6 +219,106 @@ export async function computeDerivedStock(
 ): Promise<number> {
   const res = await getRecipeAvailability(db, productId, branchId);
   return res.available;
+}
+
+export interface IngredientShortfall {
+  ingredientId: number;
+  name: string;
+  required: number; // total requerido (unidad canónica kg/L/u)
+  available: number; // stock disponible (unidad canónica)
+  shortfall: number; // max(0, required - available)
+  unitType: string | null;
+  requiredDisplay: string;
+  availableDisplay: string;
+  shortfallDisplay: string;
+  usedBy: string[]; // nombres de los elaborados que lo consumen
+}
+
+/**
+ * Chequeo COMBINADO de ingredientes para una orden/carrito completo. El stock
+ * derivado por elaborado es correcto por tipo pero NO es sumable: dos pizzas
+ * que comparten harina pueden mostrar "2 y 2" y en total solo alcanzar para 2.
+ * Esta función expande todos los ítems elaborados a sus hojas, suma los
+ * requerimientos por ingrediente y compara contra el stock real (sucursal o
+ * global). Devuelve solo los faltantes, con unidades amigables para mensajes.
+ */
+export async function computeOrderIngredientShortfall(
+  db: DB,
+  items: { productId: number; quantity: number }[],
+  branchId?: number | null,
+): Promise<IngredientShortfall[]> {
+  const ids = [...new Set(items.map((i) => i.productId))];
+  const products = await db.product.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, isRecipe: true, name: true },
+  });
+  const productsMap = new Map<number, { isRecipe: boolean; name: string }>();
+  products.forEach((p) => productsMap.set(p.id, { isRecipe: p.isRecipe === true, name: p.name }));
+
+  const totals = new Map<
+    number,
+    { ingredientId: number; name: string; unitType: string | null; required: number; usedBy: Set<string> }
+  >();
+
+  for (const item of items) {
+    const product = productsMap.get(item.productId);
+    if (!product || !product.isRecipe) continue;
+    if (!(item.quantity > 0)) continue;
+
+    let leaves: RecipeLeaf[];
+    try {
+      leaves = await expandRecipeToLeaves(db, item.productId, item.quantity);
+    } catch (err) {
+      // Un elaborado no expandible (ej. ciclo de receta) no debe tumbar el chequeo.
+      console.warn("[recipeStock] No se pudo expandir elaborado", item.productId, err);
+      continue;
+    }
+
+    for (const leaf of leaves) {
+      const entry = totals.get(leaf.productId);
+      if (entry) {
+        entry.required += leaf.quantity;
+        entry.usedBy.add(product.name);
+      } else {
+        totals.set(leaf.productId, {
+          ingredientId: leaf.productId,
+          name: leaf.name,
+          unitType: leaf.unitType,
+          required: leaf.quantity,
+          usedBy: new Set([product.name]),
+        });
+      }
+    }
+  }
+
+  const shortfalls: IngredientShortfall[] = [];
+  for (const t of totals.values()) {
+    const available = await getLeafStock(db, t.ingredientId, branchId);
+    const shortfall = Math.max(0, t.required - available);
+    if (shortfall <= 0) continue;
+    shortfalls.push({
+      ingredientId: t.ingredientId,
+      name: t.name,
+      required: t.required,
+      available,
+      shortfall,
+      unitType: t.unitType,
+      requiredDisplay: formatQuantity(t.required, t.unitType),
+      availableDisplay: formatQuantity(available, t.unitType),
+      shortfallDisplay: formatQuantity(shortfall, t.unitType),
+      usedBy: [...t.usedBy],
+    });
+  }
+  return shortfalls;
+}
+
+/**
+ * Mensaje legible de un faltante combinado, ej:
+ * "Harina: faltan 0,2 kg (hay 1 kg, necesitás 1,2 kg) — consumida por Pizza A y Pizza B".
+ */
+export function formatIngredientShortfall(s: IngredientShortfall): string {
+  const usedBy = s.usedBy.length > 0 ? ` — consumida por ${s.usedBy.join(" y ")}` : "";
+  return `${s.name}: faltan ${s.shortfallDisplay} (hay ${s.availableDisplay}, necesitás ${s.requiredDisplay})${usedBy}`;
 }
 
 /**

@@ -266,6 +266,7 @@ function saveCollapsed(groups: Set<string>) {
 
 import ProUpgradeModal from "@/components/ui/ProUpgradeModal";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
+import { isRouteVisibleForProfile } from "@/lib/moduleCatalog";
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { online, pendingSync } = useSyncStatus();
@@ -278,6 +279,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     storageMode,
     plan,
     hasRolePermission,
+    businessProfile,
   } = useModules();
   const [alertCount, setAlertCount] = useState(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -286,6 +288,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(
     null,
   );
+  const reviewNotifiedRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     setCollapsedGroups(loadCollapsed());
@@ -327,6 +330,62 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     };
     fetchAlertCount();
     const interval = setInterval(fetchAlertCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Alertas urgentes: pedidos web rechazados por stock insuficiente.
+  useEffect(() => {
+    const fetchWebOrderAlerts = async () => {
+      try {
+        const res = await fetch("/api/web-order-alerts");
+        if (!res.ok) return;
+        const data = await res.json();
+        const alerts: any[] = data.alerts || [];
+        alerts.forEach((alert: any) => {
+          const qtyText = alert.requestedQty != null ? ` (${alert.requestedQty})` : "";
+          const productName = alert.productName || "Producto";
+          toast.error(
+            `Pedido web rechazado: sin stock de ${productName}${qtyText}. Actualizá el stock o contactá al cliente.`,
+            { duration: 8000 }
+          );
+        });
+      } catch {
+        // Silently fail
+      }
+    };
+    fetchWebOrderAlerts();
+    const interval = setInterval(fetchWebOrderAlerts, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Pedidos web EN REVISIÓN por falta de stock local (Regla de Oro: el cliente
+  // físico gana la última unidad). Avisa al comerciante para que decida.
+  useEffect(() => {
+    const fetchReviewAlerts = async () => {
+      try {
+        const res = await fetch("/api/web-orders/review-alerts");
+        if (!res.ok) return;
+        const data = await res.json();
+        const alerts: any[] = data.alerts || [];
+        alerts.forEach((a: any) => {
+          const id = Number(a.id);
+          if (reviewNotifiedRef.current.has(id)) return;
+          reviewNotifiedRef.current.add(id);
+          const money =
+            a.totalAmount != null
+              ? ` ($${Number(a.totalAmount).toLocaleString("es-AR")})`
+              : "";
+          toast.error(
+            `⚠️ Pedido ${a.webOrderNumber} en revisión: falta stock local${money}. Revisá y decidí cancelar/reponer.`,
+            { duration: 10000 }
+          );
+        });
+      } catch {
+        // silencioso
+      }
+    };
+    fetchReviewAlerts();
+    const interval = setInterval(fetchReviewAlerts, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -466,6 +525,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           if (isModuleEnabled("roles") && currentUser) {
             if (!hasRolePermission(currentUser.role, item.href)) return null;
           }
+
+          // UX por rubro (WP5): ocultar módulos avanzados en perfiles minimalistas.
+          if (!isRouteVisibleForProfile(businessProfile, item.href)) return null;
 
           return { ...item, isLocked: false };
         })

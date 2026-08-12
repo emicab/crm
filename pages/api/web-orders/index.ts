@@ -66,6 +66,13 @@ export default async function handler(
         notes,
         items,
         branchId,
+        subtotalAmount,
+        discountAmount,
+        deliveryFee,
+        deliveryZone,
+        couponCode,
+        origin,
+        discountBreakdown,
       } = req.body;
 
       if (!clientName || !clientPhone || !Array.isArray(items) || !items.length) {
@@ -80,6 +87,15 @@ export default async function handler(
       const sanitizedNotes = notes ? sanitizeString(notes) : null;
 
       const generatedNumber = webOrderNumber ? sanitizeString(webOrderNumber) : `WEB-${Date.now().toString().slice(-6)}`;
+
+      const generateTrackingCode = (): string => {
+        const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        let code = "";
+        for (let i = 0; i < 8; i++) {
+          code += alphabet[Math.floor(Math.random() * alphabet.length)];
+        }
+        return code;
+      };
 
       // Si el pedido ya existe, evitar duplicados y responder 200 OK
       const existing = await prisma.webOrder.findFirst({
@@ -101,6 +117,19 @@ export default async function handler(
       });
       const productMap = new Map(dbProducts.map(p => [p.id, Number(p.priceSale)]));
 
+      // Suma los precios extra de los modificadores seleccionados (JSON string o array).
+      const modifierExtras = (raw: any): number => {
+        if (!raw) return 0;
+        let parsed: any[] = [];
+        try {
+          parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        } catch {
+          return 0;
+        }
+        if (!Array.isArray(parsed)) return 0;
+        return parsed.reduce((sum, m) => sum + (parseFloat(m?.priceExtra) || 0), 0);
+      };
+
       let calculatedTotal = 0;
       const verifiedItems = [];
 
@@ -109,14 +138,20 @@ export default async function handler(
         const qty = parseFloat(rawItem.quantity);
         if (isNaN(pId) || isNaN(qty) || qty <= 0) continue;
 
-        const dbPrice = productMap.get(pId) ?? (parseFloat(rawItem.unitPrice) || 0);
-        const subtotal = qty * dbPrice;
+        const dbPrice = productMap.get(pId);
+        // Precio base desde la base oficial (fallback al enviado si el producto no existe).
+        // Si el producto existe, los extras de modificadores se suman UNA vez al precio
+        // (el unitPrice enviado por el cliente se ignora para evitar manipulación).
+        const basePrice = dbPrice !== undefined ? dbPrice : (parseFloat(rawItem.unitPrice) || 0);
+        const extras = dbPrice !== undefined ? modifierExtras(rawItem.modifiers) : 0;
+        const unitPrice = basePrice + extras;
+        const subtotal = qty * unitPrice;
         calculatedTotal += subtotal;
 
         verifiedItems.push({
           productId: pId,
           quantity: qty,
-          unitPrice: dbPrice,
+          unitPrice: unitPrice,
           subtotal: subtotal,
           modifiers: rawItem.modifiers
             ? (typeof rawItem.modifiers === 'string' ? rawItem.modifiers : JSON.stringify(rawItem.modifiers))
@@ -142,6 +177,16 @@ export default async function handler(
           paymentStatus: 'PENDING', // Se valida mediante webhook de MP o confirmación de caja
           status: 'PENDING_PREPARATION',
           totalAmount: calculatedTotal,
+          subtotalAmount: !isNaN(parseFloat(subtotalAmount)) ? parseFloat(subtotalAmount) : calculatedTotal,
+          discountAmount: !isNaN(parseFloat(discountAmount)) ? parseFloat(discountAmount) : 0,
+          deliveryFee: !isNaN(parseFloat(deliveryFee)) ? parseFloat(deliveryFee) : 0,
+          couponCode: couponCode ? sanitizeString(String(couponCode)) : null,
+          discountBreakdown: discountBreakdown
+            ? sanitizeString(String(discountBreakdown)).slice(0, 4000)
+            : null,
+          deliveryZone: deliveryZone ? sanitizeString(String(deliveryZone)) : null,
+          trackingCode: generateTrackingCode(),
+          origin: ["WHATSAPP", "PHONE", "IN_STORE", "OTHER"].includes(origin) ? origin : "WEB",
           notes: sanitizedNotes,
           items: {
             create: verifiedItems

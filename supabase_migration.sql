@@ -97,6 +97,9 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'StoreConfig' AND column_name = 'minDeliveryAmount') THEN
             ALTER TABLE "StoreConfig" ADD COLUMN "minDeliveryAmount" NUMERIC(12, 2) DEFAULT 0;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'StoreConfig' AND column_name = 'businessSector') THEN
+            ALTER TABLE "StoreConfig" ADD COLUMN "businessSector" TEXT DEFAULT 'GASTRONOMIA';
+        END IF;
     END IF;
 END $$;
 
@@ -105,11 +108,45 @@ ALTER TABLE IF EXISTS "StoreConfig" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "WebOrder" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "WebOrderItem" DISABLE ROW LEVEL SECURITY;
 
+-- 6a. Crear tabla WebOrderStockAlert (alertas de rechazo por stock de pedidos web)
+CREATE TABLE IF NOT EXISTS "WebOrderStockAlert" (
+    "tenant_id" TEXT NOT NULL,
+    "id" BIGINT NOT NULL,
+    "productId" INTEGER,
+    "productName" TEXT NOT NULL,
+    "requestedQty" DOUBLE PRECISION,
+    "message" TEXT,
+    "seenAt" TIMESTAMP WITH TIME ZONE,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id", "id")
+);
+ALTER TABLE IF EXISTS "WebOrderStockAlert" DISABLE ROW LEVEL SECURITY;
+
 -- 6b. Agregar columna branchId a WebOrder (sucursal que despacha/prepara)
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'WebOrder' AND column_name = 'branchId') THEN
         ALTER TABLE "WebOrder" ADD COLUMN "branchId" INTEGER;
+    END IF;
+END $$;
+
+-- 6c. Agregar columnas de descuento/cupón a WebOrder
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'WebOrder' AND column_name = 'subtotalAmount') THEN
+        ALTER TABLE "WebOrder" ADD COLUMN "subtotalAmount" NUMERIC(12, 2) NOT NULL DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'WebOrder' AND column_name = 'discountAmount') THEN
+        ALTER TABLE "WebOrder" ADD COLUMN "discountAmount" NUMERIC(12, 2) NOT NULL DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'WebOrder' AND column_name = 'deliveryFee') THEN
+        ALTER TABLE "WebOrder" ADD COLUMN "deliveryFee" NUMERIC(12, 2) NOT NULL DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'WebOrder' AND column_name = 'couponCode') THEN
+        ALTER TABLE "WebOrder" ADD COLUMN "couponCode" TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'WebOrder' AND column_name = 'origin') THEN
+        ALTER TABLE "WebOrder" ADD COLUMN "origin" TEXT;
     END IF;
 END $$;
 
@@ -177,7 +214,7 @@ END $$;
 --     última unidad del local si el usuario no configura el margen).
 DO $$
 BEGIN
-    UPDATE "StoreConfig" SET "minStockBuffer" = 1 WHERE "minStockBuffer" IS NULL OR "minStockBuffer" = 0;
+    UPDATE "StoreConfig" SET "minStockBuffer" = 1 WHERE "minStockBuffer" IS NULL;
 END $$;
 
 -- 12. RPC atómica de decremento de stock. Garantiza que ante dos pedidos web
@@ -360,3 +397,60 @@ BEGIN
 END $$;
 
 GRANT EXECUTE ON FUNCTION decrement_recipe_stock(TEXT, INTEGER, NUMERIC, INTEGER) TO anon, authenticated;
+
+-- 14. Variantes y Modificadores (Opciones de Productos)
+--     - businessSector en StoreConfig (rubro comercial de la tienda).
+--     - Columnas modifiers en WebOrderItem / SaleItem (snapshot JSON de opciones).
+--     - Tablas ProductModifierGroup / ProductModifierOption con PK compuesta (tenant_id, id).
+
+-- 14a. Columna modifiers en WebOrderItem / SaleItem (si no existe)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'WebOrderItem' AND column_name = 'modifiers') THEN
+        ALTER TABLE "WebOrderItem" ADD COLUMN "modifiers" TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'SaleItem' AND column_name = 'modifiers') THEN
+        ALTER TABLE "SaleItem" ADD COLUMN "modifiers" TEXT;
+    END IF;
+END $$;
+
+-- 14b. Tabla ProductModifierGroup (si no existe)
+CREATE TABLE IF NOT EXISTS "ProductModifierGroup" (
+    "tenant_id" TEXT NOT NULL,
+    "id" BIGINT NOT NULL,
+    "productId" BIGINT NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT DEFAULT 'MULTI_SELECT',
+    "isRequired" BOOLEAN DEFAULT FALSE,
+    "minSelect" INTEGER DEFAULT 0,
+    "maxSelect" INTEGER,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id", "id"),
+    FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS "ProductModifierGroup_productId_idx" ON "ProductModifierGroup"("tenant_id", "productId");
+
+-- 14c. Tabla ProductModifierOption (si no existe)
+CREATE TABLE IF NOT EXISTS "ProductModifierOption" (
+    "tenant_id" TEXT NOT NULL,
+    "id" BIGINT NOT NULL,
+    "modifierGroupId" BIGINT NOT NULL,
+    "name" TEXT NOT NULL,
+    "priceExtra" NUMERIC DEFAULT 0,
+    "colorHex" TEXT,
+    "ingredientId" BIGINT,
+    "ingredientQty" NUMERIC DEFAULT 1,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id", "id"),
+    FOREIGN KEY ("tenant_id", "modifierGroupId") REFERENCES "ProductModifierGroup" ("tenant_id", "id") ON DELETE CASCADE,
+    FOREIGN KEY ("tenant_id", "ingredientId") REFERENCES "Product" ("tenant_id", "id") ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS "ProductModifierOption_modifierGroupId_idx" ON "ProductModifierOption"("tenant_id", "modifierGroupId");
+
+-- 14d. RLS desactivado para sincronización directa (idempotente)
+ALTER TABLE IF EXISTS "ProductModifierGroup" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS "ProductModifierOption" DISABLE ROW LEVEL SECURITY;

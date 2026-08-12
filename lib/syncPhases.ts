@@ -87,6 +87,7 @@ export function toProductPayload(p: any, tenantId: string): Record<string, any> 
     pricePurchase: fmtDec(p.pricePurchase), priceSale: fmtDec(p.priceSale),
     quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert, unitType: p.unitType,
     isPublicWeb: p.isPublicWeb !== false, webCategory: p.webCategory || null,
+    webUnavailable: p.webUnavailable === true,
     isRecipe: p.isRecipe === true, isIngredient: p.isIngredient === true,
     brandId: p.brandId, categoryId: p.categoryId, supplierId: p.supplierId,
     imageUrl: p.imageUrl || null,
@@ -214,7 +215,20 @@ export function toWebOrderPayload(order: any, cloudId: number, tenantId: string)
     status: order.status,
     totalAmount: fmtDec(order.totalAmount),
     mpFeeAmount: fmtDec(order.mpFeeAmount, "0"),
+    subtotalAmount: fmtDec(order.subtotalAmount, "0"),
+    discountAmount: fmtDec(order.discountAmount, "0"),
+    deliveryFee: fmtDec(order.deliveryFee, "0"),
+    couponCode: order.couponCode ?? null,
+    deliveryZone: order.deliveryZone ?? null,
+    trackingCode: order.trackingCode ?? null,
+    origin: order.origin ?? "WEB",
     scheduledFor: order.scheduledFor ? (typeof order.scheduledFor === "string" ? order.scheduledFor : order.scheduledFor.toISOString()) : null,
+    stockReviewNote: order.stockReviewNote ?? null,
+    stockReviewAt: order.stockReviewAt
+      ? (typeof order.stockReviewAt === "string" ? order.stockReviewAt : order.stockReviewAt.toISOString())
+      : null,
+    mpPaymentId: order.mpPaymentId ?? null,
+    discountBreakdown: order.discountBreakdown ?? null,
     notes: order.notes,
     tenant_id: tenantId,
     createdAt: order.createdAt.toISOString(),
@@ -567,8 +581,11 @@ export function buildPushPayload(
       id: sc.id, slug: sc.slug, businessName: sc.businessName, description: sc.description, logoUrl: sc.logoUrl, bannerUrl: sc.bannerUrl,
       primaryColor: sc.primaryColor, isWebActive: sc.isWebActive, mpAccessToken: sc.mpAccessToken, mpPublicKey: sc.mpPublicKey,
       mpFeePercent: fmtDec(sc.mpFeePercent), whatsappPhone: sc.whatsappPhone, minStockBuffer: sc.minStockBuffer, allowPickup: sc.allowPickup,
-      allowDelivery: sc.allowDelivery, deliveryFee: fmtDec(sc.deliveryFee), minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
+      allowDelivery: sc.allowDelivery,
+      requireMpForDelivery: sc.requireMpForDelivery !== undefined ? sc.requireMpForDelivery : true,
+      deliveryFee: fmtDec(sc.deliveryFee), minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
       businessSector: sc.businessSector || "GASTRONOMIA",
+      lat: sc.lat ?? null, lng: sc.lng ?? null, deliveryZones: sc.deliveryZones ?? null, openingHours: sc.openingHours ?? null,
       tenant_id: tenantId, createdAt: sc.createdAt.toISOString(), updatedAt: sc.updatedAt.toISOString()
     })) : [],
     Setting: isMainDeviceFlag && config.app_plan ? [{
@@ -592,9 +609,12 @@ export async function refreshStoreConfigPayload(payload: Record<string, any[]>, 
         mpAccessToken: sc.mpAccessToken, mpPublicKey: sc.mpPublicKey,
         mpFeePercent: fmtDec(sc.mpFeePercent), whatsappPhone: sc.whatsappPhone,
         minStockBuffer: sc.minStockBuffer, allowPickup: sc.allowPickup,
-        allowDelivery: sc.allowDelivery, deliveryFee: fmtDec(sc.deliveryFee),
+        allowDelivery: sc.allowDelivery,
+        requireMpForDelivery: sc.requireMpForDelivery !== undefined ? sc.requireMpForDelivery : true,
+        deliveryFee: fmtDec(sc.deliveryFee),
         minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
         businessSector: sc.businessSector || "GASTRONOMIA",
+        lat: sc.lat ?? null, lng: sc.lng ?? null, deliveryZones: sc.deliveryZones ?? null, openingHours: sc.openingHours ?? null,
         tenant_id: tenantId, createdAt: sc.createdAt.toISOString(),
         updatedAt: sc.updatedAt.toISOString()
       }));
@@ -684,6 +704,18 @@ export async function pullWebOrdersFromCloud(ctx: SyncPhaseContext): Promise<voi
               paymentStatus: order.paymentStatus,
               status: order.status,
               totalAmount: order.totalAmount,
+              subtotalAmount: order.subtotalAmount ?? 0,
+              discountAmount: order.discountAmount ?? 0,
+              deliveryFee: order.deliveryFee ?? 0,
+              couponCode: order.couponCode ?? null,
+              deliveryZone: order.deliveryZone ?? null,
+              trackingCode: order.trackingCode ?? null,
+              scheduledFor: order.scheduledFor ? new Date(order.scheduledFor) : null,
+              stockReviewNote: order.stockReviewNote ?? null,
+              stockReviewAt: order.stockReviewAt ? new Date(order.stockReviewAt) : null,
+              mpPaymentId: order.mpPaymentId ?? null,
+              discountBreakdown: order.discountBreakdown ?? null,
+              origin: order.origin ?? "WEB",
               notes: order.notes,
               createdAt: new Date(order.createdAt),
               items: {
@@ -765,6 +797,22 @@ export async function pullWebOrdersFromCloud(ctx: SyncPhaseContext): Promise<voi
                     ? "PAID"
                     : order.paymentStatus,
                 status: order.status,
+                subtotalAmount: order.subtotalAmount ?? exists.subtotalAmount,
+                discountAmount: order.discountAmount ?? exists.discountAmount,
+                deliveryFee: order.deliveryFee ?? exists.deliveryFee,
+                couponCode: order.couponCode ?? exists.couponCode,
+                deliveryZone: order.deliveryZone ?? exists.deliveryZone ?? null,
+                trackingCode: order.trackingCode ?? exists.trackingCode ?? null,
+                scheduledFor: order.scheduledFor
+                  ? new Date(order.scheduledFor)
+                  : exists.scheduledFor,
+                stockReviewNote: order.stockReviewNote ?? exists.stockReviewNote ?? null,
+                stockReviewAt: order.stockReviewAt
+                  ? new Date(order.stockReviewAt)
+                  : exists.stockReviewAt,
+                mpPaymentId: order.mpPaymentId ?? exists.mpPaymentId ?? null,
+                discountBreakdown: order.discountBreakdown ?? exists.discountBreakdown ?? null,
+                origin: order.origin ?? exists.origin ?? "WEB",
                 notes: order.notes ?? exists.notes,
                 updatedAt: new Date(order.updatedAt)
               }
@@ -772,6 +820,19 @@ export async function pullWebOrdersFromCloud(ctx: SyncPhaseContext): Promise<voi
           }
         }
       }
+    }
+
+    // WP1 "Regla de Oro": tras recibir los pedidos de la nube, marcar como
+    // PENDING_REVIEW los que el stock local (SQLite) no puede cubrir. El
+    // cliente físico gana la última unidad; el comerciante decide qué hacer.
+    try {
+      const { markWebOrdersForReview } = await import("./stockReview");
+      const flagged = await markWebOrdersForReview();
+      if (flagged > 0) {
+        console.log(`[Sync] ${flagged} pedido(s) web marcado(s) para revisión por falta de stock local`);
+      }
+    } catch (err) {
+      console.warn("[Sync] Error en la revisión de stock de pedidos web:", err);
     }
   } catch (err) {
     console.warn("Error al descargar WebOrders desde Supabase:", err);
@@ -818,8 +879,13 @@ export async function pullStoreConfigFromCloud(ctx: SyncPhaseContext, firstStore
                 minStockBuffer: parseFloat(remoteConfig.minStockBuffer) || 0,
                 allowPickup: remoteConfig.allowPickup !== false,
                 allowDelivery: remoteConfig.allowDelivery !== false,
+                requireMpForDelivery: remoteConfig.requireMpForDelivery !== false,
                 deliveryFee: remoteConfig.deliveryFee || 0,
                 minDeliveryAmount: remoteConfig.minDeliveryAmount || 0,
+                lat: remoteConfig.lat ?? null,
+                lng: remoteConfig.lng ?? null,
+                deliveryZones: remoteConfig.deliveryZones ?? null,
+                openingHours: remoteConfig.openingHours ?? null,
               }
             });
             console.log(`[Sync] StoreConfig local creada desde Supabase (Casa Central) para tenant ${tenantId}`);
@@ -1002,6 +1068,7 @@ export async function pullCoreEntitiesFromCloud(ctx: SyncPhaseContext): Promise<
               pricePurchase: p.pricePurchase, priceSale: p.priceSale,
               stockMinAlert: p.stockMinAlert,
               unitType: p.unitType || null, isPublicWeb: p.isPublicWeb !== false,
+              webUnavailable: p.webUnavailable === true,
               isRecipe: p.isRecipe === true, isIngredient: p.isIngredient === true,
               imageUrl: p.imageUrl || null,
               brandId: p.brandId, categoryId: p.categoryId, supplierId: supplierExists ? p.supplierId : null,
@@ -1012,6 +1079,7 @@ export async function pullCoreEntitiesFromCloud(ctx: SyncPhaseContext): Promise<
               pricePurchase: p.pricePurchase, priceSale: p.priceSale,
               quantityStock: p.quantityStock, stockMinAlert: p.stockMinAlert,
               unitType: p.unitType || null, isPublicWeb: p.isPublicWeb !== false,
+              webUnavailable: p.webUnavailable === true,
               isRecipe: p.isRecipe === true, isIngredient: p.isIngredient === true,
               imageUrl: p.imageUrl || null,
               brandId: p.brandId, categoryId: p.categoryId, supplierId: supplierExists ? p.supplierId : null,

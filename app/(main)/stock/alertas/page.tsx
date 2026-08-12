@@ -32,6 +32,16 @@ interface AlertProduct {
   priceSale: number;
   unitType: string | null;
   supplier?: { id: number; name: string } | null;
+  isRecipe?: boolean;
+  isIngredient?: boolean;
+}
+
+function isInStockAlert(p: AlertProduct): boolean {
+  // Sin stock físico / derivado (elaborados que no se pueden preparar).
+  if (p.quantityStock <= 0) return true;
+  const hasMinAlert = p.stockMinAlert !== null && p.stockMinAlert !== undefined;
+  if (hasMinAlert && p.quantityStock < p.stockMinAlert!) return true;
+  return false;
 }
 
 export default function StockAlertasPage() {
@@ -72,7 +82,7 @@ export default function StockAlertasPage() {
     setIsRefreshing(true);
     try {
       const [productsRes, suppliersRes] = await Promise.all([
-        fetch("/api/products?limit=1000"), // Aumentamos límite para soportar ver todos los productos
+        fetch("/api/products?kind=all&limit=1000"), // Incluye productos, ingredientes y elaborados
         fetch("/api/proveedores"),
       ]);
       if (!productsRes.ok) throw new Error("Error al cargar productos");
@@ -108,12 +118,7 @@ export default function StockAlertasPage() {
   // Filtrar productos según la pestaña activa
   const tabProducts = useMemo(() => {
     if (activeTab === "alerts") {
-      return allProducts.filter(
-        (p) =>
-          p.stockMinAlert !== null &&
-          p.stockMinAlert !== undefined &&
-          p.quantityStock < p.stockMinAlert,
-      );
+      return allProducts.filter(isInStockAlert);
     }
     return allProducts;
   }, [allProducts, activeTab]);
@@ -470,12 +475,7 @@ export default function StockAlertasPage() {
         >
           En Alerta de Stock (
           {
-            allProducts.filter(
-              (p) =>
-                p.stockMinAlert !== null &&
-                p.stockMinAlert !== undefined &&
-                p.quantityStock < p.stockMinAlert,
-            ).length
+            allProducts.filter(isInStockAlert).length
           }
           )
         </button>
@@ -599,9 +599,10 @@ export default function StockAlertasPage() {
                     ),
                   );
                   const isBelowMin =
-                    product.stockMinAlert !== null &&
-                    product.stockMinAlert !== undefined &&
-                    product.quantityStock < product.stockMinAlert;
+                    product.quantityStock <= 0 ||
+                    (product.stockMinAlert !== null &&
+                      product.stockMinAlert !== undefined &&
+                      product.quantityStock < product.stockMinAlert);
 
                   return (
                     <tr
@@ -617,7 +618,18 @@ export default function StockAlertasPage() {
                         />
                       </td>
                       <td className="p-3 sm:p-4 text-sm font-semibold text-foreground">
-                        {product.name}
+                        <div className="flex items-center gap-2">
+                          {product.name}
+                          {product.isRecipe ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40 font-bold whitespace-nowrap">
+                              🧾 Elaborado
+                            </span>
+                          ) : product.isIngredient ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 font-bold whitespace-nowrap">
+                              🥫 Ingrediente
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="p-3 sm:p-4 text-sm text-foreground-muted hidden sm:table-cell font-mono">
                         {product.sku || "-"}

@@ -106,17 +106,31 @@ export default async function handler(
 
       // Stock derivado para productos elaborados (Recetario): se calcula a
       // partir del stock de sus ingredientes, respetando la sucursal activa.
+      // Se exponen además los ingredientes limitantes (recipeAvailability) para
+      // que la UI aclare que el número es "por tipo" y compartido entre variantes.
       const recipeIds = products.filter((p: any) => p.isRecipe).map((p: any) => p.id);
       if (recipeIds.length > 0) {
         const branchIdParam = req.query.branchId as string | undefined;
         const branchId = branchIdParam && !isNaN(parseInt(branchIdParam))
           ? parseInt(branchIdParam)
           : null;
-        const { computeDerivedStock } = await import("../../../lib/recipeStock");
+        const { getRecipeAvailability } = await import("../../../lib/recipeStock");
+        const { formatQuantity } = await import("../../../lib/recipeUnits");
         const derivedMap = new Map<number, number>();
+        const availabilityMap = new Map<number, any>();
         for (const rid of recipeIds) {
           try {
-            derivedMap.set(rid, await computeDerivedStock(prisma, rid, branchId));
+            const av = await getRecipeAvailability(prisma, rid, branchId);
+            derivedMap.set(rid, av.available);
+            availabilityMap.set(rid, {
+              available: av.available,
+              limiting: (av.limiting || []).map((l) => ({
+                ingredientId: l.ingredientId,
+                name: l.name,
+                available: l.available,
+                availableDisplay: formatQuantity(l.available, l.unitType),
+              })),
+            });
           } catch {
             derivedMap.set(rid, 0);
           }
@@ -135,8 +149,8 @@ export default async function handler(
             branchStocks = await Promise.all(
               branchStocks.map(async (bs: any) => {
                 try {
-                  const derived = await computeDerivedStock(prisma, p.id, bs.branchId);
-                  return { ...bs, quantityStock: derived };
+                  const derived = await getRecipeAvailability(prisma, p.id, bs.branchId);
+                  return { ...bs, quantityStock: derived.available };
                 } catch {
                   return bs;
                 }
@@ -147,6 +161,7 @@ export default async function handler(
             ...p,
             quantityStock: derivedMap.get(p.id) ?? 0,
             branchStocks,
+            recipeAvailability: availabilityMap.get(p.id) || { available: 0, limiting: [] },
           });
         }
         products = derivedProducts;

@@ -49,3 +49,23 @@ export function formatQuantity(
   const rounded = Math.round(display * 1000) / 1000;
   return `${rounded} ${displayUnitLabel(unitType)}`;
 }
+
+export interface RecipeLimiterInfo {
+  name: string;
+  availableDisplay: string;
+}
+
+// Tooltip para la UI: aclara que el stock derivado de un elaborado es "por tipo"
+// y NO se suma entre variantes que comparten ingredientes (ej. 2A + 2B puede
+// superar la harina disponible aunque cada una muestre 2).
+export function recipeAvailabilityTooltip(
+  isRecipe: boolean | undefined,
+  recipeAvailability?: { available: number; limiting: RecipeLimiterInfo[] } | null,
+): string | undefined {
+  if (!isRecipe) return undefined;
+  const limiting = recipeAvailability?.limiting || [];
+  const base =
+    "Disponible por tipo. El número no se suma entre variantes que comparten ingredientes.";
+  if (limiting.length === 0) return base;
+  return `${base} Limitado por: ${limiting.map((l) => `${l.name}: ${l.availableDisplay}`).join(", ")}.`;
+}

@@ -2,6 +2,7 @@ import React from "react";
 import { Package, Loader2, Plus } from "lucide-react";
 import { Product } from "@/types";
 import { formatCurrency } from "@/lib/formatCurrency";
+import { recipeAvailabilityTooltip } from "@/lib/recipeUnits";
 
 interface SaleQuickAccessProps {
   isLoadingCategoryProducts: boolean;
@@ -41,6 +42,10 @@ export const SaleQuickAccess: React.FC<SaleQuickAccessProps> = ({
             const availableStock = prod.quantityStock - reservedQuantity;
             const isOutOfStock = prod.quantityStock <= 0;
             const isReservedOut = !isOutOfStock && availableStock <= 0;
+            const recipeTitle = recipeAvailabilityTooltip(prod.isRecipe, prod.recipeAvailability);
+            const title = [recipeTitle, isReservedOut ? `Producto reservado en pedido guardado (${reservedQuantity} u.)` : ""]
+              .filter(Boolean)
+              .join(" | ") || undefined;
 
             return (
               <button
@@ -54,7 +59,7 @@ export const SaleQuickAccess: React.FC<SaleQuickAccessProps> = ({
                     ? "bg-amber-50/40 hover:bg-amber-100/30 border-amber-200 hover:border-amber-300/80"
                     : "bg-muted hover:bg-white border-transparent hover:border-primary/50"
                 }`}
-                title={isReservedOut ? `Producto reservado en pedido guardado (${reservedQuantity} u.)` : ""}
+                title={title}
               >
                 <span
                   className={`text-[10px] font-bold line-clamp-2 leading-tight ${

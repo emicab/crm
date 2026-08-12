@@ -24,6 +24,11 @@ const ProductMobileCard: React.FC<ProductMobileCardProps> = ({ product, onEdit, 
           <p className="text-xs text-foreground-muted">SKU: {product.sku || 'N/A'}</p>
         </div>
         <div className="flex items-center space-x-1">
+          {product.webUnavailable && (
+            <span className="text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-300 px-2 py-0.5 rounded-full mr-1">
+              Agotado web
+            </span>
+          )}
           <Button variant="ghost" size="icon" onClick={() => onEdit(product.id)} title="Editar" className="h-8 w-8">
             <Edit3 size={16} className="text-primary" />
           </Button>

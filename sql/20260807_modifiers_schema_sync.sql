@@ -1,5 +1,11 @@
 -- Migración: Sincronizar esquema de la nube con Variantes, Modificadores y Rubro Comercial.
 -- Aplicar en el SQL Editor de Supabase.
+--
+-- NOTA IMPORTANTE: las tablas de modificadores usan PK COMPUESTA (tenant_id, id),
+-- igual que el resto del esquema multi-tenant. El sync del POS usa
+-- "Prefer: resolution=merge-duplicates" (on_conflict contra la PK); con una PK
+-- simple en "id" los IDs deterministas (productId*1e6 + índice) colisionarían
+-- entre tenants distintos y una tienda sobrescribiría los modificadores de otra.
 
 -- 1) StoreConfig: businessSector
 ALTER TABLE "StoreConfig" ADD COLUMN IF NOT EXISTS "businessSector" TEXT DEFAULT 'GASTRONOMIA';
@@ -11,10 +17,11 @@ ALTER TABLE "WebOrder" ADD COLUMN IF NOT EXISTS "scheduledFor" TIMESTAMPTZ;
 ALTER TABLE "WebOrderItem" ADD COLUMN IF NOT EXISTS "modifiers" TEXT;
 ALTER TABLE "SaleItem" ADD COLUMN IF NOT EXISTS "modifiers" TEXT;
 
--- 4) Tabla ProductModifierGroup
+-- 4) Tabla ProductModifierGroup (PK compuesta multi-tenant)
 CREATE TABLE IF NOT EXISTS "ProductModifierGroup" (
-    "id" SERIAL PRIMARY KEY,
-    "productId" INTEGER NOT NULL,
+    "tenant_id" TEXT NOT NULL,
+    "id" BIGINT NOT NULL,
+    "productId" BIGINT NOT NULL,
     "name" TEXT NOT NULL,
     "type" TEXT DEFAULT 'MULTI_SELECT',
     "isRequired" BOOLEAN DEFAULT FALSE,
@@ -22,31 +29,54 @@ CREATE TABLE IF NOT EXISTS "ProductModifierGroup" (
     "maxSelect" INTEGER,
     "createdAt" TIMESTAMPTZ DEFAULT NOW(),
     "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
-    "tenant_id" TEXT
+    PRIMARY KEY ("tenant_id", "id"),
+    FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS "ProductModifierGroup_productId_idx" ON "ProductModifierGroup"("productId");
-CREATE INDEX IF NOT EXISTS "ProductModifierGroup_tenant_idx" ON "ProductModifierGroup"("tenant_id");
+CREATE INDEX IF NOT EXISTS "ProductModifierGroup_productId_idx" ON "ProductModifierGroup"("tenant_id", "productId");
 
--- 5) Tabla ProductModifierOption
+-- 5) Tabla ProductModifierOption (PK compuesta multi-tenant)
 CREATE TABLE IF NOT EXISTS "ProductModifierOption" (
-    "id" SERIAL PRIMARY KEY,
-    "modifierGroupId" INTEGER NOT NULL REFERENCES "ProductModifierGroup"("id") ON DELETE CASCADE,
+    "tenant_id" TEXT NOT NULL,
+    "id" BIGINT NOT NULL,
+    "modifierGroupId" BIGINT NOT NULL,
     "name" TEXT NOT NULL,
     "priceExtra" NUMERIC DEFAULT 0,
     "colorHex" TEXT,
-    "ingredientId" INTEGER,
+    "ingredientId" BIGINT,
     "ingredientQty" NUMERIC DEFAULT 1,
     "createdAt" TIMESTAMPTZ DEFAULT NOW(),
     "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
-    "tenant_id" TEXT
+    PRIMARY KEY ("tenant_id", "id"),
+    FOREIGN KEY ("tenant_id", "modifierGroupId") REFERENCES "ProductModifierGroup" ("tenant_id", "id") ON DELETE CASCADE,
+    FOREIGN KEY ("tenant_id", "ingredientId") REFERENCES "Product" ("tenant_id", "id") ON DELETE SET NULL
 );
 
-ALTER TABLE "ProductModifierOption" ADD COLUMN IF NOT EXISTS "ingredientQty" NUMERIC DEFAULT 1;
+CREATE INDEX IF NOT EXISTS "ProductModifierOption_modifierGroupId_idx" ON "ProductModifierOption"("tenant_id", "modifierGroupId");
 
-CREATE INDEX IF NOT EXISTS "ProductModifierOption_modifierGroupId_idx" ON "ProductModifierOption"("modifierGroupId");
-CREATE INDEX IF NOT EXISTS "ProductModifierOption_tenant_idx" ON "ProductModifierOption"("tenant_id");
-
--- Desactivar RLS para sincronización directa
+-- Desactivar RLS para sincronización directa (igual que el resto del esquema)
 ALTER TABLE "ProductModifierGroup" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "ProductModifierOption" DISABLE ROW LEVEL SECURITY;
+
+-- 6) Realtime: publicar modificadores para que la tienda refleje cambios sin recargar
+DO $$
+DECLARE
+  pub_exists BOOLEAN;
+BEGIN
+  SELECT EXISTS(SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') INTO pub_exists;
+  IF NOT pub_exists THEN
+    RETURN;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'ProductModifierGroup'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public."ProductModifierGroup";
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'ProductModifierOption'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public."ProductModifierOption";
+  END IF;
+END $$;

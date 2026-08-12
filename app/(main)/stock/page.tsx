@@ -179,8 +179,18 @@ export default function StockPage() {
                 disponibilidad, cargá stock a los ingredientes (este producto o vía Compras).
               </p>
               <p className="text-xs font-semibold text-foreground mt-2">
-                Disponibilidad actual: {product.quantityStock}
+                Disponibilidad actual: {product.quantityStock} por tipo (según ingredientes)
               </p>
+              {Array.isArray(product.recipeAvailability?.limiting) &&
+                product.recipeAvailability.limiting.length > 0 && (
+                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-1">
+                    Limitado por:{" "}
+                    {product.recipeAvailability.limiting
+                      .map((l: any) => `${l.name}: ${l.availableDisplay}`)
+                      .join(", ")}
+                    . El número no se suma entre variantes que comparten ingredientes.
+                  </p>
+                )}
             </div>
           ) : (
             <div className="space-y-2">

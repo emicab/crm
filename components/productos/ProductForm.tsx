@@ -6,7 +6,7 @@ import type { Brand, Category, Supplier, Product } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Loader2, AlertCircle, Upload, Search, Image as ImageIcon, Check, X, ChefHat, Globe, EyeOff, Lock } from 'lucide-react';
+import { Loader2, AlertCircle, Upload, Search, Image as ImageIcon, Check, X, ChefHat, Globe, EyeOff, Lock, XCircle } from 'lucide-react';
 import { useQuickCreate } from '@/hooks/useQuickCreate';
 import QuickCreateModal from './QuickCreateModal';
 import RecipeEditor, { RecipeIngredientForm } from '@/components/recetario/RecipeEditor';
@@ -28,6 +28,7 @@ interface ProductFormData {
   supplierId: string;
   unitType: string;
   isPublicWeb: boolean;
+  webUnavailable: boolean;
 }
 
 interface ProductFormProps {
@@ -63,6 +64,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
     supplierId: initialProductData?.supplierId ? String(initialProductData.supplierId) : '',
     unitType: initialProductData?.unitType || '',
     isPublicWeb: !!initialProductData?.isPublicWeb,
+    webUnavailable: !!initialProductData?.webUnavailable,
   });
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -291,6 +293,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
           supplierId: dataToUse.supplierId ? String(dataToUse.supplierId) : '',
           unitType: dataToUse.unitType || '',
           isPublicWeb: !!dataToUse.isPublicWeb,
+          webUnavailable: !!dataToUse.webUnavailable,
         });
       };
       refreshAndLoad();
@@ -340,6 +343,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         supplierId: formData.supplierId ? parseInt(formData.supplierId) : null,
         unitType: formData.unitType || null,
         isPublicWeb: isPro ? formData.isPublicWeb : false,
+        webUnavailable: isPro ? formData.isPublicWeb && formData.webUnavailable : false,
         isIngredient: false,
         isRecipe,
         recipeItems: isRecipe
@@ -368,7 +372,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
         setFormData({
             name: '', sku: '', description: '', imageUrl: '', pricePurchase: '', priceSale: '',
             quantityStock: '', stockMinAlert: '', brandId: '', categoryId: '', supplierId: '',
-            unitType: '', isPublicWeb: false,
+            unitType: '', isPublicWeb: false, webUnavailable: false,
         });
       }
 
@@ -561,6 +565,27 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
             La publicación en la tienda web (ClinStore) está disponible en el Plan Pro.
           </p>
         </div>
+      )}
+
+      {/* Marcar como agotado / no disponible en la tienda web (solo si es visible) */}
+      {isPro && formData.isPublicWeb && (
+        <label className="flex items-center gap-3 cursor-pointer select-none p-4 bg-rose-50/50 dark:bg-rose-950/20 rounded-xl border border-rose-200 dark:border-rose-800/50">
+          <input
+            type="checkbox"
+            checked={formData.webUnavailable}
+            onChange={(e) => setFormData((prev) => ({ ...prev, webUnavailable: e.target.checked }))}
+            className="h-4 w-4 rounded border-border text-rose-600 focus:ring-rose-500"
+          />
+          <span>
+            <span className="block text-sm font-medium text-foreground flex items-center gap-1.5">
+              <XCircle size={15} className="text-rose-600" />
+              {formData.webUnavailable ? "Agotado en la tienda web" : "Disponible en la tienda web"}
+            </span>
+            <span className="block text-xs text-foreground-muted mt-0.5">
+              Marcalo como agotado para mostrarlo sin botón de compra en ClinStore (sin usar el stock).
+            </span>
+          </span>
+        </label>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

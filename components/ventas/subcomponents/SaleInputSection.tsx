@@ -2,6 +2,7 @@ import React from "react";
 import Input from "@/components/ui/Input";
 import { Product } from "@/types";
 import { formatCurrency } from "@/lib/formatCurrency";
+import { recipeAvailabilityTooltip } from "@/lib/recipeUnits";
 
 interface SaleInputSectionProps {
   productSearchTerm: string;
@@ -60,8 +61,11 @@ export const SaleInputSection: React.FC<SaleInputSectionProps> = ({
                         ? "text-red-500"
                         : "text-emerald-600"
                     }`}
+                    title={recipeAvailabilityTooltip(product.isRecipe, product.recipeAvailability)}
                   >
-                    Stock: {product.quantityStock}
+                    {product.isRecipe
+                      ? `Stock: ${product.quantityStock} por tipo`
+                      : `Stock: ${product.quantityStock}`}
                   </p>
                 </div>
               </li>

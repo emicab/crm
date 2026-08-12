@@ -56,6 +56,29 @@ export default function ConfigGeneralTab({
         </div>
       </section>
 
+      {/* Perfil del Negocio (UX por rubro) */}
+      <section className="bg-muted p-6 rounded-xl shadow space-y-4">
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <ChefHat size={20} className="text-primary" /> Perfil del Negocio
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Perfil de Interfaz"
+            value={form.business_profile || 'general'}
+            onChange={(e) => handleChange('business_profile', e.target.value)}
+          >
+            <option value="general">General (Gastronomía, Retail, Indumentaria)</option>
+            <option value="kiosco">Kiosco / Despensa (vista minimalista)</option>
+          </Select>
+        </div>
+        <p className="text-xs text-foreground-muted">
+          El perfil <strong>Kiosco/Despensa</strong> oculta los módulos avanzados
+          (marketing, recetario, consignaciones, vendedores, traspasos y
+          analíticas) para dejar una vista ultra simple: Caja, Ventas, Stock y
+          Gastos. Nada se elimina: podés volver al perfil General cuando quieras.
+        </p>
+      </section>
+
       {/* Reportes por Email */}
       <section className="bg-muted p-6 rounded-xl shadow space-y-4">
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">

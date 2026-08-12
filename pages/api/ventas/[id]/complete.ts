@@ -96,6 +96,22 @@ export default async function handler(
 
       const affectedIngredientIds: number[] = [];
 
+      // Chequeo COMBINADO de ingredientes: la disponibilidad derivada por
+      // elaborado no es sumable entre variantes que comparten ingredientes.
+      const { computeOrderIngredientShortfall, formatIngredientShortfall } = await import("../../../../lib/recipeStock");
+      const shortfalls = await computeOrderIngredientShortfall(
+        tx,
+        sale.items
+          .filter((i) => i.productId != null)
+          .map((i) => ({ productId: i.productId!, quantity: Number(i.quantity) || 0 })),
+        sale.branchId,
+      );
+      if (shortfalls.length > 0) {
+        throw new Error(
+          `Stock insuficiente de ingredientes para completar la venta: ${shortfalls.map(formatIngredientShortfall).join('; ')}. Reducí cantidades o reponé stock.`,
+        );
+      }
+
       for (const item of sale.items) {
         if (item.productId == null) continue; // ítem desvinculado, sin producto
 

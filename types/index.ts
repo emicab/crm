@@ -28,6 +28,7 @@ export interface Brand {
     unitType?: UnitType;
     isPublicWeb?: boolean;
     webCategory?: string | null;
+    webUnavailable?: boolean;
     brandId: number;
     categoryId: number;
     supplierId?: number | null;
@@ -38,6 +39,16 @@ export interface Brand {
     category: Category;
     supplier?: Supplier | null;
     branchStocks?: ProductBranchStock[];
+    /** Stock derivado de los ingredientes (solo elaborados), con sus limitantes. */
+    recipeAvailability?: {
+      available: number;
+      limiting: {
+        ingredientId: number;
+        name: string;
+        available: number;
+        availableDisplay: string;
+      }[];
+    };
   }
 
   export interface Client {

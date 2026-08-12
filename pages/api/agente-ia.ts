@@ -310,6 +310,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const businessNameSetting = await prisma.setting.findUnique({ where: { key: "businessName" } });
     const businessName = businessNameSetting?.value?.trim() || "tu negocio";
 
+    // Esquema de la BD generado dinámicamente desde prisma/schema.prisma
+    // (evoluciona con las migraciones; fallback al mapa histórico).
+    const { buildAISchema } = await import("../../lib/aiSchema");
+    const aiSchema = await buildAISchema();
+
     // Obtener información de la caja/turno actual
     const activeShift = await prisma.cashRegister.findFirst({
       where: { status: 'OPEN' },
@@ -358,28 +363,7 @@ IMPORTANTE SOBRE SQL:
 
 ESQUEMA EXACTO DE LA BASE DE DATOS (usa SOLO estos nombres exactos de columnas):
 
-Sale: id, saleDate(ms), totalAmount, paymentType, notes, clientId, sellerId, cashRegisterId, status ('COMPLETED'|'PENDING'|'CANCELLED'), onAccount, discountCodeApplied, promotionsApplied, creditCardPromotionId, createdAt(ms), updatedAt(ms)
-SaleItem: id, saleId, productId, quantity, priceAtSale, purchasePriceAtSale
-Product: id, name, sku, description, pricePurchase, priceSale, quantityStock, stockMinAlert, unitType, brandId, categoryId, supplierId, createdAt(ms), updatedAt(ms)
-Category: id, name, logoUrl, createdAt(ms), updatedAt(ms)
-Brand: id, name, logoUrl, createdAt(ms), updatedAt(ms)
-Supplier: id, name, contactPerson, email, phone, address, notes, createdAt(ms), updatedAt(ms)
-Client: id, firstName, lastName, email, phone, address, notes, cuit, businessName, createdAt(ms), updatedAt(ms)
-Seller: id, name, email, phone, isActive, createdAt(ms), updatedAt(ms)
-AccountBalance: id, clientId, balance, updatedAt(ms)
-AccountMovement: id, accountBalanceId, type, amount, description, saleId, createdAt(ms)
-Purchase: id, supplierId, totalAmount, status ('PENDING'|'ORDERED'|'RECEIVED'|'CANCELLED'), paymentType, invoiceNumber, notes, purchaseDate(ms), createdAt(ms), updatedAt(ms)
-PurchaseItem: id, purchaseId, productId, quantity, quantityReceived, purchasePrice
-Expense: id, description, amount, category, paymentType, notes, expenseDate(ms), createdAt(ms), updatedAt(ms)
-CashRegister: id, openDate(ms), closeDate(ms), initialBalance, expectedBalance, actualBalance, difference, status ('OPEN'|'CLOSED'), notes, sellerId, createdAt(ms), updatedAt(ms)
-CashMovement: id, cashRegisterId, type, paymentType, sourceId, amount, description, createdAt(ms)
-Consignment: id, clientId, status ('DELIVERED'|'SETTLED'|'CANCELLED'), notes, createdAt(ms), updatedAt(ms)
-ConsignmentItem: id, consignmentId, productId, quantityGiven, quantitySold, quantityReturned, priceAtGiven
-DiscountCode: id, code, discountPercent, validFrom(ms), validUntil(ms), maxUses, currentUses, isActive, createdAt(ms), updatedAt(ms)
-Promotion: id, name, description, type, status, discountType, discountValue, minQuantity, maxDiscountQty, priority, startDate(ms), endDate(ms), createdAt(ms), updatedAt(ms)
-Combo: id, name, description, price, active, createdAt(ms), updatedAt(ms)
-ComboItem: id, comboId, productId, quantity, customPrice
-CreditCardPromotion: id, bank, installments, startDate(ms), endDate(ms), notes, active, createdAt(ms), updatedAt(ms)
+${aiSchema}
 
 MANEJO DE ERRORES: Si una herramienta devuelve un error técnico (ej. "no such column", "Violación de Privacidad", etc.), NUNCA muestres esos detalles técnicos crudos al usuario. Solo dile de forma natural y amigable que hubo un inconveniente al procesar su solicitud o que no pudiste encontrar los datos exactos.
 

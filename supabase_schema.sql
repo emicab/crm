@@ -11,6 +11,8 @@ DROP TABLE IF EXISTS "ComboItem" CASCADE;
 DROP TABLE IF EXISTS "Combo" CASCADE;
 DROP TABLE IF EXISTS "SaleItem" CASCADE;
 DROP TABLE IF EXISTS "Sale" CASCADE;
+DROP TABLE IF EXISTS "ProductModifierOption" CASCADE;
+DROP TABLE IF EXISTS "ProductModifierGroup" CASCADE;
 DROP TABLE IF EXISTS "Product" CASCADE;
 DROP TABLE IF EXISTS "User" CASCADE;
 DROP TABLE IF EXISTS "Seller" CASCADE;
@@ -160,6 +162,7 @@ CREATE TABLE "Product" (
     "unitType" TEXT,
     "isPublicWeb" BOOLEAN DEFAULT TRUE,
     "webCategory" TEXT,
+    "webUnavailable" BOOLEAN DEFAULT FALSE,
     "imageUrl" TEXT,
     "isRecipe" BOOLEAN NOT NULL DEFAULT FALSE,
     "isIngredient" BOOLEAN NOT NULL DEFAULT FALSE,
@@ -187,6 +190,39 @@ CREATE TABLE "RecipeItem" (
     PRIMARY KEY ("tenant_id", "id"),
     FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE,
     FOREIGN KEY ("tenant_id", "ingredientId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE
+);
+
+-- 9c. Tabla ProductModifierGroup (Grupos de Opciones/Modificadores)
+CREATE TABLE "ProductModifierGroup" (
+    "tenant_id" TEXT NOT NULL,
+    "id" BIGINT NOT NULL,
+    "productId" BIGINT NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT DEFAULT 'MULTI_SELECT',
+    "isRequired" BOOLEAN DEFAULT FALSE,
+    "minSelect" INTEGER DEFAULT 0,
+    "maxSelect" INTEGER,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id", "id"),
+    FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE
+);
+
+-- 9d. Tabla ProductModifierOption (Opciones de Modificadores)
+CREATE TABLE "ProductModifierOption" (
+    "tenant_id" TEXT NOT NULL,
+    "id" BIGINT NOT NULL,
+    "modifierGroupId" BIGINT NOT NULL,
+    "name" TEXT NOT NULL,
+    "priceExtra" NUMERIC DEFAULT 0,
+    "colorHex" TEXT,
+    "ingredientId" BIGINT,
+    "ingredientQty" NUMERIC DEFAULT 1,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id", "id"),
+    FOREIGN KEY ("tenant_id", "modifierGroupId") REFERENCES "ProductModifierGroup" ("tenant_id", "id") ON DELETE CASCADE,
+    FOREIGN KEY ("tenant_id", "ingredientId") REFERENCES "Product" ("tenant_id", "id") ON DELETE SET NULL
 );
 
 -- 10. Tabla Combo (Combos)
@@ -279,6 +315,7 @@ CREATE TABLE "SaleItem" (
     "saleId" INTEGER NOT NULL,
     "productId" INTEGER,
     "productName" TEXT,
+    "modifiers" TEXT,
     PRIMARY KEY ("tenant_id", "id"),
     FOREIGN KEY ("tenant_id", "saleId") REFERENCES "Sale" ("tenant_id", "id") ON DELETE CASCADE,
     FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE SET NULL
@@ -390,6 +427,7 @@ CREATE TABLE "StoreConfig" (
     "allowDelivery" BOOLEAN DEFAULT TRUE,
     "deliveryFee" NUMERIC(12, 2) DEFAULT 0,
     "minDeliveryAmount" NUMERIC(12, 2) DEFAULT 0,
+    "businessSector" TEXT DEFAULT 'GASTRONOMIA',
     "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY ("tenant_id")
@@ -411,6 +449,12 @@ CREATE TABLE "WebOrder" (
     "status" TEXT NOT NULL DEFAULT 'PENDING_PREPARATION',
     "totalAmount" NUMERIC(12, 2) NOT NULL,
     "mpFeeAmount" NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    "subtotalAmount" NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    "discountAmount" NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    "deliveryFee" NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    "couponCode" TEXT,
+    "origin" TEXT,
+    "discountBreakdown" TEXT,
     "notes" TEXT,
     "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -427,12 +471,26 @@ CREATE TABLE "WebOrderItem" (
     "quantity" DOUBLE PRECISION NOT NULL,
     "unitPrice" NUMERIC(12, 2) NOT NULL,
     "subtotal" NUMERIC(12, 2) NOT NULL,
+    "modifiers" TEXT,
     PRIMARY KEY ("tenant_id", "id"),
     FOREIGN KEY ("tenant_id", "webOrderId") REFERENCES "WebOrder" ("tenant_id", "id") ON DELETE CASCADE,
     FOREIGN KEY ("tenant_id", "productId") REFERENCES "Product" ("tenant_id", "id") ON DELETE CASCADE
 );
 
--- 25. Deshabilitar RLS (Row Level Security) para permitir sincronización directa REST desde el POS
+-- 25. Tabla WebOrderStockAlert (Alertas de stock por rechazo de pedidos web)
+CREATE TABLE "WebOrderStockAlert" (
+    "tenant_id" TEXT NOT NULL,
+    "id" BIGINT NOT NULL,
+    "productId" INTEGER,
+    "productName" TEXT NOT NULL,
+    "requestedQty" DOUBLE PRECISION,
+    "message" TEXT,
+    "seenAt" TIMESTAMP WITH TIME ZONE,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY ("tenant_id", "id")
+);
+
+-- 26. Deshabilitar RLS (Row Level Security) para permitir sincronización directa REST desde el POS
 ALTER TABLE "Brand" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Category" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Supplier" DISABLE ROW LEVEL SECURITY;
@@ -443,6 +501,8 @@ ALTER TABLE "Seller" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "User" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Product" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "RecipeItem" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "ProductModifierGroup" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "ProductModifierOption" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Combo" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "CashRegister" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "AccountBalance" DISABLE ROW LEVEL SECURITY;
@@ -458,6 +518,7 @@ ALTER TABLE "Setting" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "StoreConfig" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WebOrder" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WebOrderItem" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "WebOrderStockAlert" DISABLE ROW LEVEL SECURITY;
 
 -- 26. Habilitar Realtime para que el POS y ClinStore escuchen cambios de stock
 -- (si la publicación supabase_realtime existe, que es lo habitual en Supabase).
@@ -469,6 +530,8 @@ DECLARE
     'Product',
     'ProductBranchStock',
     'RecipeItem',
+    'ProductModifierGroup',
+    'ProductModifierOption',
     'Sale',
     'Purchase',
     'StockTransfer',

@@ -38,6 +38,7 @@ model Product {
   unitType      String?  // null=sin especificar, UNIT, WEIGHT, VOLUME
   isPublicWeb   Boolean  @default(false)
   webCategory   String?
+  webUnavailable Boolean @default(false) // el comerciante lo marcó agotado para la tienda web (manual)
   imageUrl      String?
   brandId       Int?
   categoryId    Int?
@@ -485,6 +486,7 @@ enum WebOrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+  PENDING_REVIEW
 }
 
 model StoreConfig {
@@ -507,6 +509,11 @@ model StoreConfig {
   deliveryFee       Decimal  @default(0)
   minDeliveryAmount Decimal  @default(0)
   businessSector  String   @default("GASTRONOMIA") // GASTRONOMIA | INDUMENTARIA | MINIMARKET | RETAIL_GENERAL
+  requireMpForDelivery Boolean @default(true) // Si el pedido es MERCADO_PAGO, exigir pago confirmado antes de preparar
+  lat               Float?   // ubicación del local (para zonas de envío por radio)
+  lng               Float?
+  deliveryZones     String?  // JSON [{name, fromKm, toKm, fee, minAmount}] anillos concéntricos
+  openingHours      String?  // JSON [{day, enabled, open, close, breaks:[{start,end}]}]
   createdAt         DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -525,7 +532,18 @@ model WebOrder {
   status          WebOrderStatus @default(PENDING_PREPARATION)
   totalAmount     Decimal
   mpFeeAmount     Decimal        @default(0)
+  subtotalAmount  Decimal        @default(0) // subtotal del carrito (sin envío ni descuento)
+  discountAmount  Decimal        @default(0) // descuento aplicado (cupón y/o promos)
+  deliveryFee     Decimal        @default(0) // costo de envío a domicilio
+  couponCode      String?        // código de descuento usado
+  deliveryZone    String?        // nombre de la zona de envío seleccionada
+  trackingCode    String?        // código corto para el link público de seguimiento
+  origin          String?        // "WEB" | "WHATSAPP" | "PHONE" | "IN_STORE" | "OTHER"
   scheduledFor    DateTime?      // Fecha/hora de entrega programada (para aperturas)
+  stockReviewNote String?        // motivo de la revisión por falta de stock local (Regla de Oro)
+  stockReviewAt   DateTime?      // cuándo se marcó para revisión
+  mpPaymentId     String?        // id del pago de Mercado Pago (para devoluciones)
+  discountBreakdown String?      // JSON [{kind: COMBO|PROMO|COUPON, name, amount}] para mostrar desglose de descuentos
   notes           String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt

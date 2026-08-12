@@ -46,6 +46,7 @@ export default async function handler(
           minStockBuffer: 1,
           allowPickup: true,
           allowDelivery: true,
+          requireMpForDelivery: true,
           deliveryFee: '0',
           minDeliveryAmount: '0',
           businessSector: 'GASTRONOMIA',
@@ -94,9 +95,14 @@ export default async function handler(
         minStockBuffer,
         allowPickup,
         allowDelivery,
+        requireMpForDelivery,
         deliveryFee,
         minDeliveryAmount,
         businessSector,
+        lat,
+        lng,
+        deliveryZones,
+        openingHours,
       } = req.body;
 
       if (!slug || !slug.trim()) {
@@ -125,9 +131,36 @@ export default async function handler(
       const parsedMpFeePercent = new Prisma.Decimal(parseFloat(mpFeePercent) || 0);
       const parsedDeliveryFee = new Prisma.Decimal(parseFloat(deliveryFee) || 0);
       const parsedMinDeliveryAmount = new Prisma.Decimal(parseFloat(minDeliveryAmount) || 0);
-      const parsedMinStockBuffer = minStockBuffer !== undefined && minStockBuffer !== '' ? (parseFloat(minStockBuffer) || 1) : 1;
+      const parsedMinStockBuffer = minStockBuffer !== undefined && minStockBuffer !== '' ? (Number.isFinite(Number(minStockBuffer)) ? Number(minStockBuffer) : 1) : 1;
       const validSectors = ['GASTRONOMIA', 'INDUMENTARIA', 'MINIMARKET', 'RETAIL_GENERAL'];
       const cleanBusinessSector = validSectors.includes(businessSector) ? businessSector : 'GASTRONOMIA';
+
+      const parseCoord = (v: unknown): number | null => {
+        if (v === undefined || v === null || v === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) && Math.abs(n) <= 180 ? n : null;
+      };
+      const cleanLat = parseCoord(lat);
+      const cleanLng = parseCoord(lng);
+      if ((cleanLat === null && lat !== undefined && lat !== null && lat !== '') ||
+          (cleanLng === null && lng !== undefined && lng !== null && lng !== '')) {
+        res.status(400).json({ message: 'Las coordenadas lat/lng no son válidas.' });
+        return;
+      }
+      const toJsonOrNull = (v: unknown): string | null => {
+        if (v === undefined || v === null || v === '') return null;
+        let arr: unknown = v;
+        if (typeof v === 'string') {
+          try {
+            arr = JSON.parse(v);
+          } catch {
+            return null;
+          }
+        }
+        return Array.isArray(arr) ? JSON.stringify(arr) : null;
+      };
+      const cleanDeliveryZones = toJsonOrNull(deliveryZones);
+      const cleanOpeningHours = toJsonOrNull(openingHours);
 
       let result;
       if (existingConfig) {
@@ -149,9 +182,14 @@ export default async function handler(
             minStockBuffer: parsedMinStockBuffer,
             allowPickup: allowPickup !== undefined ? Boolean(allowPickup) : true,
             allowDelivery: allowDelivery !== undefined ? Boolean(allowDelivery) : true,
+            requireMpForDelivery: requireMpForDelivery !== undefined ? Boolean(requireMpForDelivery) : true,
             deliveryFee: parsedDeliveryFee,
             minDeliveryAmount: parsedMinDeliveryAmount,
             businessSector: cleanBusinessSector,
+            lat: cleanLat,
+            lng: cleanLng,
+            deliveryZones: cleanDeliveryZones,
+            openingHours: cleanOpeningHours,
           },
         });
       } else {
@@ -172,9 +210,14 @@ export default async function handler(
             minStockBuffer: parsedMinStockBuffer,
             allowPickup: allowPickup !== undefined ? Boolean(allowPickup) : true,
             allowDelivery: allowDelivery !== undefined ? Boolean(allowDelivery) : true,
+            requireMpForDelivery: requireMpForDelivery !== undefined ? Boolean(requireMpForDelivery) : true,
             deliveryFee: parsedDeliveryFee,
             minDeliveryAmount: parsedMinDeliveryAmount,
             businessSector: cleanBusinessSector,
+            lat: cleanLat,
+            lng: cleanLng,
+            deliveryZones: cleanDeliveryZones,
+            openingHours: cleanOpeningHours,
           },
         });
       }

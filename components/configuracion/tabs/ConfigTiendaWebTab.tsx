@@ -2,21 +2,52 @@
 
 import React, { useState, useEffect } from "react";
 import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
-import Select from "@/components/ui/Select";
 import {
   Loader2,
   Globe,
   ShoppingBag,
-  CreditCard,
   ExternalLink,
   CheckCircle2,
   ShieldCheck,
-  Smartphone,
   RefreshCw,
   AlertTriangle,
+  Clock,
+  MapPin,
+  Plus,
+  Trash2,
+  Search,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { StorePublicInfoSection } from "../tienda-web/StorePublicInfoSection";
+import { MercadoPagoConnectSection } from "../tienda-web/MercadoPagoConnectSection";
+import { StockDeliveryRulesSection } from "../tienda-web/StockDeliveryRulesSection";
+
+type DaySchedule = {
+  day: number; // 0 = Lunes ... 6 = Domingo
+  enabled: boolean;
+  open: string;
+  close: string;
+  breaks: { start: string; end: string }[];
+};
+
+type DeliveryZone = {
+  name: string;
+  fromKm: number;
+  toKm: number;
+  fee: number;
+  minAmount: number;
+};
+
+const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+
+const defaultSchedules = (): DaySchedule[] =>
+  DAY_NAMES.map((_, day) => ({
+    day,
+    enabled: true,
+    open: "09:00",
+    close: "18:00",
+    breaks: [],
+  }));
 
 export default function ConfigTiendaWebTab() {
   const [loading, setLoading] = useState(true);
@@ -39,10 +70,17 @@ export default function ConfigTiendaWebTab() {
     minStockBuffer: 1,
     allowPickup: true,
     allowDelivery: true,
+    requireMpForDelivery: true,
     deliveryFee: 0,
     minDeliveryAmount: 0,
     businessSector: "GASTRONOMIA",
   });
+  const [schedules, setSchedules] = useState<DaySchedule[]>(defaultSchedules);
+  const [zones, setZones] = useState<DeliveryZone[]>([]);
+  const [storeAddress, setStoreAddress] = useState("");
+  const [storeLat, setStoreLat] = useState("");
+  const [storeLng, setStoreLng] = useState("");
+  const [geocodingStore, setGeocodingStore] = useState(false);
 
   const fetchConfig = async () => {
     setLoading(true);
@@ -63,17 +101,50 @@ export default function ConfigTiendaWebTab() {
           mpPublicKey: data.mpPublicKey || "",
           mpFeePercent: parseFloat(data.mpFeePercent) || 0,
           whatsappPhone: data.whatsappPhone || "",
-          minStockBuffer: parseFloat(data.minStockBuffer) || 1,
+          minStockBuffer:
+            data.minStockBuffer !== undefined &&
+            data.minStockBuffer !== null &&
+            data.minStockBuffer !== ""
+              ? Number(data.minStockBuffer)
+              : 1,
           allowPickup:
             data.allowPickup !== undefined ? Boolean(data.allowPickup) : true,
           allowDelivery:
             data.allowDelivery !== undefined
               ? Boolean(data.allowDelivery)
               : true,
+          requireMpForDelivery:
+            data.requireMpForDelivery !== undefined
+              ? Boolean(data.requireMpForDelivery)
+              : true,
           deliveryFee: parseFloat(data.deliveryFee) || 0,
           minDeliveryAmount: parseFloat(data.minDeliveryAmount) || 0,
           businessSector: data.businessSector || "GASTRONOMIA",
         });
+        try {
+          const parsedSchedules: DaySchedule[] = data.openingHours
+            ? JSON.parse(data.openingHours)
+            : [];
+          setSchedules(
+            parsedSchedules.length === 7 ? parsedSchedules : defaultSchedules(),
+          );
+        } catch {
+          setSchedules(defaultSchedules());
+        }
+        try {
+          const parsedZones: DeliveryZone[] = data.deliveryZones
+            ? JSON.parse(data.deliveryZones)
+            : [];
+          setZones(Array.isArray(parsedZones) ? parsedZones : []);
+        } catch {
+          setZones([]);
+        }
+        setStoreLat(
+          data.lat !== undefined && data.lat !== null ? String(data.lat) : "",
+        );
+        setStoreLng(
+          data.lng !== undefined && data.lng !== null ? String(data.lng) : "",
+        );
       }
     } catch (err) {
       console.error(err);
@@ -90,9 +161,7 @@ export default function ConfigTiendaWebTab() {
       .then((data) => {
         setIsMainDevice(data.is_main_device !== "false");
       })
-      .catch(() => {
-        // si falla, se asume Casa Central
-      });
+      .catch(() => {});
   }, []);
 
   const handleChange = (
@@ -109,6 +178,111 @@ export default function ConfigTiendaWebTab() {
     }
   };
 
+  const updateSchedule = (day: number, patch: Partial<DaySchedule>) => {
+    setSchedules((prev) =>
+      prev.map((s) => (s.day === day ? { ...s, ...patch } : s)),
+    );
+  };
+
+  const updateBreak = (
+    day: number,
+    index: number,
+    field: "start" | "end",
+    value: string,
+  ) => {
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.day === day
+          ? {
+              ...s,
+              breaks: s.breaks.map((b, i) =>
+                i === index ? { ...b, [field]: value } : b,
+              ),
+            }
+          : s,
+      ),
+    );
+  };
+
+  const addBreak = (day: number) => {
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.day === day
+          ? { ...s, breaks: [...s.breaks, { start: "13:00", end: "14:00" }] }
+          : s,
+      ),
+    );
+  };
+
+  const removeBreak = (day: number, index: number) => {
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.day === day
+          ? { ...s, breaks: s.breaks.filter((_, i) => i !== index) }
+          : s,
+      ),
+    );
+  };
+
+  const updateZone = (index: number, patch: Partial<DeliveryZone>) => {
+    setZones((prev) => prev.map((z, i) => (i === index ? { ...z, ...patch } : z)));
+  };
+
+  const addZone = () => {
+    setZones((prev) => {
+      const last = prev[prev.length - 1];
+      return [
+        ...prev,
+        {
+          name: `Zona ${prev.length + 1}`,
+          fromKm: last ? last.toKm : 0,
+          toKm: last ? last.toKm + 2 : 2,
+          fee: 0,
+          minAmount: 0,
+        },
+      ];
+    });
+  };
+
+  const removeZone = (index: number) => {
+    setZones((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const geocodeStoreAddress = async () => {
+    if (!storeAddress.trim()) {
+      toast.error("Ingresá la dirección del local.");
+      return;
+    }
+    setGeocodingStore(true);
+    try {
+      const res = await fetch(
+        `/api/geocode?q=${encodeURIComponent(storeAddress.trim())}`,
+      );
+      if (!res.ok) throw new Error("No se pudo geolocalizar la dirección.");
+      const data = await res.json();
+      if (!data.lat || !data.lng) {
+        throw new Error("No se encontró la dirección. Revisá el texto.");
+      }
+      setStoreLat(String(data.lat));
+      setStoreLng(String(data.lng));
+      toast.success(`Ubicación guardada: ${data.display_name || "ok"}`);
+    } catch (err: any) {
+      toast.error(err.message || "Error al geolocalizar.");
+    } finally {
+      setGeocodingStore(false);
+    }
+  };
+
+  const buildSaveBody = (overrides: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      ...formData,
+      lat: storeLat ? Number(storeLat) : null,
+      lng: storeLng ? Number(storeLng) : null,
+      deliveryZones: zones.length ? zones : null,
+      openingHours: schedules.length === 7 ? schedules : null,
+      ...overrides,
+    });
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.slug.trim()) {
@@ -120,7 +294,7 @@ export default function ConfigTiendaWebTab() {
       const res = await fetch("/api/store-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: buildSaveBody(),
       });
 
       if (!res.ok) {
@@ -160,11 +334,7 @@ export default function ConfigTiendaWebTab() {
       const res = await fetch("/api/store-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          mpAccessToken: "",
-          mpPublicKey: "",
-        }),
+        body: buildSaveBody({ mpAccessToken: "", mpPublicKey: "" }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -284,241 +454,255 @@ export default function ConfigTiendaWebTab() {
         </div>
       )}
 
-      {/* Configuración Básica */}
+      <StorePublicInfoSection formData={formData} onChange={handleChange} />
+
+      <MercadoPagoConnectSection
+        formData={formData}
+        onChange={handleChange}
+        saving={saving}
+        storeBase={storeBase}
+        onOpenChangeModal={() => setShowMpChangeModal(true)}
+        onDisconnectMp={disconnectMp}
+      />
+
+      <StockDeliveryRulesSection formData={formData} onChange={handleChange} />
+
+      {/* Horarios de Atención */}
       <div className="bg-muted p-6 rounded-xl border border-border space-y-4">
         <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-          <Globe size={18} className="text-primary" /> Datos Públicos de la
-          Tienda
+          <Clock size={18} className="text-violet-600" /> Horarios de Atención
         </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label="Subdominio / Slug de la Tienda *"
-            name="slug"
-            value={formData.slug}
-            onChange={handleChange}
-            placeholder="ej. donyeyo"
-            required
-          />
-          <Input
-            label="Nombre Comercial Público *"
-            name="businessName"
-            value={formData.businessName}
-            onChange={handleChange}
-            placeholder="ej. Panadería y Confitería Don Yeyo"
-            required
-          />
-          <div>
-            <label className="block text-sm font-medium text-foreground-muted mb-1">
-              Rubro Comercial del Negocio
-            </label>
-            <select
-              name="businessSector"
-              value={formData.businessSector}
-              onChange={handleChange}
-              className="w-full p-2.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50 font-semibold"
-            >
-              <option value="GASTRONOMIA">🍔 Gastronomía (Restaurantes, Cafés, Dark Kitchens)</option>
-              <option value="INDUMENTARIA">👕 Indumentaria y Calzado (Talles y Colores)</option>
-              <option value="MINIMARKET">🛒 Minimarket / Almacén / Kiosco</option>
-              <option value="RETAIL_GENERAL">🛍️ Retail y Comercio General</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-foreground-muted mb-1">
-            Descripción Breve o Eslogan
-          </label>
-          <textarea
-            name="description"
-            rows={2}
-            value={formData.description}
-            onChange={handleChange}
-            placeholder="Los mejores panes y facturas de la ciudad. Envíos en el día."
-            className="w-full p-3 rounded-lg border border-border bg-background text-sm text-foreground outline-none"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Teléfono para pedidos / WhatsApp"
-            name="whatsappPhone"
-            value={formData.whatsappPhone}
-            onChange={handleChange}
-            placeholder="ej. 5491123456789"
-          />
-          <Input
-            label="Color Primario de la Tienda"
-            type="color"
-            name="primaryColor"
-            value={formData.primaryColor}
-            onChange={handleChange}
-          />
-        </div>
-      </div>
-
-      {/* Vinculación Mercado Pago */}
-      <div className="bg-muted p-6 rounded-xl border border-border space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <CreditCard size={18} className="text-blue-600" /> Cobros Online con
-            Mercado Pago
-          </h3>
-          <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">
-            Integración Directa
-          </span>
-        </div>
         <p className="text-xs text-foreground-muted">
-          Los pagos ingresarán de forma instantánea a tu propia cuenta de
-          Mercado Pago cuando tus clientes compren en ClinStore.
+          Si la tienda está cerrada, el cliente no podrá pagar: se le mostrará
+          la próxima apertura y podrá agendar su pedido para esa fecha/hora.
         </p>
-
-        {/* OAuth Button */}
-        <div className="p-4 bg-background border border-blue-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 shrink-0">
-              <ShieldCheck size={24} />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">
-                Vinculación Oficial 1-Clic (OAuth 2.0)
-              </p>
-              <p className="text-xs text-foreground-muted">
-                Conectá tu cuenta de Mercado Pago con 1 clic sin copiar claves
-                secretas.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                if (formData.mpAccessToken?.trim()) {
-                  // Ya hay cuenta conectada → mostrar modal de confirmación
-                  setShowMpChangeModal(true);
-                } else {
-                  // Primera conexión → OAuth directo
-                  const url = `https://${storeBase}/api/mercadopago/connect?tenant_id=${encodeURIComponent(formData.slug || "mi-tienda")}`;
-                  import("@tauri-apps/plugin-shell")
-                    .then(({ open }) => open(url))
-                    .catch(() => window.open(url, "_blank"));
-                }
-              }}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+        <div className="space-y-2">
+          {schedules.map((s) => (
+            <div
+              key={s.day}
+              className="p-3 rounded-xl border border-border bg-background space-y-2"
             >
-              {formData.mpAccessToken?.trim()
-                ? "Cambiar cuenta conectada (OAuth 2.0)"
-                : "Conectar Mercado Pago (OAuth 2.0) 🔗"}
-            </button>
-            {formData.mpAccessToken?.trim() ? (
-              <button
-                type="button"
-                onClick={disconnectMp}
-                disabled={saving}
-                className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : null}
-                Desconectar Mercado Pago
-              </button>
-            ) : null}
-          </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm font-semibold text-foreground w-32 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={s.enabled}
+                    onChange={(e) =>
+                      updateSchedule(s.day, { enabled: e.target.checked })
+                    }
+                    className="rounded border-border"
+                  />
+                  {DAY_NAMES[s.day]}
+                </label>
+                {s.enabled ? (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs text-foreground-muted">
+                      Apertura
+                      <input
+                        type="time"
+                        value={s.open}
+                        onChange={(e) =>
+                          updateSchedule(s.day, { open: e.target.value })
+                        }
+                        className="px-2 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-foreground-muted">
+                      Cierre
+                      <input
+                        type="time"
+                        value={s.close}
+                        onChange={(e) =>
+                          updateSchedule(s.day, { close: e.target.value })
+                        }
+                        className="px-2 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => addBreak(s.day)}
+                      className="ml-auto text-xs font-semibold text-violet-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={14} /> Receso
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs text-foreground-muted italic">
+                    Cerrado
+                  </span>
+                )}
+              </div>
+              {s.enabled &&
+                s.breaks.map((b, bi) => (
+                  <div
+                    key={bi}
+                    className="flex flex-wrap items-center gap-2 pl-10"
+                  >
+                    <span className="text-[11px] text-foreground-muted uppercase tracking-wider">
+                      Receso {bi + 1}
+                    </span>
+                    <input
+                      type="time"
+                      value={b.start}
+                      onChange={(e) =>
+                        updateBreak(s.day, bi, "start", e.target.value)
+                      }
+                      className="px-2 py-1 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    <span className="text-xs text-foreground-muted">a</span>
+                    <input
+                      type="time"
+                      value={b.end}
+                      onChange={(e) =>
+                        updateBreak(s.day, bi, "end", e.target.value)
+                      }
+                      className="px-2 py-1 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeBreak(s.day, bi)}
+                      className="text-rose-500 hover:text-rose-600 cursor-pointer"
+                      aria-label="Quitar receso"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          ))}
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          <Input
-            label="Access Token de Producción (Opcional)"
-            name="mpAccessToken"
-            value={formData.mpAccessToken}
-            onChange={handleChange}
-            placeholder="APP_USR-..."
-            type="password"
-          />
-          <Input
-            label="Public Key (Opcional)"
-            name="mpPublicKey"
-            value={formData.mpPublicKey}
-            onChange={handleChange}
-            placeholder="APP_USR-..."
-          />
-          <Input
-            label="Comisión Estimada Mercado Pago (%)"
-            name="mpFeePercent"
-            type="number"
-            step="0.01"
-            value={String(formData.mpFeePercent)}
-            onChange={handleChange}
-            placeholder="ej. 6.49"
-          />
-        </div>
-        <p className="text-xs text-foreground-muted italic">
-          💡 La comisión estimada (ej. 6.49% en el acto o 3.99% a 14 días) te
-          permite visualizar la deducción retenida por MP al evaluar tus ventas
-          netas del día.
-        </p>
       </div>
 
-      {/* Reglas de Stock y Envíos */}
+      {/* Ubicación y Zonas de Envío */}
       <div className="bg-muted p-6 rounded-xl border border-border space-y-4">
         <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-          <Smartphone size={18} className="text-emerald-600" /> Stock de
-          Seguridad y Envíos
+          <MapPin size={18} className="text-rose-600" /> Ubicación y Zonas de
+          Envío
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <Input
-              label="Buffer de Stock de Seguridad"
-              type="number"
-              name="minStockBuffer"
-              value={String(formData.minStockBuffer)}
-              onChange={handleChange}
-              placeholder="1"
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-foreground-muted mb-1">
+              Dirección del local (para calcular zonas de envío)
+            </label>
+            <input
+              type="text"
+              value={storeAddress}
+              onChange={(e) => setStoreAddress(e.target.value)}
+              placeholder="ej. Av. Corrientes 1200, CABA"
+              className="w-full p-2.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
             />
-            <p className="text-[11px] text-foreground-muted mt-1">
-              Unidades reservadas para el local (por defecto 1). La tienda nunca vende la última unidad física.
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={geocodeStoreAddress}
+            disabled={geocodingStore}
+          >
+            {geocodingStore ? (
+              <Loader2 size={14} className="animate-spin mr-2" />
+            ) : (
+              <Search size={14} className="mr-2" />
+            )}
+            {geocodingStore ? "Buscando..." : "Geolocalizar"}
+          </Button>
+        </div>
+
+        {(storeLat || storeLng) && (
+          <p className="text-xs text-foreground-muted">
+            📍 Coordenadas del local:{" "}
+            <span className="font-mono">{storeLat}, {storeLng}</span>
+          </p>
+        )}
+
+        <div className="border-t border-border pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold text-foreground">
+              Zonas de envío (por radio)
             </p>
+            <Button type="button" variant="outline" size="sm" onClick={addZone}>
+              <Plus size={14} className="mr-1.5" /> Agregar Zona
+            </Button>
           </div>
-          <Input
-            label="Costo de Envío ($)"
-            type="number"
-            name="deliveryFee"
-            value={String(formData.deliveryFee)}
-            onChange={handleChange}
-            placeholder="0"
-          />
-          <Input
-            label="Pedido Mínimo Envío ($)"
-            type="number"
-            name="minDeliveryAmount"
-            value={String(formData.minDeliveryAmount)}
-            onChange={handleChange}
-            placeholder="0"
-          />
-          <div className="flex flex-col justify-end space-y-2">
-            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input
-                type="checkbox"
-                name="allowPickup"
-                checked={formData.allowPickup}
-                onChange={handleChange}
-                className="rounded border-border"
-              />
-              Permitir Retiro en Local
-            </label>
-            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input
-                type="checkbox"
-                name="allowDelivery"
-                checked={formData.allowDelivery}
-                onChange={handleChange}
-                className="rounded border-border"
-              />
-              Permitir Envío a Domicilio
-            </label>
-          </div>
+          <p className="text-xs text-foreground-muted mb-3">
+            El cliente escribe su dirección y el sistema calcula a qué anillo
+            pertenece. Fuera del último anillo no se realiza envío (solo retiro).
+          </p>
+          {zones.length === 0 ? (
+            <p className="text-xs text-foreground-muted italic">
+              Sin zonas configuradas: se usará el costo de envío único.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div className="hidden md:grid grid-cols-[1fr_70px_70px_90px_90px_36px] gap-2 text-[11px] uppercase tracking-wider text-foreground-muted font-semibold px-1">
+                <span>Nombre</span>
+                <span>Desde km</span>
+                <span>Hasta km</span>
+                <span>Envío $</span>
+                <span>Mínimo $</span>
+                <span></span>
+              </div>
+              {zones.map((z, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-2 md:grid-cols-[1fr_70px_70px_90px_90px_36px] gap-2 items-center"
+                >
+                  <input
+                    type="text"
+                    value={z.name}
+                    onChange={(e) => updateZone(i, { name: e.target.value })}
+                    placeholder="ej. Centro"
+                    className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={String(z.fromKm)}
+                    onChange={(e) =>
+                      updateZone(i, { fromKm: Number(e.target.value) || 0 })
+                    }
+                    className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={String(z.toKm)}
+                    onChange={(e) =>
+                      updateZone(i, { toKm: Number(e.target.value) || 0 })
+                    }
+                    className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={String(z.fee)}
+                    onChange={(e) =>
+                      updateZone(i, { fee: Number(e.target.value) || 0 })
+                    }
+                    className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={String(z.minAmount)}
+                    onChange={(e) =>
+                      updateZone(i, { minAmount: Number(e.target.value) || 0 })
+                    }
+                    className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeZone(i)}
+                    className="text-rose-500 hover:text-rose-600 cursor-pointer justify-self-center"
+                    aria-label="Quitar zona"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -541,6 +725,7 @@ export default function ConfigTiendaWebTab() {
           {saving ? "Guardando..." : "Guardar Cambios"}
         </Button>
       </div>
+
       {/* Modal de confirmación para cambiar cuenta MP */}
       {showMpChangeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">

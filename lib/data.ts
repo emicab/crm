@@ -49,9 +49,13 @@ export async function getCategoryCount() {
 // Podríamos añadir más aquí, como "productos con stock bajo", etc.
 export async function getLowStockProductCount() {
     try {
+        // Incluye stock bajo el mínimo configurado y stock 0 sin mínimo.
+        // Los elaborados (isRecipe) tienen stock 0 por diseño, así que solo
+        // entran por stockMinAlert si lo tienen configurado.
         const result = await prisma.$queryRaw<any[]>`
             SELECT COUNT(*) as count FROM Product
-            WHERE stockMinAlert IS NOT NULL AND quantityStock < stockMinAlert
+            WHERE (stockMinAlert IS NOT NULL AND quantityStock < stockMinAlert)
+               OR (quantityStock <= 0 AND isRecipe = 0)
         `;
         const count = result[0]?.count;
         return typeof count === 'bigint' ? Number(count) : (Number(count) || 0);

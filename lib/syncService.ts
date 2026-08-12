@@ -232,14 +232,16 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
 
 // ===== SELECTIVE SYNC HELPERS =====
 
-// Cuando la nube todavía no tiene una columna (PGRST204), reintentamos el upsert
-// con un payload reducido que omite los campos que aún no existen en Supabase.
-// Esto permite sincronizar aunque la migración SQL de la nube esté pendiente
-// (ej. isPublicWeb/webCategory en Product, o discountType/discountValue/minPurchase
-// en DiscountCode) sin romper el resto del sync.
+// Cuando la nube todavía no tiene una columna (PGRST204 o 42703), reintentamos
+// el upsert con un payload reducido que omite los campos que aún no existen en
+// Supabase. Esto permite sincronizar aunque la migración SQL de la nube esté
+// pendiente (ej. isPublicWeb/webCategory en Product, o discountType/discountValue/
+// minPurchase en DiscountCode) sin romper el resto del sync.
 const PGRST204_FALLBACKS: Record<string, (records: any[]) => any[]> = {
-  Product: (records) => records.map(({ isPublicWeb, webCategory, ...rest }) => rest),
+  Product: (records) => records.map(({ isPublicWeb, webCategory, webUnavailable, ...rest }) => rest),
   DiscountCode: (records) => records.map(({ discountType, discountValue, minPurchase, ...rest }) => rest),
+  StoreConfig: (records) => records.map(({ businessSector, ...rest }) => rest),
+  WebOrder: (records) => records.map(({ discountBreakdown, ...rest }) => rest),
 };
 
 export async function pushEntitiesToSupabase(
@@ -274,7 +276,8 @@ export async function pushEntitiesToSupabase(
 
     if (!res.ok) {
       const errorText = await res.text();
-      const fallback = errorText.includes("PGRST204") ? PGRST204_FALLBACKS[tableName] : null;
+      const isMissingColumn = errorText.includes("PGRST204") || errorText.includes("42703");
+      const fallback = isMissingColumn ? PGRST204_FALLBACKS[tableName] : null;
 
       if (fallback) {
         res = await upsert(fallback(records));

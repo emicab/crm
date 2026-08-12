@@ -36,7 +36,7 @@ export default async function handler(
       handleApiError(res, error, `fetching product ${id}`);
     }
   } else if (req.method === 'PUT') {
-    const { isPublicWeb, webCategory } = req.body;
+    const { isPublicWeb, webCategory, webUnavailable } = req.body;
 
     // Si es una actualización rápida de visibilidad web únicamente:
     if (isPublicWeb !== undefined && Object.keys(req.body).every((k) => ['isPublicWeb', 'webCategory'].includes(k))) {
@@ -66,24 +66,59 @@ export default async function handler(
       }
     }
 
+    // Actualización rápida del flag "agotado en la tienda web" únicamente:
+    if (webUnavailable !== undefined && Object.keys(req.body).every((k) => ['webUnavailable'].includes(k))) {
+      try {
+        const updated = await prisma.product.update({
+          where: { id },
+          data: {
+            webUnavailable: Boolean(webUnavailable),
+            ...(webUnavailable ? { isPublicWeb: true } : {}),
+          },
+          include: { brand: true, category: true, supplier: true, branchStocks: true },
+        });
+
+        try {
+          const { enqueueOutbox } = await import("../../../lib/syncOutbox");
+          await enqueueOutbox("Product", "UPSERT", String(id));
+        } catch (enqErr) {
+          console.error("[Productos] Error al encolar agotado web:", enqErr);
+        }
+
+        res.status(200).json(updated);
+        return;
+      } catch (error: any) {
+        handleApiError(res, error, `updating product web availability ${id}`);
+        return;
+      }
+    }
+
     const {
       pricePurchase, priceSale, quantityStock, stockMinAlert,
-      brandId, categoryId, supplierId, unitType, branchStocks, branchId, isRecipe, recipeItems
+      brandId, categoryId, supplierId, unitType, branchStocks, branchId, isRecipe, recipeItems, isIngredient
     } = req.body;
     let {
       name, sku, description,
     } = req.body;
 
+    // Los ingredientes no usan categoría ni precio de venta (igual que en el POST).
+    // Se detecta con el flag del body o, si viene una actualización parcial, con el
+    // registro existente en la BD.
+    let isIngredientProduct = isIngredient === true || isIngredient === 'true';
+    if (!isIngredientProduct) {
+      try {
+        const existingProduct = await prisma.product.findUnique({ where: { id }, select: { isIngredient: true } });
+        isIngredientProduct = existingProduct?.isIngredient === true;
+      } catch { /* si falla, se asume producto vendible */ }
+    }
+
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({ message: 'El nombre del producto es obligatorio.' });
     }
-    if (priceSale === undefined || isNaN(parseFloat(priceSale))) {
+    if (!isIngredientProduct && (priceSale === undefined || isNaN(parseFloat(priceSale)))) {
       return res.status(400).json({ message: 'El precio de venta es obligatorio y debe ser un número.' });
     }
-    if (brandId === undefined || isNaN(parseInt(brandId))) {
-      return res.status(400).json({ message: 'La marca es obligatoria.' });
-    }
-    if (categoryId === undefined || isNaN(parseInt(categoryId))) {
+    if (!isIngredientProduct && (categoryId === undefined || isNaN(parseInt(categoryId)))) {
       return res.status(400).json({ message: 'La categoría es obligatoria.' });
     }
 
@@ -92,11 +127,17 @@ export default async function handler(
     if (description) description = sanitizeString(description);
 
     try {
-      const brandExists = await prisma.brand.findUnique({ where: { id: parseInt(brandId) }});
-      if (!brandExists) return res.status(400).json({ message: `Marca con ID ${brandId} no existe.` });
-      
-      const categoryExists = await prisma.category.findUnique({ where: { id: parseInt(categoryId) }});
-      if (!categoryExists) return res.status(400).json({ message: `Categoría con ID ${categoryId} no existe.` });
+      const brandIdInt = brandId !== undefined && brandId !== null && brandId !== '' ? parseInt(brandId) : null;
+      const brandIdValid = brandIdInt !== null && !isNaN(brandIdInt);
+      if (brandIdValid) {
+        const brandExists = await prisma.brand.findUnique({ where: { id: brandIdInt } });
+        if (!brandExists) return res.status(400).json({ message: `Marca con ID ${brandId} no existe.` });
+      }
+
+      if (categoryId !== undefined && categoryId !== null && categoryId !== '' && !isNaN(parseInt(categoryId))) {
+        const categoryExists = await prisma.category.findUnique({ where: { id: parseInt(categoryId) }});
+        if (!categoryExists) return res.status(400).json({ message: `Categoría con ID ${categoryId} no existe.` });
+      }
 
       let totalStockCalculated = quantityStock !== undefined ? parseFloat(quantityStock) : undefined;
 
@@ -154,11 +195,18 @@ export default async function handler(
 
       const dataToUpdate: Prisma.ProductUpdateInput = {
         name: name.trim(),
-        priceSale: new Decimal(parseFloat(priceSale)),
+        ...(priceSale !== undefined && priceSale !== null && priceSale !== '' ? { priceSale: new Decimal(parseFloat(priceSale)) } : {}),
         ...(totalStockCalculated !== undefined ? { quantityStock: totalStockCalculated } : {}),
-        brand: { connect: { id: parseInt(brandId) } },
-        category: { connect: { id: parseInt(categoryId) } },
+        ...(brandIdValid ? { brand: { connect: { id: brandIdInt } } } : {}),
+        ...(categoryId !== undefined && categoryId !== null && categoryId !== '' && !isNaN(parseInt(categoryId))
+          ? { category: { connect: { id: parseInt(categoryId) } } }
+          : {}),
       };
+
+      // La marca es opcional: si llega vacía la desvinculamos, si no viene no la tocamos.
+      if (brandId !== undefined && !brandIdValid) {
+        dataToUpdate.brand = { disconnect: true };
+      }
 
       if (sku !== undefined) {
         dataToUpdate.sku = typeof sku === 'string' ? (sku.trim() || null) : sku;
@@ -191,6 +239,9 @@ export default async function handler(
       }
       if (req.body.webCategory !== undefined) {
         dataToUpdate.webCategory = typeof req.body.webCategory === 'string' ? (req.body.webCategory.trim() || null) : req.body.webCategory;
+      }
+      if (req.body.webUnavailable !== undefined) {
+        dataToUpdate.webUnavailable = Boolean(req.body.webUnavailable);
       }
       if (supplierId !== undefined && supplierId !== null && supplierId !== '') {
         dataToUpdate.supplier = { connect: { id: parseInt(supplierId) } };

@@ -35,6 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               paymentMethod: "MERCADO_PAGO",
               paymentStatus: "PENDING",
               status: "PENDING_PREPARATION",
+              origin: "WEB",
               totalAmount: parseFloat(orderPayload.totalAmount || total) || 0,
               notes: orderPayload.notes || null,
               items: {

@@ -28,6 +28,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ message: "Pedido web no encontrado." });
       }
 
+      // Gate de pago (Regla del POS): no se prepara un pedido pagado con
+      // Mercado Pago hasta que el pago esté confirmado (PAID), salvo que la
+      // tienda haya desactivado requireMpForDelivery. Se aplica al avanzar de
+      // PENDING_PREPARATION (el paso que dispara la preparación en cocina).
+      const isStartingPreparation =
+        status === "READY_FOR_PICKUP" &&
+        currentOrder.status === "PENDING_PREPARATION";
+      if (
+        isStartingPreparation &&
+        (currentOrder.paymentMethod || "").toUpperCase().includes("MERCADO") &&
+        currentOrder.paymentStatus !== "PAID"
+      ) {
+        const storeConfig = await prisma.storeConfig.findFirst();
+        const requirePayingFirst =
+          storeConfig?.requireMpForDelivery !== false;
+        if (requirePayingFirst) {
+          return res.status(409).json({
+            message:
+              "Este pedido está pendiente de pago (Mercado Pago). Esperá la confirmación del pago antes de prepararlo.",
+            blockedByPayment: true,
+          });
+        }
+      }
+
       // Elaborados (Recetario): el stock se reserva/repone por ingredientes.
       const orderItemIds = currentOrder.items.map((i) => i.productId);
       const recipeIds = new Set<number>(
@@ -322,6 +346,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (paymentStatus) updateData.paymentStatus = paymentStatus;
         if (isAssigningBranch && newBranchId) updateData.branchId = newBranchId;
         if (isDelivered && !isAlreadyRegistered) updateData.paymentStatus = "PAID";
+        // Al cancelar/entregar se resuelve la revisión (Regla de Oro).
+        if (status === "CANCELLED" || status === "DELIVERED") {
+          updateData.stockReviewAt = null;
+          updateData.stockReviewNote = null;
+        }
 
         await tx.webOrder.update({
           where: { id: orderId },

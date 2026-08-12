@@ -358,6 +358,24 @@ export default async function handler(
           }
         }
 
+        // Chequeo COMBINADO de ingredientes. El stock derivado por elaborado es
+        // correcto por tipo pero NO sumable entre variantes que comparten
+        // ingredientes (ej. 2A + 2B puede superar la harina disponible).
+        if (!isPending) {
+          const { computeOrderIngredientShortfall, formatIngredientShortfall } = await import("../../../lib/recipeStock");
+          const combinedBranchId = effectiveBranchId ?? (req.body.branchId ? parseInt(req.body.branchId) : undefined);
+          const shortfalls = await computeOrderIngredientShortfall(
+            tx,
+            items,
+            combinedBranchId && !isNaN(combinedBranchId) ? combinedBranchId : undefined,
+          );
+          if (shortfalls.length > 0) {
+            throw new Error(
+              `Stock insuficiente de ingredientes para completar la venta: ${shortfalls.map(formatIngredientShortfall).join('; ')}. Reducí cantidades o reponé stock.`,
+            );
+          }
+        }
+
         for (const item of items) {          const product = await tx.product.findUnique({ where: { id: item.productId } });
           if (!product) {
             throw new Error(`Producto con ID ${item.productId} no encontrado.`);
@@ -367,23 +385,10 @@ export default async function handler(
           const recipeBranchId = bId && !isNaN(bId) ? bId : undefined;
           const isRecipeProduct = product.isRecipe === true;
 
-          // Validación de stock: para elaborados se valida contra la disponibilidad
-          // derivada de sus ingredientes.
-          if (!isPending) {
-            if (isRecipeProduct) {
-              const { getRecipeAvailability } = await import("../../../lib/recipeStock");
-              const availability = await getRecipeAvailability(tx, item.productId, recipeBranchId);
-              if (availability.available < item.quantity) {
-                const limitText = availability.limiting
-                  .map(l => `"${l.name}"`)
-                  .join(", ");
-                throw new Error(
-                  `Stock insuficiente para preparar "${product.name}". Solo podés preparar ${availability.available}. Falta: ${limitText}.`
-                );
-              }
-            } else if (Number(product.quantityStock) < item.quantity) {
-              throw new Error(`Stock insuficiente para el producto "${product.name}". Disponible: ${product.quantityStock}, Solicitado: ${item.quantity}.`);
-            }
+          // Validación de stock de productos simples. Los elaborados ya se
+          // validaron de forma combinada contra los ingredientes (antes del loop).
+          if (!isPending && !isRecipeProduct && Number(product.quantityStock) < item.quantity) {
+            throw new Error(`Stock insuficiente para el producto "${product.name}". Disponible: ${product.quantityStock}, Solicitado: ${item.quantity}.`);
           }
 
           let purchasePriceAtSale = product.pricePurchase;

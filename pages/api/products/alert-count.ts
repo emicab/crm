@@ -11,10 +11,12 @@ export default async function handler(
   }
 
   try {
-    // Se excluyen los productos elaborados (isRecipe = 0): su disponibilidad se
-    // deriva de los ingredientes y no tienen stock físico propio.
+    // Los elaborados (isRecipe = 1) no se cuentan aquí: se cuentan aparte vía
+    // stock derivado (computeDerivedStock). Acá solo productos simples e
+    // ingredientes: stock bajo el mínimo o stock 0 aunque no tengan
+    // stockMinAlert configurado.
     const result: any = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*) as count FROM Product WHERE stockMinAlert IS NOT NULL AND quantityStock < stockMinAlert AND isRecipe = 0`
+      `SELECT COUNT(*) as count FROM Product WHERE isRecipe = 0 AND ((stockMinAlert IS NOT NULL AND quantityStock < stockMinAlert) OR quantityStock <= 0)`
     );
     const count = Number(result[0]?.count || 0);
 
