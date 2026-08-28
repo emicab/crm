@@ -107,10 +107,20 @@ export function ComandaCard({
       {/* Comanda Card Header */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-3.5 space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono font-black text-base text-cyan-400">
               #{order.webOrderNumber}
             </span>
+            {order.origin === "PEDIDOS_YA" && (
+              <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded-md bg-rose-600 text-white border border-rose-400">
+                🔴 PedidosYa
+              </span>
+            )}
+            {order.origin === "RAPPI" && (
+              <span className="text-[10px] uppercase font-black tracking-wider px-2 py-0.5 rounded-md bg-amber-600 text-white border border-amber-400">
+                🟠 Rappi
+              </span>
+            )}
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-white/10 border border-white/20">
               {order.deliveryType === "DELIVERY" ? "🚚 Envío" : "🏬 Retiro"}
             </span>
@@ -118,20 +128,34 @@ export function ComandaCard({
 
           <span
             className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
-              order.paymentStatus === "PAID"
+              order.status === "CANCELLED"
+                ? "bg-slate-500/30 text-slate-300 border border-slate-500/40"
+                : order.paymentStatus === "PAID"
                 ? "bg-emerald-500 text-white"
                 : blockedByPayment
                 ? "bg-rose-500/30 text-rose-200 border border-rose-500/40"
                 : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
             }`}
           >
-            {order.paymentStatus === "PAID"
+            {order.status === "CANCELLED"
+              ? "CANCELADO"
+              : order.paymentStatus === "PAID"
               ? "PAGADO"
               : blockedByPayment
               ? "ESPERANDO PAGO"
               : "PENDIENTE PAGO"}
           </span>
         </div>
+
+        {/* Código corto de retiro para el Rider (PedidosYa) */}
+        {(order as any).orderCode && (
+          <div className="bg-rose-500/20 border border-rose-500/40 p-1.5 rounded-lg flex items-center justify-between">
+            <span className="text-[11px] font-bold text-rose-300">CÓDIGO RIDER:</span>
+            <span className="font-mono font-black text-sm text-yellow-300 tracking-wider">
+              {(order as any).orderCode}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between text-xs text-slate-300 font-medium">
           <span className="font-bold text-white truncate max-w-[180px]">

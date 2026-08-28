@@ -6,6 +6,7 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Filter, X, RefreshCw } from 'lucide-react';
 import type { Brand, Category, Supplier, Branch } from '@/types';
+import { CatalogSyncButton } from './CatalogSyncButton';
 
 interface ProductFiltersProps {
   filters: { search: string; brandId: string; categoryId: string; supplierId: string; branchId?: string };
@@ -26,11 +27,12 @@ const ProductFilters: React.FC<ProductFiltersProps> = ({
   filters, brands, categories, suppliers, branches, onChange, onClear, onExportCSV, onImportCSV, onTransferStock, onSync, isSyncing,
 }) => (
   <div className="mb-6 p-4 border border-border rounded-md bg-background">
-    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2 flex-wrap">
       <h3 className="text-lg font-medium text-foreground flex items-center">
         <Filter size={18} className="mr-2 text-primary" /> Filtros y Búsqueda
       </h3>
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+        <CatalogSyncButton />
         {onTransferStock && (
           <Button onClick={onTransferStock} variant="primary" size="sm" className="text-xs">
             Remito Traspaso 🔁

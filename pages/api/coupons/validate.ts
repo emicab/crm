@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/lib/prisma";
+import { resolveDbForRequest } from "@/lib/requestDb";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "POST") {
@@ -7,13 +7,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { code, subtotal } = req.body;
       const cleanCode = (code || "").replace(/\s+/g, "").toUpperCase();
       const numSubtotal = parseFloat(subtotal) || 0;
+      const db = await resolveDbForRequest(req);
 
       if (!cleanCode) {
-        return res.status(400).json({ message: "Ingrese un código de descuento válido." });
+        return res.status(400).json({ message: "Ingrese un c��digo de descuento vǭlido." });
       }
 
       // 1. Buscar en la tabla DiscountCode (la que administra el POS)
-      const discountCode = await prisma.discountCode.findFirst({
+      const discountCode = await db.discountCode.findFirst({
         where: { code: { equals: cleanCode } },
       });
 
@@ -62,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // 2. Buscar en la tabla Coupon (para compatibilidad)
-      const coupon = await prisma.coupon.findFirst({
+      const coupon = await db.coupon.findFirst({
         where: { code: { equals: cleanCode } },
       });
 

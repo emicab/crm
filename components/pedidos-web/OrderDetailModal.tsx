@@ -6,6 +6,7 @@ import {
   Printer,
   Link2,
   MessageCircle,
+  Share2,
   Clock,
   MapPin,
   Truck,
@@ -34,6 +35,38 @@ function parseItemModifiers(item: WebOrderItem): ParsedModifier[] {
   } catch {
     return [];
   }
+}
+
+// Texto legible del estado del pedido para el cliente (WhatsApp / compartir).
+const STATUS_LABELS: Record<string, string> = {
+  PENDING_PAYMENT: "pendiente de pago",
+  PENDING_PREPARATION: "en preparación",
+  PENDING_REVIEW: "en revisión de stock",
+  READY_FOR_PICKUP: "listo para retiro",
+  SHIPPED: "en camino",
+  DELIVERED: "entregado",
+  CANCELLED: "cancelado",
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] || status.toLowerCase().replace(/_/g, " ");
+}
+
+// Normaliza el teléfono a formato internacional AR (wa.me requiere 549...).
+function normalizePhone(raw: string): string {
+  const digits = String(raw || "").replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("549")) return digits;
+  if (digits.startsWith("54")) return "549" + digits.slice(2);
+  return "549" + digits;
+}
+
+function openExternal(url: string) {
+  import("@tauri-apps/plugin-shell")
+    .then(({ open }) => open(url))
+    .catch(() => {
+      window.open(url, "_blank");
+    });
 }
 
 interface OrderDetailModalProps {
@@ -80,14 +113,32 @@ export function OrderDetailModal({
     toast.success("Enlace de seguimiento copiado al portapapeles.");
   };
 
+  const buildStatusMessage = () => {
+    const state = statusLabel(order.status);
+    return `¡Hola ${order.clientName}! Tu pedido #${order.webOrderNumber} está ${state} 📦\n\nSeguilo en tiempo real acá: ${trackingLink}`;
+  };
+
   const handleSendWhatsAppTracking = () => {
-    if (!order.clientPhone || !trackingLink) return;
-    const cleanPhone = order.clientPhone.replace(/[^0-9]/g, "");
-    const msg = `¡Hola ${order.clientName}! Podés seguir el estado de tu pedido en tiempo real ingresando acá: ${trackingLink}`;
-    window.open(
-      `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`,
-      "_blank",
-    );
+    const cleanPhone = normalizePhone(order.clientPhone);
+    if (!cleanPhone) {
+      toast.error("El pedido no tiene un teléfono válido del cliente.");
+      return;
+    }
+    if (!trackingLink) {
+      toast.error("El pedido no tiene enlace de seguimiento.");
+      return;
+    }
+    const msg = buildStatusMessage();
+    openExternal(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`);
+  };
+
+  const handleShareStatus = () => {
+    if (!trackingLink) {
+      toast.error("El pedido no tiene enlace de seguimiento.");
+      return;
+    }
+    navigator.clipboard.writeText(buildStatusMessage());
+    toast.success("Estado del pedido copiado al portapapeles.");
   };
 
   return (
@@ -136,6 +187,15 @@ export function OrderDetailModal({
                   onClick={handleCopyTrackingLink}
                 >
                   Copiar
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleShareStatus}
+                  title="Copiá el estado actual del pedido con su enlace de seguimiento"
+                >
+                  <Share2 size={14} className="mr-1" /> Compartir estado
                 </Button>
                 <Button
                   type="button"
@@ -242,8 +302,61 @@ export function OrderDetailModal({
             Cerrar
           </Button>
 
-          <div className="flex items-center gap-2">
-            {order.status === "PENDING_PREPARATION" && blockedByPayment && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Acciones para PedidosYa / Rappi si aplica */}
+            {(order.origin === "PEDIDOS_YA" || order.origin === "RAPPI") && order.status === "PENDING_PREPARATION" && (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="bg-rose-600 hover:bg-rose-500 text-white"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/integrations/order-action", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ orderId: order.id, action: "ACCEPT", prepTimeMinutes: 20 }),
+                      });
+                      if (res.ok) {
+                        toast.success("Pedido aceptado exitosamente");
+                        onStatusChange(order.id, "PENDING_PREPARATION");
+                        onClose();
+                      }
+                    } catch (err) {
+                      toast.error("Error al aceptar pedido externo");
+                    }
+                  }}
+                >
+                  <CheckCircle2 size={16} className="mr-1.5" /> Aceptar (20 min)
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-rose-500/40 text-rose-600 hover:bg-rose-500/10"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/integrations/order-action", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ orderId: order.id, action: "CANCEL", cancelReason: "STORE_BUSY" }),
+                      });
+                      if (res.ok) {
+                        toast.success("Pedido rechazado");
+                        onStatusChange(order.id, "CANCELLED");
+                        onClose();
+                      }
+                    } catch (err) {
+                      toast.error("Error al cancelar pedido");
+                    }
+                  }}
+                >
+                  Rechazar
+                </Button>
+              </div>
+            )}
+
+            {/* Acciones genéricas / ClinStore */}
+            {order.origin !== "PEDIDOS_YA" && order.origin !== "RAPPI" && order.status === "PENDING_PREPARATION" && blockedByPayment && (
               <Button
                 type="button"
                 variant="outline"
@@ -255,7 +368,7 @@ export function OrderDetailModal({
               </Button>
             )}
 
-            {order.status === "PENDING_PREPARATION" && !blockedByPayment && (
+            {order.origin !== "PEDIDOS_YA" && order.origin !== "RAPPI" && order.status === "PENDING_PREPARATION" && !blockedByPayment && (
               <Button
                 type="button"
                 variant="primary"
@@ -273,7 +386,14 @@ export function OrderDetailModal({
               <Button
                 type="button"
                 variant="primary"
-                onClick={() => {
+                onClick={async () => {
+                  if (order.origin === "PEDIDOS_YA" || order.origin === "RAPPI") {
+                    await fetch("/api/integrations/order-action", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ orderId: order.id, action: "DISPATCH" }),
+                    });
+                  }
                   onStatusChange(
                     order.id,
                     order.deliveryType === "DELIVERY" ? "SHIPPED" : "DELIVERED",

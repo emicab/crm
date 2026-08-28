@@ -62,3 +62,9 @@ DOCS
 app_standalone
 dist_tauri
 electron
+
+# Estado runtime multi-negocio (contiene licencia y claves de Supabase)
+store.json
+
+# Scripts y fixtures de prueba / desarrollo
+/scratch/

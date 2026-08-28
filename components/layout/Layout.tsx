@@ -70,6 +70,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         const res = await fetch("/api/sync");
         if (res.ok) {
           window.dispatchEvent(new Event("sync-completed"));
+          // Cron distribuido de expiración de pedidos web: reusa el ciclo de
+          // 5 min del sync. Fire-and-forget, no bloquea ni rompe el sync.
+          fetch("/api/web-orders/expire-pending", {
+            method: "POST",
+          }).catch((err) => {
+            console.error("Error al disparar la expiración de pedidos web:", err);
+          });
         }
       } catch (err) {
         console.error(

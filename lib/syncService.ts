@@ -5,6 +5,7 @@ import prisma from "./prisma";
 import os from "os";
 import crypto from "crypto";
 import { isMainDevice } from "./branchIdentity";
+import { getDeviceSettings } from "./profiles";
 import {
   fetchWithTimeout,
   recalcProductTotal,
@@ -41,6 +42,12 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
   const config: Record<string, string> = {};
   for (const s of settings) {
     config[s.key] = s.value;
+  }
+  // Overlay de settings a nivel máquina (licencia, plan, credenciales Supabase)
+  // para que el sync use las mismas credenciales en todos los negocios.
+  const device = getDeviceSettings();
+  for (const [k, v] of Object.entries(device)) {
+    config[k] = v;
   }
   return config;
 }
@@ -81,6 +88,9 @@ export async function getSelectiveSyncCredentials(): Promise<{
       process.env.HARDWARE_ID?.trim() ||
       `pos_${computerHostname}`
     );
+    // El tenant_id se persiste por negocio en su DB local (Setting.tenant_id)
+    // cuando se adopta/crea el negocio, así que este fallback solo aplica a
+    // instalaciones legacy de un solo negocio (fórmula original, sin slug).
     tenantId = crypto.createHash("sha256").update(rawTenant).digest("hex").slice(0, 16);
   }
 
@@ -238,10 +248,11 @@ export async function runSupabaseSync(forceFullSync: boolean = false): Promise<{
 // pendiente (ej. isPublicWeb/webCategory en Product, o discountType/discountValue/
 // minPurchase en DiscountCode) sin romper el resto del sync.
 const PGRST204_FALLBACKS: Record<string, (records: any[]) => any[]> = {
-  Product: (records) => records.map(({ isPublicWeb, webCategory, webUnavailable, ...rest }) => rest),
+  Product: (records) => records.map(({ isPublicWeb, webCategory, webUnavailable, externalSku, lastSyncJobId, ...rest }) => rest),
   DiscountCode: (records) => records.map(({ discountType, discountValue, minPurchase, ...rest }) => rest),
-  StoreConfig: (records) => records.map(({ businessSector, ...rest }) => rest),
-  WebOrder: (records) => records.map(({ discountBreakdown, ...rest }) => rest),
+  StoreConfig: (records) => records.map(({ businessSector, rappiWebhookSecret, peyaEnabled, peyaChainId, peyaVendorId, peyaEnv, peyaAutoAccept, peyaConnected, peyaWebhookSecret, ...rest }) => rest),
+  WebOrder: (records) => records.map(({ discountBreakdown, orderCode, externalOrderId, chainId, vendorId, transportType, promisedFor, acceptedFor, riderInfo, ...rest }) => rest),
+  WebOrderItem: (records) => records.map(({ externalItemId, ...rest }) => rest),
 };
 
 export async function pushEntitiesToSupabase(

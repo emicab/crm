@@ -27,6 +27,7 @@ import {
   Ticket,
   ArrowRightLeft,
   ChefHat,
+  Building2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
@@ -282,6 +283,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     businessProfile,
   } = useModules();
   const [alertCount, setAlertCount] = useState(0);
+  const [activeBusinessName, setActiveBusinessName] = useState<string | null>(null);
+  const [isMultiBusiness, setIsMultiBusiness] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const hasHydratedRef = useRef(false);
   const [appVersion, setAppVersion] = useState(pkg.version);
@@ -293,6 +296,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     setCollapsedGroups(loadCollapsed());
     hasHydratedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/profiles")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setIsMultiBusiness((data.profiles || []).length > 1);
+        const active = (data.profiles || []).find(
+          (p: any) => p.id === data.activeProfileId,
+        );
+        if (active) setActiveBusinessName(active.name);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -622,6 +639,34 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             );
           })}
         </nav>
+
+        {activeBusinessName && (
+          <div className="mx-4 mb-2 p-3 rounded-xl border border-border bg-background/50">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Building2 size={16} className="text-primary shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[9px] uppercase font-bold text-foreground-muted tracking-wider">
+                    Negocio activo
+                  </p>
+                  <p className="text-xs font-bold text-foreground truncate">
+                    {activeBusinessName}
+                  </p>
+                </div>
+              </div>
+              {isMultiBusiness && (
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new Event("open-business-picker"))}
+                  className="px-2 py-1 text-[10px] font-bold bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors cursor-pointer shrink-0"
+                  title="Cambiar de negocio"
+                >
+                  Cambiar
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {currentUser && (
           <div className="px-4 py-2.5 border-t border-border flex items-center justify-between text-xs bg-background/50">

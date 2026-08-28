@@ -3,14 +3,27 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const origin = request.headers.get('origin') || '*';
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // CORS restrictivo: en producción solo se refleja el origen del panel (Tauri)
+  // o localhost; nunca un origin arbitrario con credenciales.
+  const requestOrigin = request.headers.get('origin');
+  const isAllowedOrigin =
+    !requestOrigin ||
+    !isProduction ||
+    requestOrigin.startsWith('http://localhost:') ||
+    requestOrigin.startsWith('http://127.0.0.1:') ||
+    requestOrigin.startsWith('tauri://localhost') ||
+    requestOrigin.startsWith('https://clinstore.vercel.app');
+  const corsOrigin = isAllowedOrigin && requestOrigin ? requestOrigin : 'http://localhost:3000';
 
   // Helper de cabeceras CORS seguras
   const setCorsHeaders = (res: NextResponse) => {
-    res.headers.set('Access-Control-Allow-Origin', origin);
+    res.headers.set('Access-Control-Allow-Origin', corsOrigin);
     res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
     res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-app-secret, ngrok-skip-browser-warning');
-    res.headers.set('Access-Control-Allow-Credentials', 'true');
+    // Credenciales solo para orígenes de confianza (panel/tauri/localhost).
+    res.headers.set('Access-Control-Allow-Credentials', isAllowedOrigin ? 'true' : 'false');
     return res;
   };
 
@@ -28,10 +41,14 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/ClinPOS.png') ||
     pathname.startsWith('/IgniteCRM.png');
 
+  // Webhooks de plataformas externas (Rappi y Mercado Pago): llegan con su
+  // propio token (Authorization Bearer) que cada ruta valida. El webhook de
+  // PedidosYa ya no vive en el POS: apunta a clinstore.
   const isWebhookOrMp =
     pathname.startsWith('/api/webhooks/') ||
     pathname.startsWith('/api/mercadopago/') ||
-    pathname.startsWith('/api/mp/');
+    pathname.startsWith('/api/mp/') ||
+    pathname.startsWith('/api/integrations/rappi/webhook');
 
   // Solo POST en /api/web-orders para que la tienda cree pedidos.
   // /api/web-orders/mark-paid y GET /api/web-orders NO son públicos.

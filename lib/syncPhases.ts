@@ -230,6 +230,20 @@ export function toWebOrderPayload(order: any, cloudId: number, tenantId: string)
     mpPaymentId: order.mpPaymentId ?? null,
     discountBreakdown: order.discountBreakdown ?? null,
     notes: order.notes,
+    // Campos de integración (PeYA/Rappi). Tolerante: si la nube aún no tiene la
+    // columna, el sync los omite vía PGRST204_FALLBACKS en syncService.
+    orderCode: order.orderCode ?? null,
+    externalOrderId: order.externalOrderId ?? null,
+    chainId: order.chainId ?? null,
+    vendorId: order.vendorId ?? null,
+    transportType: order.transportType ?? null,
+    promisedFor: order.promisedFor
+      ? (typeof order.promisedFor === "string" ? order.promisedFor : order.promisedFor.toISOString())
+      : null,
+    acceptedFor: order.acceptedFor
+      ? (typeof order.acceptedFor === "string" ? order.acceptedFor : order.acceptedFor.toISOString())
+      : null,
+    riderInfo: order.riderInfo ?? null,
     tenant_id: tenantId,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString()
@@ -245,6 +259,7 @@ export function toWebOrderItemPayload(item: any, cloudId: number, index: number,
     unitPrice: fmtDec(item.unitPrice),
     subtotal: fmtDec(item.subtotal),
     modifiers: item.modifiers || null,
+    externalItemId: item.externalItemId ?? null,
     tenant_id: tenantId
   };
 }
@@ -586,6 +601,15 @@ export function buildPushPayload(
       deliveryFee: fmtDec(sc.deliveryFee), minDeliveryAmount: fmtDec(sc.minDeliveryAmount),
       businessSector: sc.businessSector || "GASTRONOMIA",
       lat: sc.lat ?? null, lng: sc.lng ?? null, deliveryZones: sc.deliveryZones ?? null, openingHours: sc.openingHours ?? null,
+      // Campos de integración PeYA (clinstore los lee para resolver el tenant
+      // del webhook y autorizar los proxies). Tolerante vía PGRST204_FALLBACKS.
+      peyaEnabled: sc.peyaEnabled ?? false,
+      peyaChainId: sc.peyaChainId ?? null,
+      peyaVendorId: sc.peyaVendorId ?? null,
+      peyaEnv: sc.peyaEnv || "SANDBOX",
+      peyaAutoAccept: sc.peyaAutoAccept ?? false,
+      peyaConnected: sc.peyaConnected ?? false,
+      peyaWebhookSecret: sc.peyaWebhookSecret ?? null,
       tenant_id: tenantId, createdAt: sc.createdAt.toISOString(), updatedAt: sc.updatedAt.toISOString()
     })) : [],
     Setting: isMainDeviceFlag && config.app_plan ? [{
@@ -681,6 +705,36 @@ export async function pullWebOrdersFromCloud(ctx: SyncPhaseContext): Promise<voi
     });
     if (resWebOrders.ok) {
       const cloudOrders = await resWebOrders.json();
+
+      // Los items de pedidos externos (PeYA/Rappi) pueden apuntar a productos
+      // que el pull de catálogo aún no importó (placeholders creados por
+      // clinstore sin marca/categoría, que ese pull saltea). Sin este guard, el
+      // create del pedido viola la FK de productId.
+      const ensureLocalProduct = async (cloudProductId: number): Promise<number> => {
+        const existing = await prisma.product.findUnique({
+          where: { id: cloudProductId },
+          select: { id: true },
+        });
+        if (existing) return cloudProductId;
+        try {
+          await prisma.product.create({
+            data: {
+              id: cloudProductId,
+              name: `Producto externo #${cloudProductId}`,
+              priceSale: 0,
+              pricePurchase: 0,
+              quantityStock: 0,
+              isIngredient: false,
+              isPublicWeb: false,
+            },
+          });
+        } catch (err) {
+          // Posible carrera con otro sync: si el producto apareció entretanto, ok.
+          console.warn("[Sync] No se pudo crear placeholder local del item externo", cloudProductId, err);
+        }
+        return cloudProductId;
+      };
+
       for (const order of cloudOrders) {
         // Si el pedido web se marcó para borrar (outbox), no lo re-importemos.
         const { isOutboxDeletePending } = await import("./syncOutbox");
@@ -717,17 +771,31 @@ export async function pullWebOrdersFromCloud(ctx: SyncPhaseContext): Promise<voi
               discountBreakdown: order.discountBreakdown ?? null,
               origin: order.origin ?? "WEB",
               notes: order.notes,
+              // Campos de integración (PeYA/Rappi): sin ellos, el pedido bajado
+              // de la nube no se identifica como externo (externalOrderId null)
+              // y las acciones de comanda (aceptar/despachar/cancelar) fallan.
+              orderCode: order.orderCode ?? null,
+              externalOrderId: order.externalOrderId ?? null,
+              chainId: order.chainId ?? null,
+              vendorId: order.vendorId ?? null,
+              transportType: order.transportType ?? null,
+              promisedFor: order.promisedFor ? new Date(order.promisedFor) : null,
+              acceptedFor: order.acceptedFor ? new Date(order.acceptedFor) : null,
+              riderInfo: order.riderInfo ?? null,
               createdAt: new Date(order.createdAt),
               items: {
-                create: (order.WebOrderItem || []).map((i: any) => ({
-                  productId: i.productId,
-                  quantity: i.quantity,
-                  unitPrice: i.unitPrice,
-                  subtotal: i.subtotal,
-                  modifiers: i.modifiers
-                    ? (typeof i.modifiers === "string" ? i.modifiers : JSON.stringify(i.modifiers))
-                    : null,
-                }))
+                create: await Promise.all(
+                  (order.WebOrderItem || []).map(async (i: any) => ({
+                    productId: await ensureLocalProduct(i.productId),
+                    quantity: i.quantity,
+                    unitPrice: i.unitPrice,
+                    subtotal: i.subtotal,
+                    modifiers: i.modifiers
+                      ? (typeof i.modifiers === "string" ? i.modifiers : JSON.stringify(i.modifiers))
+                      : null,
+                    externalItemId: i.externalItemId ?? null,
+                  }))
+                )
               }
             }
           });
@@ -814,6 +882,20 @@ export async function pullWebOrdersFromCloud(ctx: SyncPhaseContext): Promise<voi
                 discountBreakdown: order.discountBreakdown ?? exists.discountBreakdown ?? null,
                 origin: order.origin ?? exists.origin ?? "WEB",
                 notes: order.notes ?? exists.notes,
+                // Campos de integración: se sincronizan si la nube los tiene
+                // (pedidos PeYA/Rappi creados por clinstore o el webhook).
+                orderCode: order.orderCode ?? exists.orderCode ?? null,
+                externalOrderId: order.externalOrderId ?? exists.externalOrderId ?? null,
+                chainId: order.chainId ?? exists.chainId ?? null,
+                vendorId: order.vendorId ?? exists.vendorId ?? null,
+                transportType: order.transportType ?? exists.transportType ?? null,
+                promisedFor: order.promisedFor
+                  ? new Date(order.promisedFor)
+                  : exists.promisedFor,
+                acceptedFor: order.acceptedFor
+                  ? new Date(order.acceptedFor)
+                  : exists.acceptedFor,
+                riderInfo: order.riderInfo ?? exists.riderInfo ?? null,
                 updatedAt: new Date(order.updatedAt)
               }
             });
@@ -892,30 +974,51 @@ export async function pullStoreConfigFromCloud(ctx: SyncPhaseContext, firstStore
           } else {
             console.log(`[Sync] Esta PC es una sucursal y no tiene StoreConfig local; la tienda web la administra la Casa Central (tenant ${tenantId}).`);
           }
-        } else if (
-          remoteConfig.mpAccessToken !== firstStoreConfig.mpAccessToken
-        ) {
-          // La nube es la fuente de verdad para las credenciales de MP:
-          // - Si la nube BORRÓ el token (mpAccessToken vacío), el borrado se
-          //   propaga SIEMPRE al local, aunque su timestamp sea viejo (un
-          //   UPDATE manual en Supabase no actualiza updatedAt). Sin esto, el
-          //   local conservaba el token y el PUSH lo volvía a subir.
-          // - Si la nube tiene un token NUEVO, solo se aplica si es más nuevo
-          //   que el local (isCloudNewer), para no pisar una escritura local
-          //   reciente (ej. OAuth legacy que aún no se subió).
-          const cloudHasToken = Boolean(remoteConfig.mpAccessToken);
-          const cloudIsNewer = isCloudNewer(remoteConfig.updatedAt, firstStoreConfig.updatedAt);
-          if (!cloudHasToken || cloudIsNewer) {
-            await prisma.storeConfig.update({
-              where: { id: firstStoreConfig.id },
-              data: {
-                mpAccessToken: remoteConfig.mpAccessToken || null,
-                mpPublicKey: remoteConfig.mpPublicKey || "",
-              },
-            });
-            console.log(
-              `[Sync] mpAccessToken${cloudHasToken ? " actualizado" : " borrado"} desde Supabase para tenant ${tenantId}`
-            );
+        } else {
+          if (remoteConfig.mpAccessToken !== firstStoreConfig.mpAccessToken) {
+            // La nube es la fuente de verdad para las credenciales de MP:
+            // - Si la nube BORRÓ el token (mpAccessToken vacío), el borrado se
+            //   propaga SIEMPRE al local, aunque su timestamp sea viejo (un
+            //   UPDATE manual en Supabase no actualiza updatedAt). Sin esto, el
+            //   local conservaba el token y el PUSH lo volvía a subir.
+            // - Si la nube tiene un token NUEVO, solo se aplica si es más nuevo
+            //   que el local (isCloudNewer), para no pisar una escritura local
+            //   reciente (ej. OAuth legacy que aún no se subió).
+            const cloudHasToken = Boolean(remoteConfig.mpAccessToken);
+            const cloudIsNewer = isCloudNewer(remoteConfig.updatedAt, firstStoreConfig.updatedAt);
+            if (!cloudHasToken || cloudIsNewer) {
+              await prisma.storeConfig.update({
+                where: { id: firstStoreConfig.id },
+                data: {
+                  mpAccessToken: remoteConfig.mpAccessToken || null,
+                  mpPublicKey: remoteConfig.mpPublicKey || "",
+                },
+              });
+              console.log(
+                `[Sync] mpAccessToken${cloudHasToken ? " actualizado" : " borrado"} desde Supabase para tenant ${tenantId}`
+              );
+            }
+          }
+
+          if (remoteConfig.peyaWebhookSecret !== firstStoreConfig.peyaWebhookSecret) {
+            // El secret del webhook de PeYA se sincroniza de la nube a la Casa
+            // Central (la generó el flujo "Conectar" y clinstore lo valida).
+            const cloudIsNewer = isCloudNewer(remoteConfig.updatedAt, firstStoreConfig.updatedAt);
+            if (cloudIsNewer) {
+              await prisma.storeConfig.update({
+                where: { id: firstStoreConfig.id },
+                data: {
+                  peyaWebhookSecret: remoteConfig.peyaWebhookSecret || null,
+                  peyaConnected: remoteConfig.peyaConnected === true,
+                  peyaChainId: remoteConfig.peyaChainId || null,
+                  peyaVendorId: remoteConfig.peyaVendorId || null,
+                  peyaEnv: remoteConfig.peyaEnv || "SANDBOX",
+                  peyaAutoAccept: remoteConfig.peyaAutoAccept === true,
+                  peyaEnabled: remoteConfig.peyaEnabled === true,
+                },
+              });
+              console.log(`[Sync] Configuración PeYA actualizada desde Supabase para tenant ${tenantId}`);
+            }
           }
         }
       }

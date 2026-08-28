@@ -21,6 +21,7 @@ import toast from "react-hot-toast";
 import { StorePublicInfoSection } from "../tienda-web/StorePublicInfoSection";
 import { MercadoPagoConnectSection } from "../tienda-web/MercadoPagoConnectSection";
 import { StockDeliveryRulesSection } from "../tienda-web/StockDeliveryRulesSection";
+import { DeliveryAppsConfigSection } from "../tienda-web/DeliveryAppsConfigSection";
 
 type DaySchedule = {
   day: number; // 0 = Lunes ... 6 = Domingo
@@ -705,6 +706,9 @@ export default function ConfigTiendaWebTab() {
           )}
         </div>
       </div>
+
+      {/* Integraciones de Delivery (PedidosYa & Rappi) */}
+      <DeliveryAppsConfigSection />
 
       {/* Botón Guardar */}
       <div className="flex justify-end gap-3 pt-4 border-t border-border">

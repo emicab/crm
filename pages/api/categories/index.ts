@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma'; // Ajusta la ruta si es necesario
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
+import { resolveDbForRequest } from '../../../lib/requestDb';
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,15 +21,16 @@ export default async function handler(
     const skip = page ? (page - 1) * limit : undefined;
 
     try {
+      const db = await resolveDbForRequest(req);
       const [categories, total] = await Promise.all([
-        prisma.category.findMany({
+        db.category.findMany({
           where: whereClause,
           orderBy: {
             name: 'asc', // Ordenar por nombre ascendentemente
           },
           ...(skip !== undefined && { skip, take: limit }),
         }),
-        prisma.category.count({ where: whereClause }),
+        db.category.count({ where: whereClause }),
       ]);
 
       if (page !== undefined) {

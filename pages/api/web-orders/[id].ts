@@ -370,6 +370,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.warn("Error al encolar pedido web actualizado:", enqErr);
       }
 
+      // Sync PUNTUAL del pedido a la nube: el tracking público que ve el
+      // cliente lee de Supabase, y el sync completo tarda hasta 5 min. Subir
+      // este pedido ahora evita que el cambio de estado se refleje recién en el
+      // próximo ciclo. Fire-and-forget: no bloquea la respuesta.
+      if (status || paymentStatus) {
+        try {
+          const { syncWebOrderToSupabase } = await import("../../../lib/syncService");
+          syncWebOrderToSupabase(orderId).catch((syncErr: any) =>
+            console.warn("Error en sync puntual del pedido web:", syncErr?.message || syncErr)
+          );
+        } catch (syncErr) {
+          console.warn("No se pudo disparar el sync puntual del pedido web:", syncErr);
+        }
+      }
+
       const updatedOrder = await prisma.webOrder.findUnique({
         where: { id: orderId },
         include: { items: { include: { product: true } } },

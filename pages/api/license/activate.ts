@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import prisma from "../../../lib/prisma";
 import { createClient } from "@supabase/supabase-js";
 import os from "os";
+import { setDeviceSettings } from "../../../lib/deviceSettings";
 
 const getHardwareId = () => {
   if (process.env.HARDWARE_ID) return process.env.HARDWARE_ID;
@@ -122,13 +122,7 @@ export default async function handler(
       license_activated_at: new Date().toISOString(),
     };
 
-    for (const [key, value] of Object.entries(updates)) {
-      await prisma.setting.upsert({
-        where: { key },
-        update: { value },
-        create: { key, value },
-      });
-    }
+    await setDeviceSettings(updates);
 
     return res.status(200).json({
       success: true,

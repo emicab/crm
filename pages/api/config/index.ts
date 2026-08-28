@@ -3,6 +3,8 @@ import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { encryptText, decryptText } from '../../../lib/encryption';
 import { getDeviceBranchId, isMainDevice } from '../../../lib/branchIdentity';
+import { getDeviceSettings } from '../../../lib/profiles';
+import { isDeviceGlobalKey, setDeviceSettings } from '../../../lib/deviceSettings';
 import os from 'os';
 
 const OFFICIAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://htroigemnwqiugieodmv.supabase.co';
@@ -83,6 +85,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!result.supabase_url) result.supabase_url = OFFICIAL_SUPABASE_URL;
       if (!result.supabase_anon_key) result.supabase_anon_key = OFFICIAL_SUPABASE_KEY;
 
+      // Overlay de settings a nivel máquina (licencia, plan, credenciales) para
+      // que todos los negocios de esta PC compartan el mismo plan/licencia.
+      const deviceSettings = getDeviceSettings();
+      for (const [k, v] of Object.entries(deviceSettings)) {
+        result[k] = v;
+      }
+
       // Identidad de sucursal de esta PC (server-side)
       const deviceBranchId = await getDeviceBranchId();
       result.device_branch_id = deviceBranchId ? String(deviceBranchId) : '';
@@ -95,7 +104,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } else if (req.method === 'PUT') {
     try {
       const entries = req.body as Record<string, string>;
+      const deviceEntries: Record<string, string> = {};
+      const businessEntries: Record<string, string> = {};
+
       for (const [key, rawValue] of Object.entries(entries)) {
+        if (isDeviceGlobalKey(key)) {
+          deviceEntries[key] = String(rawValue);
+        } else {
+          businessEntries[key] = String(rawValue);
+        }
+      }
+
+      if (Object.keys(deviceEntries).length > 0) {
+        await setDeviceSettings(deviceEntries);
+      }
+
+      for (const [key, rawValue] of Object.entries(businessEntries)) {
         let storedValue = String(rawValue);
         if (ENCRYPTED_FIELDS.includes(key) && storedValue.trim() !== '') {
           storedValue = encryptText(storedValue);

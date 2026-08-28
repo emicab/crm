@@ -2,6 +2,15 @@
 
 Todos los cambios notables realizados en el proyecto están detallados a continuación.
 
+## [1.14.0] - 2026-08-28
+
+### Añadido
+- **Multi-negocio (dos locales en una misma PC)**: cada negocio vive en su propia base SQLite con catálogo, caja, usuarios, facturación y configuración totalmente aislados. Selector de negocio al iniciar, botón "Cambiar negocio" en el Home y en la sidebar, y creación/eliminación de negocios desde el selector. La licencia/plan es a nivel máquina (una activación cubre todos los negocios).
+- **Flag de integraciones de delivery**: las implementaciones de PedidosYa y Rappi quedan ocultas por defecto (`NEXT_PUBLIC_ENABLE_PEYA` / `NEXT_PUBLIC_ENABLE_RAPPI`), para habilitarlas cuando haya credenciales reales.
+
+### Corregido
+- **Aislamiento de tenant en la nube**: cada negocio persiste un `tenant_id` estable y único para Supabase, evitando que los productos/stock de un local se mezclen con los del otro al sincronizar.
+
 ## [1.2.0] - 2026-07-10
 
 ### Añadido

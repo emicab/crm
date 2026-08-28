@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Search } from "lucide-react";
+import { FEATURE_PEYA, FEATURE_RAPPI } from "@/lib/featureFlags";
 
 interface WebOrdersFilterBarProps {
   searchTerm: string;
@@ -10,6 +11,8 @@ interface WebOrdersFilterBarProps {
   onStatusFilterChange: (value: string) => void;
   paymentStatusFilter: string;
   onPaymentStatusFilterChange: (value: string) => void;
+  originFilter?: string;
+  onOriginFilterChange?: (value: string) => void;
   totalFiltered: number;
 }
 
@@ -20,6 +23,8 @@ export function WebOrdersFilterBar({
   onStatusFilterChange,
   paymentStatusFilter,
   onPaymentStatusFilterChange,
+  originFilter = "ALL",
+  onOriginFilterChange,
   totalFiltered,
 }: WebOrdersFilterBarProps) {
   return (
@@ -33,12 +38,27 @@ export function WebOrdersFilterBar({
           type="text"
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Buscar por #pedido, cliente, teléfono o dirección..."
+          placeholder="Buscar por #pedido, código rider, cliente o dirección..."
           className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-background text-foreground text-xs outline-none focus:ring-2 focus:ring-primary/50"
         />
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
+        {onOriginFilterChange && (
+          <select
+            value={originFilter}
+            onChange={(e) => onOriginFilterChange(e.target.value)}
+            className="p-2 rounded-xl border border-border bg-background text-foreground font-semibold outline-none cursor-pointer"
+          >
+            <option value="ALL">Canal: Todos</option>
+            <option value="WEB">🌐 ClinStore Web</option>
+            <option value="WHATSAPP">💬 WhatsApp</option>
+            {FEATURE_PEYA && <option value="PEDIDOS_YA">🔴 PedidosYa</option>}
+            {FEATURE_RAPPI && <option value="RAPPI">🟠 Rappi</option>}
+            <option value="IN_STORE">🏪 En Mostrador</option>
+          </select>
+        )}
+
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value)}

@@ -5,6 +5,7 @@ import { handleApiError } from '../../../lib/apiErrorHandler';
 import { isProDevice } from '../../../lib/branchIdentity';
 import { applyRateLimit } from '../../../lib/rateLimit';
 import { sanitizeString } from '../../../lib/sanitize';
+import { resolveDbForRequest } from '../../../lib/requestDb';
 
 export default async function handler(
   req: NextApiRequest,
@@ -55,6 +56,9 @@ export default async function handler(
         return;
       }
 
+      // Resolver el negocio por slug (multi-negocio) o usar el activo.
+      const db = await resolveDbForRequest(req);
+
       const {
         webOrderNumber,
         clientName,
@@ -98,7 +102,7 @@ export default async function handler(
       };
 
       // Si el pedido ya existe, evitar duplicados y responder 200 OK
-      const existing = await prisma.webOrder.findFirst({
+      const existing = await db.webOrder.findFirst({
         where: { webOrderNumber: generatedNumber },
       });
 
@@ -111,7 +115,7 @@ export default async function handler(
       // SEGURIDAD: Recalcular precios unitarios y subtotal server-side consultando
       // la base de datos oficial para evitar manipulación de precios desde el cliente.
       const productIds = items.map((i: any) => parseInt(i.productId)).filter(id => !isNaN(id));
-      const dbProducts = await prisma.product.findMany({
+      const dbProducts = await db.product.findMany({
         where: { id: { in: productIds } },
         select: { id: true, priceSale: true }
       });
@@ -164,7 +168,7 @@ export default async function handler(
       }
 
       // Por defecto, todo pedido web público inicia en estado PENDING de pago
-      const newOrder = await prisma.webOrder.create({
+      const newOrder = await db.webOrder.create({
         data: {
           webOrderNumber: generatedNumber,
           clientName: sanitizedName,
@@ -196,11 +200,11 @@ export default async function handler(
       });
 
       // Descuenta stock automáticamente
-      const mainBranch = await prisma.branch.findFirst({ where: { isMain: true } });
+        const mainBranch = await db.branch.findFirst({ where: { isMain: true } });
       const stockBranchId = parsedBranchId ?? mainBranch?.id;
       for (const item of verifiedItems) {
         try {
-          const product = await prisma.product.findUnique({
+          const product = await db.product.findUnique({
             where: { id: item.productId },
             select: { isRecipe: true },
           });
@@ -208,7 +212,7 @@ export default async function handler(
             const { deductRecipeStock } = await import("../../../lib/recipeStock");
             await deductRecipeStock(prisma, item.productId, item.quantity, stockBranchId);
           } else {
-            await prisma.product.update({
+            await db.product.update({
               where: { id: item.productId },
               data: {
                 quantityStock: {
@@ -217,7 +221,7 @@ export default async function handler(
               }
             });
             if (stockBranchId) {
-              await prisma.productBranchStock.upsert({
+              await db.productBranchStock.upsert({
                 where: {
                   productId_branchId: {
                     productId: item.productId,

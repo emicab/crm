@@ -4,6 +4,7 @@
 // (Setting "device_role": main | branch | pending). Sin valor configurado,
 // el equipo se comporta como Casa Central (compatibilidad hacia atrás).
 import prisma from "./prisma";
+import { getDeviceSetting, setDeviceSettings } from "./deviceSettings";
 
 export type DeviceRole = "main" | "branch" | "pending";
 
@@ -58,18 +59,14 @@ export async function isMainDevice(): Promise<boolean> {
   return branch.isMain === true;
 }
 
-async function getSettingValue(key: string): Promise<string | null> {
-  const setting = await prisma.setting.findUnique({ where: { key } });
-  return setting?.value ?? null;
-}
-
-// El plan Pro se deduce de las Settings locales. En las sucursales, el valor
-// llega vía sync (la Casa Central lo escribe en la nube y ellas lo descargan).
+// El plan Pro se deduce de las Settings a nivel máquina (store.json en
+// multi-negocio, DB local en legacy). En las sucursales remotas el valor llega
+// vía sync (la Casa Central lo escribe en la nube y ellas lo descargan).
 export async function isProDevice(): Promise<boolean> {
-  const appPlan = await getSettingValue("app_plan");
-  const planType = await getSettingValue("plan_type");
-  const unlockedPro = await getSettingValue("unlocked_plan_pro");
-  const storageMode = await getSettingValue("storage_mode");
+  const appPlan = await getDeviceSetting("app_plan");
+  const planType = await getDeviceSetting("plan_type");
+  const unlockedPro = await getDeviceSetting("unlocked_plan_pro");
+  const storageMode = await getDeviceSetting("storage_mode");
   return (
     appPlan === "pro" ||
     planType === "pro" ||
@@ -86,11 +83,5 @@ export async function setPlanSettings(plan: "pro" | "basico"): Promise<void> {
     unlocked_plan_pro: isPro ? "true" : "false",
     storage_mode: isPro ? "seguro" : "local",
   };
-  for (const [key, value] of Object.entries(entries)) {
-    await prisma.setting.upsert({
-      where: { key },
-      update: { value },
-      create: { key, value },
-    });
-  }
+  await setDeviceSettings(entries);
 }

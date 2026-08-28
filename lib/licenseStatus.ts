@@ -4,15 +4,14 @@
 // actualiza crm-admin). Si la clave está expirada/desactivada, el plan baja a
 // "basico" localmente y luego se propaga a la nube para que las sucursales
 // también bajen.
-import prisma from "./prisma";
 import os from "os";
+import { getDeviceSetting, setDeviceSettings } from "./deviceSettings";
 
 const OFFICIAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://htroigemnwqiugieodmv.supabase.co";
 const OFFICIAL_SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0cm9pZ2VtbndxaXVnaWVvZG12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3MDM4ODcsImV4cCI6MjA5OTI3OTg4N30.sSp5vEDvI7OHuYL0SeeFiATilC_f_BdZao2BjeN0IVQ";
 
 async function getSettingValue(key: string): Promise<string | null> {
-  const setting = await prisma.setting.findUnique({ where: { key } });
-  return setting?.value ?? null;
+  return getDeviceSetting(key);
 }
 
 function getHardwareId(): string {
@@ -66,13 +65,7 @@ async function applyPlan(plan: "pro" | "basico"): Promise<void> {
     unlocked_plan_pro: isPro ? "true" : "false",
     storage_mode: isPro ? "seguro" : "local",
   };
-  for (const [key, value] of Object.entries(entries)) {
-    await prisma.setting.upsert({
-      where: { key },
-      update: { value },
-      create: { key, value },
-    });
-  }
+  await setDeviceSettings(entries);
 }
 
 export async function getLocalPlan(): Promise<"pro" | "basico"> {

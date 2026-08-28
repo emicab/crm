@@ -24,6 +24,7 @@ import {
   RefreshCcw,
   Ticket,
   Bookmark,
+  ArrowRightLeft,
 } from "lucide-react";
 
 const priorityModules = [
@@ -404,6 +405,20 @@ export default function HomePage() {
             </div>
           </section>
         </main>
+
+        {(!isModuleEnabled("roles") ||
+          !currentUser ||
+          ["ADMIN", "SUPERVISOR"].includes(currentUser.role)) && (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("open-business-picker"))}
+            className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary-dark hover:shadow-xl transition-all cursor-pointer text-sm font-bold"
+            title="Cambiar o crear negocio"
+          >
+            <ArrowRightLeft size={18} />
+            Cambiar negocio
+          </button>
+        )}
       </div>
     </div>
   );

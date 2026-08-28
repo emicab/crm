@@ -39,6 +39,8 @@ model Product {
   isPublicWeb   Boolean  @default(false)
   webCategory   String?
   webUnavailable Boolean @default(false) // el comerciante lo marcó agotado para la tienda web (manual)
+  externalSku   String?  // SKU sincronizado con PedidosYa / Rappi
+  lastSyncJobId String?  // ID del último job de sincronización de catálogo
   imageUrl      String?
   brandId       Int?
   categoryId    Int?
@@ -514,6 +516,28 @@ model StoreConfig {
   lng               Float?
   deliveryZones     String?  // JSON [{name, fromKm, toKm, fee, minAmount}] anillos concéntricos
   openingHours      String?  // JSON [{day, enabled, open, close, breaks:[{start,end}]}]
+
+  // Integración PedidosYa API v2
+  peyaEnabled       Boolean  @default(false)
+  peyaConnected     Boolean  @default(false) // Indica si se conectó exitosamente vía OAuth
+  peyaClientId      String?
+  peyaClientSecret  String?
+  peyaChainId       String?
+  peyaVendorId      String?
+  peyaEnv           String   @default("SANDBOX") // "SANDBOX" | "PRODUCTION"
+  peyaAutoAccept    Boolean  @default(false)
+  peyaOutletStatus  String   @default("OPEN") // "OPEN" | "BUSY" | "CLOSED"
+  peyaWebhookSecret String?  // token estático que PeYA manda en Authorization (WebhookKeyAuth)
+
+  // Integración Rappi API
+  rappiEnabled      Boolean  @default(false)
+  rappiConnected    Boolean  @default(false) // Indica si se conectó exitosamente
+  rappiApiKey       String?
+  rappiStoreId      String?
+  rappiAutoAccept   Boolean  @default(false)
+  rappiOutletStatus String   @default("OPEN") // "OPEN" | "BUSY" | "CLOSED"
+  rappiWebhookSecret String? // token estático que Rappi manda en Authorization (webhook auth)
+
   createdAt         DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -538,7 +562,15 @@ model WebOrder {
   couponCode      String?        // código de descuento usado
   deliveryZone    String?        // nombre de la zona de envío seleccionada
   trackingCode    String?        // código corto para el link público de seguimiento
-  origin          String?        // "WEB" | "WHATSAPP" | "PHONE" | "IN_STORE" | "OTHER"
+  origin          String?        // "WEB" | "WHATSAPP" | "PHONE" | "PEDIDOS_YA" | "RAPPI" | "IN_STORE" | "OTHER"
+  orderCode       String?        // Código corto para el rider de PeYa (ej: "wxfr-2440-rtbs")
+  externalOrderId String?        @unique // ID único original de PedidosYa / Rappi (impide duplicados por reintentos de webhook)
+  chainId         String?        // ID de la cadena (PedidosYa)
+  vendorId        String?        // ID de la sucursal (PedidosYa / Rappi)
+  transportType   String?        // "LOGISTICS_DELIVERY" | "VENDOR_DELIVERY" | "PICKUP"
+  promisedFor     DateTime?      // Fecha/hora prometida de entrega por PeYa/Rappi
+  acceptedFor     DateTime?      // Fecha/hora estimada de preparación informada
+  riderInfo       String?        // JSON con datos del repartidor
   scheduledFor    DateTime?      // Fecha/hora de entrega programada (para aperturas)
   stockReviewNote String?        // motivo de la revisión por falta de stock local (Regla de Oro)
   stockReviewAt   DateTime?      // cuándo se marcó para revisión
@@ -551,14 +583,15 @@ model WebOrder {
 }
 
 model WebOrderItem {
-  id          Int      @id @default(autoincrement())
-  webOrderId  Int
-  productId   Int
-  quantity    Float
-  unitPrice   Decimal
-  subtotal    Decimal
-  modifiers   String?  // JSON snapshot de opciones seleccionadas
-  webOrder    WebOrder @relation(fields: [webOrderId], references: [id], onDelete: Cascade)
+  id             Int      @id @default(autoincrement())
+  webOrderId     Int
+  productId      Int
+  quantity       Float
+  unitPrice      Decimal
+  subtotal       Decimal
+  modifiers      String?  // JSON snapshot de opciones seleccionadas
+  externalItemId String?  // id del item del pedido externo (PeYA items[]._id) para UPDATE_CART futuro
+  webOrder       WebOrder @relation(fields: [webOrderId], references: [id], onDelete: Cascade)
   product     Product  @relation(fields: [productId], references: [id])
 }
 

@@ -4,6 +4,7 @@ import prisma from '../../../lib/prisma';
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
 import { isMainDevice, isProDevice } from '../../../lib/branchIdentity';
+import { resolveDbForRequest } from '../../../lib/requestDb';
 import { Prisma } from '@prisma/client';
 
 export default async function handler(
@@ -13,10 +14,11 @@ export default async function handler(
   if (req.method === 'GET') {
     try {
       const reqSlug = req.query.slug ? sanitizeString(String(req.query.slug).toLowerCase()) : null;
+      const db = await resolveDbForRequest(req);
       let config = null;
 
       if (reqSlug) {
-        config = await prisma.storeConfig.findFirst({ where: { slug: reqSlug } });
+        config = await db.storeConfig.findFirst({ where: { slug: reqSlug } });
         if (!config) {
           return res.status(404).json({
             message: `La tienda "${reqSlug}" no existe.`,
@@ -26,7 +28,7 @@ export default async function handler(
           });
         }
       } else {
-        config = await prisma.storeConfig.findFirst();
+        config = await db.storeConfig.findFirst();
       }
 
       if (!config) {
@@ -56,6 +58,15 @@ export default async function handler(
 
       res.status(200).json({
         ...config,
+        // NUNCA exponer secrets por GET público: el middleware deja pasar
+        // GET /api/store-config (catálogo público) y el server escucha en la LAN.
+        mpAccessToken: undefined,
+        mpPublicKey: undefined,
+        peyaClientId: undefined,
+        peyaClientSecret: undefined,
+        peyaWebhookSecret: undefined,
+        rappiApiKey: undefined,
+        rappiWebhookSecret: undefined,
         businessSector: config.businessSector || 'GASTRONOMIA',
         deliveryFee: config.deliveryFee ? config.deliveryFee.toString() : '0',
         minDeliveryAmount: config.minDeliveryAmount ? config.minDeliveryAmount.toString() : '0',
@@ -103,6 +114,20 @@ export default async function handler(
         lng,
         deliveryZones,
         openingHours,
+        peyaEnabled,
+        peyaClientId,
+        peyaClientSecret,
+        peyaChainId,
+        peyaVendorId,
+        peyaEnv,
+        peyaAutoAccept,
+        peyaConnected,
+        peyaWebhookSecret,
+        rappiEnabled,
+        rappiApiKey,
+        rappiStoreId,
+        rappiAutoAccept,
+        rappiWebhookSecret,
       } = req.body;
 
       if (!slug || !slug.trim()) {
@@ -162,6 +187,29 @@ export default async function handler(
       const cleanDeliveryZones = toJsonOrNull(deliveryZones);
       const cleanOpeningHours = toJsonOrNull(openingHours);
 
+      // Los secrets nunca viajan por GET (seguridad), así que cuando llegan
+      // vacíos desde el form se conserva el valor almacenado. Solo se
+      // actualizan si el usuario escribe un valor nuevo.
+      const keepOr = (incoming: unknown, existing: string | null | undefined) =>
+        incoming !== undefined && String(incoming).trim() !== "" ? String(incoming) : existing ?? null;
+
+      const peyaData = {
+        peyaEnabled: peyaEnabled !== undefined ? Boolean(peyaEnabled) : existingConfig?.peyaEnabled ?? false,
+        peyaClientId: keepOr(peyaClientId, existingConfig?.peyaClientId ?? null),
+        peyaClientSecret: keepOr(peyaClientSecret, existingConfig?.peyaClientSecret ?? null),
+        peyaChainId: keepOr(peyaChainId, existingConfig?.peyaChainId ?? null),
+        peyaVendorId: keepOr(peyaVendorId, existingConfig?.peyaVendorId ?? null),
+        peyaEnv: peyaEnv || existingConfig?.peyaEnv || "SANDBOX",
+        peyaAutoAccept: peyaAutoAccept !== undefined ? Boolean(peyaAutoAccept) : existingConfig?.peyaAutoAccept ?? false,
+        peyaConnected: peyaConnected !== undefined ? Boolean(peyaConnected) : existingConfig?.peyaConnected ?? false,
+        peyaWebhookSecret: keepOr(peyaWebhookSecret, existingConfig?.peyaWebhookSecret ?? null),
+        rappiEnabled: rappiEnabled !== undefined ? Boolean(rappiEnabled) : existingConfig?.rappiEnabled ?? false,
+        rappiApiKey: keepOr(rappiApiKey, existingConfig?.rappiApiKey ?? null),
+        rappiStoreId: keepOr(rappiStoreId, existingConfig?.rappiStoreId ?? null),
+        rappiAutoAccept: rappiAutoAccept !== undefined ? Boolean(rappiAutoAccept) : existingConfig?.rappiAutoAccept ?? false,
+        rappiWebhookSecret: keepOr(rappiWebhookSecret, existingConfig?.rappiWebhookSecret ?? null),
+      };
+
       let result;
       if (existingConfig) {
         result = await prisma.storeConfig.update({
@@ -190,6 +238,7 @@ export default async function handler(
             lng: cleanLng,
             deliveryZones: cleanDeliveryZones,
             openingHours: cleanOpeningHours,
+            ...peyaData,
           },
         });
       } else {
@@ -218,6 +267,7 @@ export default async function handler(
             lng: cleanLng,
             deliveryZones: cleanDeliveryZones,
             openingHours: cleanOpeningHours,
+            ...peyaData,
           },
         });
       }

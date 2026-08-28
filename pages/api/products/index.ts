@@ -6,6 +6,7 @@ type Decimal = Prisma.Decimal;
 const Decimal = Prisma.Decimal;
 import { handleApiError } from '../../../lib/apiErrorHandler';
 import { sanitizeString } from '../../../lib/sanitize';
+import { resolveDbForRequest } from '../../../lib/requestDb';
 
 export default async function handler(
   req: NextApiRequest,
@@ -71,8 +72,9 @@ export default async function handler(
     const limit = req.query.limit ? Math.min(parseInt(req.query.limit as string) || 50, 5000) : 50;
 
     try {
+      const db = await resolveDbForRequest(req);
       // 1. Obtener productos aplicando filtros base (marca, categoría, proveedor)
-      let products: any[] = await prisma.product.findMany({
+      let products: any[] = await db.product.findMany({
         where: whereClause,
         include: {
           brand: true,
@@ -91,7 +93,7 @@ export default async function handler(
 
       // Calcular stock reservado (pedidos pendientes)
       const pendingWhere: any = { sale: { status: 'PENDING' } };
-      const pendingSalesAggregate = await prisma.saleItem.groupBy({
+      const pendingSalesAggregate = await db.saleItem.groupBy({
         by: ['productId'],
         _sum: { quantity: true },
         where: pendingWhere
@@ -120,7 +122,7 @@ export default async function handler(
         const availabilityMap = new Map<number, any>();
         for (const rid of recipeIds) {
           try {
-            const av = await getRecipeAvailability(prisma, rid, branchId);
+            const av = await getRecipeAvailability(db, rid, branchId);
             derivedMap.set(rid, av.available);
             availabilityMap.set(rid, {
               available: av.available,
@@ -149,7 +151,7 @@ export default async function handler(
             branchStocks = await Promise.all(
               branchStocks.map(async (bs: any) => {
                 try {
-                  const derived = await getRecipeAvailability(prisma, p.id, bs.branchId);
+                  const derived = await getRecipeAvailability(db, p.id, bs.branchId);
                   return { ...bs, quantityStock: derived.available };
                 } catch {
                   return bs;
