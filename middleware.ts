@@ -63,7 +63,12 @@ export function middleware(request: NextRequest) {
       pathname.startsWith('/api/store-config') ||
       pathname.startsWith('/api/sync/status'));
 
-  const isPublicRoute = isStaticAsset || isWebhookOrMp || isPublicWebOrderCreate || isPublicCatalogGet;
+  // Salud del esquema local: la sondea el arranque de Tauri antes de navegar.
+  // Solo expone nombres de tablas/columnas faltantes, nunca datos ni secrets.
+  const isPublicHealthGet =
+    request.method === 'GET' && pathname.startsWith('/api/health/');
+
+  const isPublicRoute = isStaticAsset || isWebhookOrMp || isPublicWebOrderCreate || isPublicCatalogGet || isPublicHealthGet;
 
   if (isPublicRoute) {
     return setCorsHeaders(NextResponse.next());

@@ -2,6 +2,15 @@
 
 Todos los cambios notables realizados en el proyecto están detallados a continuación.
 
+## [1.14.1] - 2026-09-12
+
+### Corregido
+- **Migraciones de producción (P2022)**: las columnas agregadas al schema (integraciones PedidosYa/Rappi, `requireMpForDelivery`, `externalSku`, etc.) nunca llegaban a las bases ya instaladas. Se agregó la migración v24 + verificador declarativo que auto-repara cualquier columna faltante en cada arranque, con backup pre-migración (últimos 3).
+- **Gate de salud de DB**: Tauri espera a que `GET /api/health/db` responda `ok` antes de mostrar el panel; si la DB no sana, el error queda visible en `server.log` en vez de romper endpoints en cascada.
+
+### Añadido
+- **Anti-drift en build**: `scripts/check-drift.js` (integrado a `build:next`) bloquea el empaquetado si un campo del schema no está cubierto por el migrador de Tauri y el health endpoint.
+
 ## [1.14.0] - 2026-08-28
 
 ### Añadido

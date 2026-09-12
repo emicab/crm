@@ -496,7 +496,228 @@ const MIGRATIONS: &[Migration] = &[
             ALTER TABLE "Product" ADD COLUMN "webUnavailable" INTEGER NOT NULL DEFAULT 0;
         "#,
     },
+    Migration {
+        version: 24,
+        name: "fase3_integrations_parity",
+        sql: r#"
+            ALTER TABLE "StoreConfig" ADD COLUMN "requireMpForDelivery" BOOLEAN NOT NULL DEFAULT 1;
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaEnabled" BOOLEAN NOT NULL DEFAULT 0;
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaConnected" BOOLEAN NOT NULL DEFAULT 0;
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaClientId" TEXT;
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaClientSecret" TEXT;
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaChainId" TEXT;
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaVendorId" TEXT;
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaEnv" TEXT NOT NULL DEFAULT 'SANDBOX';
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaAutoAccept" BOOLEAN NOT NULL DEFAULT 0;
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaOutletStatus" TEXT NOT NULL DEFAULT 'OPEN';
+            ALTER TABLE "StoreConfig" ADD COLUMN "peyaWebhookSecret" TEXT;
+            ALTER TABLE "StoreConfig" ADD COLUMN "rappiEnabled" BOOLEAN NOT NULL DEFAULT 0;
+            ALTER TABLE "StoreConfig" ADD COLUMN "rappiConnected" BOOLEAN NOT NULL DEFAULT 0;
+            ALTER TABLE "StoreConfig" ADD COLUMN "rappiApiKey" TEXT;
+            ALTER TABLE "StoreConfig" ADD COLUMN "rappiStoreId" TEXT;
+            ALTER TABLE "StoreConfig" ADD COLUMN "rappiAutoAccept" BOOLEAN NOT NULL DEFAULT 0;
+            ALTER TABLE "StoreConfig" ADD COLUMN "rappiOutletStatus" TEXT NOT NULL DEFAULT 'OPEN';
+            ALTER TABLE "StoreConfig" ADD COLUMN "rappiWebhookSecret" TEXT;
+            ALTER TABLE "Product" ADD COLUMN "externalSku" TEXT;
+            ALTER TABLE "Product" ADD COLUMN "lastSyncJobId" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "orderCode" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "externalOrderId" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "chainId" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "vendorId" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "transportType" TEXT;
+            ALTER TABLE "WebOrder" ADD COLUMN "promisedFor" DATETIME;
+            ALTER TABLE "WebOrder" ADD COLUMN "acceptedFor" DATETIME;
+            ALTER TABLE "WebOrder" ADD COLUMN "riderInfo" TEXT;
+            ALTER TABLE "WebOrderItem" ADD COLUMN "externalItemId" TEXT;
+            ALTER TABLE "Coupon" ADD COLUMN "expiresAt" DATETIME;
+            ALTER TABLE "Sale" ADD COLUMN "cashRegisterId" INTEGER;
+            CREATE UNIQUE INDEX IF NOT EXISTS "WebOrder_externalOrderId_key" ON "WebOrder"("externalOrderId");
+        "#,
+    },
 ];
+
+// ── Declarative safety net ─────────────────────────────────────────────
+// Fuente de verdad: prisma/schema.prisma (modelos foco: Setting, StoreConfig,
+// Product, WebOrder, WebOrderItem, Coupon, Sale, SaleItem).
+// Si una columna futura se agrega al schema pero se olvida en MIGRATIONS,
+// este verificador la crea igual de forma idempotente en cada arranque
+// (ignora "duplicate column").
+//
+// Tipos intencionalmente NULLABLES (sin NOT NULL): lo único que importa para
+// evitar P2021/P2022 es la existencia de la columna. Las tablas frescas
+// obtienen constraints correctos vía `prisma db push` del template, y los
+// upgrades con defaults correctos vía MIGRATIONS versionadas (que corren
+// antes que este verificador).
+// Mantener sincronizado con pages/api/health/db.ts y scripts/check-drift.js.
+const EXPECTED_COLUMNS: &[(&str, &str, &str)] = &[
+    ("Setting", "id", "INTEGER"),
+    ("Setting", "key", "TEXT"),
+    ("Setting", "value", "TEXT"),
+    ("StoreConfig", "id", "INTEGER"),
+    ("StoreConfig", "slug", "TEXT"),
+    ("StoreConfig", "customDomain", "TEXT"),
+    ("StoreConfig", "businessName", "TEXT"),
+    ("StoreConfig", "description", "TEXT"),
+    ("StoreConfig", "logoUrl", "TEXT"),
+    ("StoreConfig", "bannerUrl", "TEXT"),
+    ("StoreConfig", "primaryColor", "TEXT"),
+    ("StoreConfig", "isWebActive", "BOOLEAN"),
+    ("StoreConfig", "mpAccessToken", "TEXT"),
+    ("StoreConfig", "mpPublicKey", "TEXT"),
+    ("StoreConfig", "mpFeePercent", "DECIMAL"),
+    ("StoreConfig", "whatsappPhone", "TEXT"),
+    ("StoreConfig", "minStockBuffer", "REAL"),
+    ("StoreConfig", "allowPickup", "BOOLEAN"),
+    ("StoreConfig", "allowDelivery", "BOOLEAN"),
+    ("StoreConfig", "deliveryFee", "DECIMAL"),
+    ("StoreConfig", "minDeliveryAmount", "DECIMAL"),
+    ("StoreConfig", "businessSector", "TEXT"),
+    ("StoreConfig", "requireMpForDelivery", "BOOLEAN"),
+    ("StoreConfig", "lat", "REAL"),
+    ("StoreConfig", "lng", "REAL"),
+    ("StoreConfig", "deliveryZones", "TEXT"),
+    ("StoreConfig", "openingHours", "TEXT"),
+    ("StoreConfig", "peyaEnabled", "BOOLEAN"),
+    ("StoreConfig", "peyaConnected", "BOOLEAN"),
+    ("StoreConfig", "peyaClientId", "TEXT"),
+    ("StoreConfig", "peyaClientSecret", "TEXT"),
+    ("StoreConfig", "peyaChainId", "TEXT"),
+    ("StoreConfig", "peyaVendorId", "TEXT"),
+    ("StoreConfig", "peyaEnv", "TEXT"),
+    ("StoreConfig", "peyaAutoAccept", "BOOLEAN"),
+    ("StoreConfig", "peyaOutletStatus", "TEXT"),
+    ("StoreConfig", "peyaWebhookSecret", "TEXT"),
+    ("StoreConfig", "rappiEnabled", "BOOLEAN"),
+    ("StoreConfig", "rappiConnected", "BOOLEAN"),
+    ("StoreConfig", "rappiApiKey", "TEXT"),
+    ("StoreConfig", "rappiStoreId", "TEXT"),
+    ("StoreConfig", "rappiAutoAccept", "BOOLEAN"),
+    ("StoreConfig", "rappiOutletStatus", "TEXT"),
+    ("StoreConfig", "rappiWebhookSecret", "TEXT"),
+    ("StoreConfig", "createdAt", "DATETIME"),
+    ("StoreConfig", "updatedAt", "DATETIME"),
+    ("Product", "id", "INTEGER"),
+    ("Product", "name", "TEXT"),
+    ("Product", "sku", "TEXT"),
+    ("Product", "description", "TEXT"),
+    ("Product", "pricePurchase", "DECIMAL"),
+    ("Product", "priceSale", "DECIMAL"),
+    ("Product", "quantityStock", "REAL"),
+    ("Product", "stockMinAlert", "REAL"),
+    ("Product", "unitType", "TEXT"),
+    ("Product", "isPublicWeb", "BOOLEAN"),
+    ("Product", "webCategory", "TEXT"),
+    ("Product", "webUnavailable", "BOOLEAN"),
+    ("Product", "externalSku", "TEXT"),
+    ("Product", "lastSyncJobId", "TEXT"),
+    ("Product", "imageUrl", "TEXT"),
+    ("Product", "brandId", "INTEGER"),
+    ("Product", "categoryId", "INTEGER"),
+    ("Product", "supplierId", "INTEGER"),
+    ("Product", "isRecipe", "BOOLEAN"),
+    ("Product", "isIngredient", "BOOLEAN"),
+    ("Product", "createdAt", "DATETIME"),
+    ("Product", "updatedAt", "DATETIME"),
+    ("WebOrder", "id", "INTEGER"),
+    ("WebOrder", "webOrderNumber", "TEXT"),
+    ("WebOrder", "clientName", "TEXT"),
+    ("WebOrder", "clientEmail", "TEXT"),
+    ("WebOrder", "clientPhone", "TEXT"),
+    ("WebOrder", "shippingAddress", "TEXT"),
+    ("WebOrder", "deliveryType", "TEXT"),
+    ("WebOrder", "branchId", "INTEGER"),
+    ("WebOrder", "paymentMethod", "TEXT"),
+    ("WebOrder", "paymentStatus", "TEXT"),
+    ("WebOrder", "status", "TEXT"),
+    ("WebOrder", "totalAmount", "DECIMAL"),
+    ("WebOrder", "mpFeeAmount", "DECIMAL"),
+    ("WebOrder", "subtotalAmount", "DECIMAL"),
+    ("WebOrder", "discountAmount", "DECIMAL"),
+    ("WebOrder", "deliveryFee", "DECIMAL"),
+    ("WebOrder", "couponCode", "TEXT"),
+    ("WebOrder", "deliveryZone", "TEXT"),
+    ("WebOrder", "trackingCode", "TEXT"),
+    ("WebOrder", "origin", "TEXT"),
+    ("WebOrder", "orderCode", "TEXT"),
+    ("WebOrder", "externalOrderId", "TEXT"),
+    ("WebOrder", "chainId", "TEXT"),
+    ("WebOrder", "vendorId", "TEXT"),
+    ("WebOrder", "transportType", "TEXT"),
+    ("WebOrder", "promisedFor", "DATETIME"),
+    ("WebOrder", "acceptedFor", "DATETIME"),
+    ("WebOrder", "riderInfo", "TEXT"),
+    ("WebOrder", "scheduledFor", "DATETIME"),
+    ("WebOrder", "stockReviewNote", "TEXT"),
+    ("WebOrder", "stockReviewAt", "DATETIME"),
+    ("WebOrder", "mpPaymentId", "TEXT"),
+    ("WebOrder", "discountBreakdown", "TEXT"),
+    ("WebOrder", "notes", "TEXT"),
+    ("WebOrder", "createdAt", "DATETIME"),
+    ("WebOrder", "updatedAt", "DATETIME"),
+    ("WebOrderItem", "id", "INTEGER"),
+    ("WebOrderItem", "webOrderId", "INTEGER"),
+    ("WebOrderItem", "productId", "INTEGER"),
+    ("WebOrderItem", "quantity", "REAL"),
+    ("WebOrderItem", "unitPrice", "DECIMAL"),
+    ("WebOrderItem", "subtotal", "DECIMAL"),
+    ("WebOrderItem", "modifiers", "TEXT"),
+    ("WebOrderItem", "externalItemId", "TEXT"),
+    ("Coupon", "id", "INTEGER"),
+    ("Coupon", "code", "TEXT"),
+    ("Coupon", "discountType", "TEXT"),
+    ("Coupon", "discountValue", "DECIMAL"),
+    ("Coupon", "minPurchase", "DECIMAL"),
+    ("Coupon", "active", "BOOLEAN"),
+    ("Coupon", "createdAt", "DATETIME"),
+    ("Coupon", "expiresAt", "DATETIME"),
+    ("Sale", "id", "INTEGER"),
+    ("Sale", "saleDate", "DATETIME"),
+    ("Sale", "totalAmount", "DECIMAL"),
+    ("Sale", "paymentType", "TEXT"),
+    ("Sale", "notes", "TEXT"),
+    ("Sale", "clientId", "INTEGER"),
+    ("Sale", "sellerId", "INTEGER"),
+    ("Sale", "cashRegisterId", "INTEGER"),
+    ("Sale", "branchId", "INTEGER"),
+    ("Sale", "createdAt", "DATETIME"),
+    ("Sale", "updatedAt", "DATETIME"),
+    ("Sale", "discountCodeApplied", "TEXT"),
+    ("Sale", "promotionsApplied", "TEXT"),
+    ("Sale", "creditCardPromotionId", "INTEGER"),
+    ("Sale", "onAccount", "BOOLEAN"),
+    ("Sale", "status", "TEXT"),
+    ("SaleItem", "id", "INTEGER"),
+    ("SaleItem", "quantity", "REAL"),
+    ("SaleItem", "priceAtSale", "DECIMAL"),
+    ("SaleItem", "purchasePriceAtSale", "DECIMAL"),
+    ("SaleItem", "saleId", "INTEGER"),
+    ("SaleItem", "productId", "INTEGER"),
+    ("SaleItem", "productName", "TEXT"),
+    ("SaleItem", "modifiers", "TEXT"),
+];
+
+fn ensure_expected_columns(conn: &Connection) {
+    for (table, column, def) in EXPECTED_COLUMNS {
+        let stmt = format!(r#"ALTER TABLE "{}" ADD COLUMN "{}" {}"#, table, column, def);
+        match conn.execute(&stmt, []) {
+            Ok(_) => println!("[Migrations] ensure: added {}.{}", table, column),
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("duplicate column") || msg.contains("already exists") {
+                    // ya existe: estado deseado alcanzado
+                } else if msg.contains("no such table") {
+                    eprintln!("[Migrations] ensure: table {} missing, skipping {}.{} ({})", table, table, column, e);
+                } else {
+                    eprintln!("[Migrations] ensure error on {}.{}: {}", table, column, e);
+                }
+            }
+        }
+    }
+    let _ = conn.execute(
+        r#"CREATE UNIQUE INDEX IF NOT EXISTS "WebOrder_externalOrderId_key" ON "WebOrder"("externalOrderId")"#,
+        [],
+    );
+}
 
 fn run_migrations(db_path: &Path) {
     let conn = match Connection::open(db_path) {
@@ -517,6 +738,52 @@ fn run_migrations(db_path: &Path) {
     ) {
         eprintln!("[Migrations] Failed to create tracking table: {}", e);
         return;
+    }
+
+    // Backup pre-migración (solo al actualizar una DB existente con migraciones
+    // pendientes; en instalaciones frescas no hay datos que respaldar).
+    // Conserva los últimos 3 backups.
+    let latest_applied: Option<i32> = conn
+        .query_row("SELECT MAX(version) FROM _app_migrations", [], |r| {
+            r.get(0)
+        })
+        .unwrap_or(None);
+    let latest_known: i32 = MIGRATIONS.last().map(|m| m.version).unwrap_or(0);
+    let needs_backup = latest_applied.map(|v| v < latest_known).unwrap_or(false);
+    if needs_backup && db_path.exists() {
+        let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+        let bak = db_path.with_extension(format!("db.{}.bak", stamp));
+        match fs::copy(db_path, &bak) {
+            Ok(_) => {
+                println!("[Migrations] Backup pre-migración: {}", bak.display());
+                // Podar backups viejos, conservar los 3 más recientes.
+                if let Some(parent) = db_path.parent() {
+                    let mut baks: Vec<_> = fs::read_dir(parent)
+                        .map(|rd| {
+                            rd.filter_map(|e| e.ok())
+                                .map(|e| e.path())
+                                .filter(|p| {
+                                    p.extension().map(|x| x == "bak").unwrap_or(false)
+                                        && p.file_stem()
+                                            .map(|s| s.to_string_lossy().contains("crm_prod.db."))
+                                            .unwrap_or(false)
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    baks.sort();
+                    while baks.len() > 3 {
+                        if let Some(old) = baks.first().cloned() {
+                            let _ = fs::remove_file(&old);
+                            baks.remove(0);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+            Err(e) => eprintln!("[Migrations] No se pudo crear backup: {}", e),
+        }
     }
 
     for migration in MIGRATIONS {
@@ -559,6 +826,10 @@ fn run_migrations(db_path: &Path) {
             println!("[Migrations] ✓ v{} applied successfully", migration.version);
         }
     }
+
+    // Red de seguridad declarativa: crea cualquier columna esperada que falte,
+    // aunque su migración versionada se haya marcado aplicada en el pasado.
+    ensure_expected_columns(&conn);
 }
 // ── End auto-migration system ──────────────────────────────────────────
 
@@ -710,6 +981,35 @@ async fn save_report_file(
     }
 }
 
+/// Sondea GET /api/health/db (ruta pública) hasta que responda {"ok":true}.
+/// Devuelve true si la DB está sana, false si se agota el timeout (~60s).
+/// Sin dependencias nuevas: HTTP/1.0 crudo sobre TcpStream.
+fn wait_for_db_health(port: u16) -> bool {
+    use std::io::{Read, Write};
+    use std::time::Duration;
+
+    let addr: std::net::SocketAddr = format!("127.0.0.1:{}", port)
+        .parse()
+        .unwrap_or_else(|_| "127.0.0.1:3001".parse().unwrap());
+    for _ in 0..240 {
+        if let Ok(mut stream) = std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(250)) {
+            let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+            let req = "GET /api/health/db HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+            if stream.write_all(req.as_bytes()).is_ok() {
+                let mut buf = Vec::with_capacity(4096);
+                if stream.read_to_end(&mut buf).is_ok() {
+                    let body = String::from_utf8_lossy(&buf);
+                    if body.contains(r#""ok":true"#) {
+                        return true;
+                    }
+                }
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    false
+}
+
 #[tauri::command]
 async fn kill_server(state: tauri::State<'_, ServerState>) -> Result<(), String> {
     if let Ok(mut server_state) = state.0.lock() {
@@ -848,15 +1148,31 @@ pub fn run() {
             // Navigate with secret as query param; middleware will set a cookie
             let target_url = format!("http://localhost:{}?_token={}", port, secret_for_nav);
 
+            // 1) Esperar a que el puerto TCP acepte conexiones.
+            let mut tcp_ok = false;
             for _ in 0..120 {
               if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
-                if let Some(window) = app_handle.get_webview_window("main") {
-                  let url: tauri::Url = target_url.parse().unwrap();
-                  let _ = window.navigate(url);
-                }
+                tcp_ok = true;
                 break;
               }
               std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+            if !tcp_ok {
+              eprintln!("[Startup] server TCP never came up on port {}", port);
+            }
+
+            // 2) Gate de salud de DB: no navegar hasta que /api/health/db diga ok.
+            //    Nunca bloquea más de ~60s: si el backend no sana, se navega igual
+            //    y el error queda visible en server.log + health endpoint.
+            if wait_for_db_health(port) {
+              println!("[Startup] DB health ok, navigating webview");
+            } else {
+              eprintln!("[Startup] DB health NOT ok after timeout — navigating anyway, check server.log and /api/health/db");
+            }
+
+            if let Some(window) = app_handle.get_webview_window("main") {
+              let url: tauri::Url = target_url.parse().unwrap();
+              let _ = window.navigate(url);
             }
           });
       }
