@@ -2,6 +2,11 @@
 
 Todos los cambios notables realizados en el proyecto están detallados a continuación.
 
+## [1.14.2] - 2026-09-12
+
+### Corregido
+- **ADMIN ve todo**: el rol Administrador se salta los candados de plan y los filtros de módulos/perfil en el Sidebar, el Home y las pestañas de Configuración (Sucursales, Tienda Web). Los módulos apagados por el rubro del onboarding (Vendedores, Marketing, etc.) ya no ocultan nada al admin. Supervisor y Cajero mantienen sus permisos.
+
 ## [1.14.1] - 2026-09-12
 
 ### Corregido

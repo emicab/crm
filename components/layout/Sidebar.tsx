@@ -512,11 +512,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  // El ADMIN ve todo: se salta candados de plan y filtros de módulos/perfil.
+  // Los demás roles pasan por las 3 compuertas (plan Pro, permisos, perfil).
+  const isAdmin = currentUser?.role === "ADMIN";
+
   // Filtrar los grupos según módulos activos y rol de usuarios
   const filteredGroups = navGroups
     .map((group) => {
       const processedItems = group.items
         .map((item) => {
+          if (isAdmin) return { ...item, isLocked: false };
           const isEnabled = !item.moduleId || isModuleEnabled(item.moduleId);
           const isProFeature = [
             "cuenta_corriente",

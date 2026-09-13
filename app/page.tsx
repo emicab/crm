@@ -299,8 +299,11 @@ const SecondaryNavCard = ({
 
 export default function HomePage() {
   const { isModuleEnabled, currentUser } = useModules();
+  // El ADMIN ve todos los accesos sin filtros de módulos ni roles.
+  const isAdmin = currentUser?.role === "ADMIN";
 
   const filteredPriorityModules = priorityModules.filter((mod) => {
+    if (isAdmin) return true;
     if (mod.moduleId && !isModuleEnabled(mod.moduleId)) return false;
     if (isModuleEnabled("roles") && currentUser && mod.allowedRoles) {
       return mod.allowedRoles.includes(currentUser.role);
@@ -309,6 +312,7 @@ export default function HomePage() {
   });
 
   const filteredSecondaryModules = secondaryModules.filter((mod) => {
+    if (isAdmin) return true;
     if (mod.moduleId && !isModuleEnabled(mod.moduleId)) return false;
     if (isModuleEnabled("roles") && currentUser && mod.allowedRoles) {
       return mod.allowedRoles.includes(currentUser.role);
@@ -317,6 +321,7 @@ export default function HomePage() {
   });
 
   const filteredShortcuts = shortcuts.filter((s) => {
+    if (isAdmin) return true;
     if (s.moduleId && !isModuleEnabled(s.moduleId)) return false;
     if (isModuleEnabled("roles") && currentUser && s.allowedRoles) {
       return s.allowedRoles.includes(currentUser.role);

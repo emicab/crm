@@ -26,7 +26,9 @@ import { ShoppingBag, Store, Lock } from "lucide-react";
 
 
 export default function ConfiguracionPage() {
-  const { refresh: refreshModules, plan } = useModules();
+  const { refresh: refreshModules, plan, currentUser } = useModules();
+  // El ADMIN accede a todas las pestañas sin restricción de plan.
+  const isAdmin = currentUser?.role === "ADMIN";
   const [form, setForm] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,7 +38,7 @@ export default function ConfiguracionPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingTab, setPendingTab] = useState<string | null>(null);
 
-  const isPlanPro = plan === "pro";
+  const isPlanPro = isAdmin || plan === "pro";
 
   // Modal de Pago
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -69,15 +71,15 @@ export default function ConfiguracionPage() {
     const validTabs = ["general", "sucursales", "tienda_web", "promociones_tarjetas", "usuarios", "backup", "arca", "suscripciones"];
     if (!validTabs.includes(pendingTab)) return;
     const proTabs = ["sucursales", "tienda_web"];
-    if (proTabs.includes(pendingTab) && plan === "basico") {
+    if (proTabs.includes(pendingTab) && !isPlanPro) {
       setActiveTab("general");
     } else {
       setActiveTab(pendingTab as any);
     }
-  }, [pendingTab, plan]);
+  }, [pendingTab, plan, isAdmin]);
 
   const handleTabClick = (tab: "general" | "sucursales" | "tienda_web" | "promociones_tarjetas" | "usuarios" | "backup" | "arca" | "suscripciones") => {
-    if ((tab === "sucursales" || tab === "tienda_web") && plan === "basico") {
+    if ((tab === "sucursales" || tab === "tienda_web") && !isPlanPro) {
       toast.error("Esta sección requiere el plan Pro.");
       return;
     }
