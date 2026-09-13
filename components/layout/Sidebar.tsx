@@ -481,6 +481,29 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  // Espera a que el server local libere el puerto 3001 (cualquier respuesta
+  // HTTP = sigue vivo; solo "connection refused" = libre). Evita el clásico
+  // `os error 32` del instalador por archivos bloqueados por node huérfano.
+  const waitForPortFree = async (timeoutMs = 15000): Promise<boolean> => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), 2000);
+        await fetch("http://127.0.0.1:3001/api/health/db", {
+          cache: "no-store",
+          signal: ctl.signal,
+        });
+        clearTimeout(t);
+        await new Promise((r) => setTimeout(r, 500));
+      } catch (err: any) {
+        if (err?.name === "AbortError") continue; // timeout: sigue vivo
+        return true; // connection refused: puerto libre
+      }
+    }
+    return false;
+  };
+
   const handleInstallUpdate = async () => {
     if (!availableUpdate) return;
     try {
@@ -494,11 +517,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       } catch (e) {
         console.error("Failed to kill server", e);
       }
+      const portFree = await waitForPortFree();
+      if (!portFree) {
+        toast.error(
+          "El servidor local sigue en uso. Cerrá manualmente la aplicación (revisá que no queden procesos node.exe de ClinPOS) e intentá de nuevo.",
+        );
+        return;
+      }
       await availableUpdate.downloadAndInstall();
       toast.success(
-        "¡Actualización instalada! Por favor, cierra y vuelve a abrir la aplicación para aplicar los cambios.",
+        "¡Actualización instalada! La aplicación se cerrará para aplicar los cambios.",
       );
       setIsUpdateModalOpen(false);
+      // Cerrar la ventana aplica la actualización (reemplaza el exe en uso).
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().close();
     } catch (err: any) {
       console.error("Install error:", err);
       const errMsg =

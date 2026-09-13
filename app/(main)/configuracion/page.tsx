@@ -76,7 +76,7 @@ export default function ConfiguracionPage() {
     } else {
       setActiveTab(pendingTab as any);
     }
-  }, [pendingTab, plan, isAdmin]);
+  }, [pendingTab, isPlanPro]);
 
   const handleTabClick = (tab: "general" | "sucursales" | "tienda_web" | "promociones_tarjetas" | "usuarios" | "backup" | "arca" | "suscripciones") => {
     if ((tab === "sucursales" || tab === "tienda_web") && !isPlanPro) {

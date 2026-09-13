@@ -1020,12 +1020,110 @@ async fn kill_server(state: tauri::State<'_, ServerState>) -> Result<(), String>
     }
     Ok(())
 }
+
+// ── Node orphan prevention ─────────────────────────────────────────────
+// Sin esto, un crash / kill por task-manager / apagado deja node.exe
+// huérfano reteniendo node.exe, la DLL de Prisma y el puerto 3001, y el
+// updater (o el instalador) falla con `os error 32` al reescribir archivos.
+
+// Handle del Job Object: debe vivir hasta la salida del proceso para que
+// KILL_ON_JOB_CLOSE siga vigente. El SO lo libera al terminar la app.
+#[cfg(not(debug_assertions))]
+static JOB_HANDLE: std::sync::Mutex<usize> = std::sync::Mutex::new(0);
+
+/// Asigna el server recién spawneado a un Job Object con KILL_ON_JOB_CLOSE:
+/// si la app muere por la vía que sea, Windows mata a node automáticamente.
+#[cfg(not(debug_assertions))]
+fn assign_to_job_object(child: &Child) {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::JobObjects::*;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
+    unsafe {
+        let proc = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, child.id());
+        if proc.is_null() || proc == INVALID_HANDLE_VALUE {
+            return;
+        }
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() || job == INVALID_HANDLE_VALUE {
+            CloseHandle(proc);
+            return;
+        }
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let ok = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        if ok != 0 && AssignProcessToJobObject(job, proc) != 0 {
+            if let Ok(mut slot) = JOB_HANDLE.lock() {
+                *slot = job as usize;
+            }
+            // `job` queda abierto a propósito hasta la salida del proceso.
+        } else {
+            CloseHandle(job);
+        }
+        CloseHandle(proc);
+    }
+}
+
+/// Mata node.exe huérfanos de arranques anteriores cuyo command-line apunta a
+/// NUESTRO standalone empaquetado. Nunca toca otros node (dev, otras apps).
+/// Las 2ª instancias vivas nunca llegan acá (single-instance las frena antes
+/// del setup), así que todo match es un huérfano seguro de matar.
+#[cfg(not(debug_assertions))]
+fn reap_stale_node_servers(standalone_dir: &Path) {
+    let needle = standalone_dir
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_lowercase();
+    if needle.is_empty() {
+        return;
+    }
+    let ps = format!(
+        "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | ForEach-Object {{ if ($_.CommandLine -and $_.CommandLine.Replace('\\','/').ToLower().Contains('{0}')) {{ $_.ProcessId }} }}",
+        needle.replace('\'', "")
+    );
+    let out = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    let pids: Vec<u32> = out
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default()
+        .split_whitespace()
+        .filter_map(|s| s.parse::<u32>().ok())
+        .collect();
+    // Nunca matar al propio proceso (defensivo: powershell no es node, pero
+    // el chequeo es gratis).
+    let me = std::process::id();
+    for pid in pids.into_iter().filter(|p| *p != me) {
+        println!("[Startup] Matando node huérfano (pid {})", pid);
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_dialog::init())
+    // 2ª instancia → enfoca la ventana existente y sale (nunca spawnea un
+    // 2º server ni llega al setup, así el reaper no puede matar un vivo).
+    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+      }
+    }))
     .manage(ServerState(Mutex::new(None)))
     .invoke_handler(tauri::generate_handler![backup_database, restore_database, kill_server, save_report_file])
     .setup(|app| {
@@ -1103,6 +1201,9 @@ pub fn run() {
             (0..48).map(|_| { let idx = rng.gen_range(0..CHARSET.len()); CHARSET[idx] as char }).collect()
         };
 
+        // Limpiar node.exe huérfanos de arranques anteriores ANTES de spawnear.
+        reap_stale_node_servers(&standalone_dir);
+
         if server_js.exists() {
           let node_bin = if local_node.exists() {
             local_node.to_string_lossy().to_string()
@@ -1133,6 +1234,8 @@ pub fn run() {
           cmd.stderr(Stdio::from(err_file));
 
           if let Ok(child) = cmd.spawn() {
+            // Garantía del SO: si la app muere, node muere con ella.
+            assign_to_job_object(&child);
             if let Ok(mut state) = app.state::<ServerState>().0.lock() {
               *state = Some(child);
             }
@@ -1180,7 +1283,12 @@ pub fn run() {
       Ok(())
     })
     .on_window_event(|window, event| {
-      if let tauri::WindowEvent::Destroyed = event {
+      // Se mata en CloseRequested (libera puerto/archivos cuanto antes) y se
+      // reintenta en Destroyed por seguridad.
+      if matches!(
+        event,
+        tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+      ) {
         if let Ok(mut state) = window.state::<ServerState>().0.lock() {
           if let Some(mut child) = state.take() {
             let _ = child.kill();

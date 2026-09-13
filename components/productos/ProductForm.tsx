@@ -6,13 +6,14 @@ import type { Brand, Category, Supplier, Product } from '@/types';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import { Loader2, AlertCircle, Upload, Search, Image as ImageIcon, Check, X, ChefHat, Globe, EyeOff, Lock, XCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Upload, Search, Image as ImageIcon, Check, X, ChefHat, Globe, EyeOff, Lock, XCircle, Calculator } from 'lucide-react';
 import { useQuickCreate } from '@/hooks/useQuickCreate';
 import QuickCreateModal from './QuickCreateModal';
 import RecipeEditor, { RecipeIngredientForm } from '@/components/recetario/RecipeEditor';
 import { useModules } from '@/hooks/useModules';
 import toast from 'react-hot-toast';
 import { optimizeImage } from '@/lib/imageOptimizer';
+import { calcSalePrice, marginOnSale, markupOnCost, type MarginMode } from '@/lib/priceAdjuster';
 
 interface ProductFormData {
   name: string;
@@ -79,6 +80,31 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
   const [isSearchingML, setIsSearchingML] = useState(false);
   const [mlCandidates, setMlCandidates] = useState<Array<{ id: string; title: string; imageUrl: string; thumbnail: string }>>([]);
   const [isMLModalOpen, setIsMLModalOpen] = useState(false);
+
+  // ── Calculadora de precio de venta ─────────────────────────────────────
+  const [marginPct, setMarginPct] = useState<string>('');
+  const [marginMode, setMarginMode] = useState<MarginMode>('markup');
+
+  // Preview en vivo: se recalcula sola al cambiar costo o %.
+  const costNum = parseFloat(formData.pricePurchase);
+  let marginSuggested: number | null = null;
+  let marginCounterpart = '';
+  let marginCalcError: string | null = null;
+  if (marginPct.trim() !== '') {
+    try {
+      marginSuggested = calcSalePrice(costNum, parseFloat(marginPct), marginMode);
+      marginCounterpart = marginMode === 'markup'
+        ? `Margen s/venta: ${marginOnSale(costNum, marginSuggested)}%`
+        : `Recargo s/costo: ${markupOnCost(costNum, marginSuggested)}%`;
+    } catch (e: any) {
+      marginCalcError = e?.message || 'Revisá los valores.';
+    }
+  }
+
+  const applyMarginPrice = () => {
+    if (marginSuggested === null) return;
+    setFormData((prev) => ({ ...prev, priceSale: String(marginSuggested) }));
+  };
 
   // ── Recetario ────────────────────────────────────────────────────────────
   const [isRecipe, setIsRecipe] = useState<boolean>(!!initialProductData?.isRecipe);
@@ -591,6 +617,36 @@ const ProductForm: React.FC<ProductFormProps> = ({ initialProductData }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input label="Precio de Compra" name="pricePurchase" type="number" step="0.01" value={formData.pricePurchase} onChange={handleChange} />
         <Input label="Precio de Venta *" name="priceSale" type="number" step="0.01" value={formData.priceSale} onChange={handleChange} required />
+      </div>
+
+      {/* Calculadora de precio de venta por porcentaje */}
+      <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-3">
+        <span className="block text-sm font-semibold text-foreground flex items-center gap-1.5">
+          <Calculator size={16} className="text-emerald-600" /> Calcular venta por porcentaje
+        </span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+          <Input label="% deseado" name="marginPct" type="number" step="0.1" value={marginPct} onChange={(e) => setMarginPct(e.target.value)} placeholder="Ej. 50" />
+          <Select label="Modo" name="marginMode" value={marginMode} onChange={(e) => setMarginMode(e.target.value as MarginMode)}>
+            <option value="markup">Recargo s/costo</option>
+            <option value="margin">Margen s/venta</option>
+          </Select>
+          <Button type="button" variant="secondary" onClick={applyMarginPrice} disabled={marginSuggested === null}>
+            {marginSuggested !== null ? `Aplicar $${marginSuggested}` : 'Aplicar'}
+          </Button>
+        </div>
+        {marginSuggested !== null && (
+          <p className="text-xs text-foreground-muted">
+            Precio sugerido: <strong className="text-foreground">${marginSuggested}</strong>
+            {' · '}{marginCounterpart}
+            {marginMode === 'markup' ? ' (venta = costo × (1 + %))' : ' (venta = costo ÷ (1 − %))'}
+          </p>
+        )}
+        {marginCalcError && (
+          <p className="text-xs text-rose-600">{marginCalcError}</p>
+        )}
+        {marginPct.trim() === '' && (
+          <p className="text-xs text-foreground-muted">Ingresá un % para ver el precio sugerido desde el costo.</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

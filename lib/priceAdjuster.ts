@@ -49,3 +49,37 @@ export function validateAdjustValue(value: unknown): number {
   }
   return num;
 }
+
+// ── Calculadora de precio de venta ─────────────────────────────────────
+// Dos modos (a pedido): recargo sobre costo y margen sobre venta.
+//   markup: venta = costo × (1 + p/100)   (ej. 100 + 50% → 150)
+//   margin: venta = costo / (1 − m/100)   (ej. 100 + 50% → 200)
+export type MarginMode = "markup" | "margin";
+
+export function calcSalePrice(cost: number, pct: number, mode: MarginMode): number {
+  if (!isFinite(cost) || cost <= 0) {
+    throw new Error("Ingresá un precio de compra válido mayor a 0.");
+  }
+  if (!isFinite(pct) || pct <= 0) {
+    throw new Error("Ingresá un porcentaje mayor a 0.");
+  }
+  if (mode === "margin") {
+    if (pct >= 100) {
+      throw new Error("El margen sobre venta debe ser menor a 100%.");
+    }
+    return applyRound(cost / (1 - pct / 100), "none");
+  }
+  return applyRound(cost * (1 + pct / 100), "none");
+}
+
+// Margen sobre venta resultante (%) dados costo y venta. 0 si inválido.
+export function marginOnSale(cost: number, sale: number): number {
+  if (!isFinite(cost) || cost <= 0 || !isFinite(sale) || sale <= 0) return 0;
+  return Math.round((1 - cost / sale) * 1000) / 10;
+}
+
+// Recargo sobre costo resultante (%) dados costo y venta. 0 si inválido.
+export function markupOnCost(cost: number, sale: number): number {
+  if (!isFinite(cost) || cost <= 0 || !isFinite(sale) || sale <= 0) return 0;
+  return Math.round((sale / cost - 1) * 1000) / 10;
+}

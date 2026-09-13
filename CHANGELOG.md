@@ -2,6 +2,12 @@
 
 Todos los cambios notables realizados en el proyecto están detallados a continuación.
 
+## [1.15.0] - 2026-09-13
+
+### Añadido
+- **Anti-huérfanos de node**: Job Object con `KILL_ON_JOB_CLOSE` (el SO mata al server si la app muere por cualquier vía), reaper al arranque que elimina `node.exe` huérfanos del standalone, y single-instance (la 2ª apertura enfoca la ventana en vez de spawnear otro server). El updater espera al puerto 3001 libre antes de instalar y cierra la app sola al terminar.
+- **Calculadora de precio en productos**: panel bajo los precios con % deseado, modo Recargo s/costo o Margen s/venta, preview en vivo con equivalencia y botón Aplicar. Vale para crear y editar.
+
 ## [1.14.2] - 2026-09-12
 
 ### Corregido
